@@ -106,6 +106,30 @@ pytest -q
 
 ---
 
+## Models & first run
+
+Model weights are **not** stored in this repo (they're multi-gigabyte and
+third-party). They're fetched to a local, git-ignored `checkpoints/` cache — so a
+fresh clone is small.
+
+- **Mixing & mastering** — no model downloads required. Works out of the box.
+- **Voice studio (optional)** — the singing-voice conversion path uses the
+  optional GPU-isolated **Seed-VC** provider. Install it once with:
+
+  ```powershell
+  ./tools/install_seed_vc.ps1
+  ```
+
+  On first use, the voice pipeline downloads its model weights from Hugging Face
+  (Whisper, BigVGAN, CAMPPlus, RMVPE, Seed-VC — several GB total) into
+  `checkpoints/`. This is a one-time download; subsequent runs are offline.
+
+Nothing you process — your mixes, references, or voice recordings — is ever
+uploaded. Only the initial model weights are downloaded, and only for the
+optional voice features.
+
+---
+
 ## Project layout
 
 ```
