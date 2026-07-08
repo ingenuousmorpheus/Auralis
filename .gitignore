@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Downloaded model weights & caches (multi-GB — not for source control)
+checkpoints/
+hf_cache/
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Job scratch / user audio
+jobs/
+tmp/
+*.wav
+*.flac
+*.mp3
+*.aiff
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,11 @@
+id: vocal-forward-rnb
+display_name: "Vocal-Forward R&B"
+inspired_by: "the silky, vocal-centric R&B production aesthetic of the 90s"
+reference: null
+default_target_lufs: -14.0
+description: "Silky vocal, warm low-mids, controlled highs."
+targets:
+  tonal_curve: warm
+  low_end_weight: warm
+  stereo_width: 1.05
+  compression: { bus_ratio: 2.0, character: smooth }

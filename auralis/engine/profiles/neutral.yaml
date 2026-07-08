@@ -1,0 +1,11 @@
+id: neutral
+display_name: "Neutral Transparent"
+inspired_by: "a do-no-harm reference master with no added character"
+reference: null
+default_target_lufs: -14.0
+description: "Faithful, character-free master. Loudness and ceiling only."
+targets:
+  tonal_curve: flat
+  low_end_weight: neutral
+  stereo_width: 1.0
+  compression: { bus_ratio: 1.0, character: transparent }

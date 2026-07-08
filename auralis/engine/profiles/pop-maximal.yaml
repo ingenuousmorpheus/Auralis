@@ -1,0 +1,11 @@
+id: pop-maximal
+display_name: "Maximalist Pop Polish"
+inspired_by: "the bright, wide, vocal-forward sheen of modern radio pop"
+reference: null            # bundle a reference WAV here, or run internal-target mode
+default_target_lufs: -10.0
+description: "Forward vocal, tight wide stereo, bright top end."
+targets:
+  tonal_curve: bright
+  low_end_weight: tight
+  stereo_width: 1.18
+  compression: { bus_ratio: 2.5, character: assertive }

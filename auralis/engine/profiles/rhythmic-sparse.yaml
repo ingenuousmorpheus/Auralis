@@ -1,0 +1,11 @@
+id: rhythmic-sparse
+display_name: "Rhythmic Sparse Low-End"
+inspired_by: "beat-driven minimalism with heavy sub and open space"
+reference: null
+default_target_lufs: -12.0
+description: "Heavy sub, open space, punchy transients."
+targets:
+  tonal_curve: sub-heavy
+  low_end_weight: heavy
+  stereo_width: 0.9
+  compression: { bus_ratio: 1.8, character: punchy }

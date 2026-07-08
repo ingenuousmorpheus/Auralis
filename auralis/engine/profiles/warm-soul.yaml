@@ -1,0 +1,11 @@
+id: warm-soul
+display_name: "Warm Soul"
+inspired_by: "vintage soul warmth with rounded lows and gentle highs"
+reference: null
+default_target_lufs: -15.0
+description: "Round lows, gentle highs, analog-leaning feel."
+targets:
+  tonal_curve: warm
+  low_end_weight: round
+  stereo_width: 0.92
+  compression: { bus_ratio: 1.6, character: gentle }
