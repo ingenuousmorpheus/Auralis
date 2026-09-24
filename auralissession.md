@@ -1569,3 +1569,662 @@ Replace the old home-card interface with the Suno-style layout the user asked fo
 
 ### Next Action
 AU-03 Artist DNA V1, once the user has spot-checked a few songs and set the DNA toggles in My Music.
+
+
+---
+
+# Research Addendum — R&B Theory Atlas / Era-Aware Composition Intelligence
+
+**Added:** 2026-09-24  
+**Purpose:** Give Auralis a research-backed R&B music-theory layer that can sit beside Artist DNA and guide original composition by era, harmony, groove, form and vocal phrasing.
+
+## Core idea
+
+Auralis should not rely only on `Artist DNA` or a black-box music model.
+
+The stronger architecture is:
+
+```text
+R&B THEORY ATLAS
+        +
+ARTIST DNA
+        +
+CURRENT SONG BRIEF
+        +
+USER VOICE RANGE
+        ↓
+SONG BLUEPRINT
+        ↓
+ORIGINAL COMPOSITION
+```
+
+The Atlas is not a “hit generator” and should never promise commercial success. Its job is to make generation more stylistically informed by historically common and musically effective R&B practices while preserving originality.
+
+Use the terms:
+
+- **era fit**
+- **style fit**
+- **harmonic familiarity**
+- **vocal fit**
+- **hook/contrast**
+- **originality**
+
+Do not expose a “probability of becoming a hit.”
+
+## Research findings to encode
+
+### 1. Popular-music harmony is better modeled as reusable schemata than isolated chord names
+
+Corpus work using the McGill Billboard corpus treats recurring harmonic patterns as probabilistic templates / schemata rather than rigid rules. This supports the Atlas design: store recurring relationships, transitions, cadence behavior and harmonic rhythm rather than “magic chords.”
+
+A 2026 Music Theory Online study of “soul dominants” used the McGill Billboard corpus and identified **2,033 eleventh-quality chords across 153 songs**. The study found that their behavior depends on context, including incoming bass motion and metrical placement. This is useful for generation because Auralis should model **what tends to happen before and after a sonority**, not just the sonority itself.
+
+Research source:
+https://mtosmt.org/issues/mto.26.32.2/mto.26.32.2.fink.html
+
+### 2. The “soul dominant” should be an explicit R&B harmonic feature
+
+The dominant-eleventh / suspended-dominant family is historically important enough in soul/R&B to deserve a first-class Atlas feature.
+
+Store abstract labels such as:
+
+```text
+V11
+V9sus
+IV/V
+sus-dominant color
+bass-pedal dominant color
+```
+
+For each occurrence/profile store:
+
+- era
+- tonal context
+- scale-degree bass
+- approach interval
+- exit interval
+- strong/weak metrical position
+- resolution tendency
+- section role
+- tension level
+
+Do not assume every V11 must resolve like a classical V7.
+
+### 3. Quiet Storm / slow R&B often benefits from harmonic stasis and pedal-based color
+
+Music Theory Online’s analysis of Smokey Robinson’s “Quiet Storm” describes an extended pedal-based texture: a sustained/pedal foundation, Amaj9 in the intro/verse, and a chorus shifting between Amaj7 and Dmaj7 while retaining the pedal. The important reusable lesson is **not the song’s exact progression**; it is that slow R&B can create motion through:
+
+- sustained pedal tones
+- extended major harmony
+- layer accumulation
+- timbral change
+- register change
+- section density
+
+without frequent chord changes.
+
+Research source:
+https://www.mtosmt.org/issues/mto.25.31.4/mto.25.31.4.hudson_wang.html
+
+This should inform an **80s R&B / Quiet Storm** era preset, while acknowledging that the Quiet Storm style begins earlier and develops into the 1980s radio/R&B sound.
+
+### 4. Neo-soul harmony should use extensions, borrowing and smooth voice-leading
+
+Useful neo-soul features supported by contemporary pedagogy include:
+
+- maj7 / min7
+- maj9 / min9
+- 11ths
+- 13ths
+- altered dominants
+- secondary dominants
+- borrowed chords / modal interchange
+- passing chords
+- rootless or fifth-less voicings
+- close voice-leading between chord colors
+
+Research sources:
+https://www.pickupmusic.com/blog/neo-soul-guitar-chords-for-beginners
+https://www.pickupmusic.com/blog/10-essential-neo-soul-chord-progressions-for-guitarists
+https://online.berklee.edu/courses/harmony-2
+https://college.berklee.edu/courses/hr-216
+
+Berklee’s harmony curriculum reinforces that modal interchange, secondary/extended dominants, deceptive resolution, guide tones, melodic rhythm, harmonic rhythm and melody/harmony relationships are appropriate building blocks for contemporary harmony.
+
+### 5. Groove timing is part of the composition, not an afterthought
+
+Oxford research on neo-soul groove describes deliberate microtiming offsets among rhythmic layers. In one analyzed D’Angelo groove, pulse-carrying layers differ by roughly **50–80 ms**, and the broader literature describes offsets reaching about **50–100 ms** in neo-soul contexts.
+
+The Atlas should therefore store groove descriptors such as:
+
+- kick offset
+- snare offset
+- bass offset
+- comping offset
+- swing ratio
+- push/pull tendency
+- quantization strength
+- pocket width
+
+Do not hard-code one delay amount. Treat microtiming as a style distribution and allow section-dependent variation.
+
+Research sources:
+https://academic.oup.com/book/56186/chapter/443057660
+https://academic.oup.com/mts/article/45/2/181/7234305
+
+### 6. R&B vocal phrasing should be modeled relative to the beat and backbeat
+
+Oxford’s `Swinglines` research specifically examines American R&B singers in relation to accompaniment, beat and snare backbeat. The reusable idea is that lead vocals should not be represented only as a sequence of MIDI notes.
+
+For each vocal phrase store abstract features:
+
+- scale-degree start
+- scale-degree end
+- highest/lowest scale degree
+- interval-size distribution
+- stepwise vs leap percentage
+- contour: rising / falling / arch / wave / static
+- phrase length in beats/bars
+- pickup length
+- onset offset from beat
+- relationship to snare/backbeat
+- syncopation density
+- repeated-motif count
+- melisma density
+- average notes per syllable
+- held-note tendency
+- phrase-ending run tendency
+- register lift by section
+- call/response behavior
+- ad-lib density
+- breath spacing
+
+Research source:
+https://academic.oup.com/book/57410/chapter-abstract/464767463
+
+Auralis should learn **phrasing behavior**, not copy a third-party singer’s exact melody.
+
+### 7. Form and section lift belong in the Atlas
+
+Popular-music theory research shows that verse/prechorus/chorus arrival can be driven by harmony, texture, register, repetition or a combination. For R&B generation, section contrast should therefore be modeled as a multi-variable “lift,” not just “make the chorus louder.”
+
+Store:
+
+- harmonic tension change
+- chord-rhythm change
+- bass-register change
+- vocal-register change
+- background-vocal entry
+- drum-density change
+- stereo-width change
+- textural saturation
+- hook repetition
+- melody repetition/variation
+
+Research source:
+https://www.mtosmt.org/issues/mto.22.28.3/mto.22.28.3.nobile.html
+
+### 8. Loop-based harmony and tonal ambiguity are valid modern choices
+
+Broader post-1990 pop research documents axis progressions, loop-based harmony, hybrid tonics and tonal ambiguity. These should be available to modern/crossover R&B presets, but they must not be treated as uniquely R&B features.
+
+Research sources:
+https://mtosmt.org/issues/mto.17.23.3/mto.17.23.3.richards.html
+https://www.mtosmt.org/issues/mto.19.25.4/mto.19.25.4.duinker.html
+
+## Key-selection rule
+
+Do **not** build a simplistic “most hit songs are in key X” rule.
+
+A progression should first be represented in Roman numerals / scale degrees, then mapped into a key using:
+
+1. requested era/mood
+2. user’s trained/comfortable vocal range
+3. desired chorus high point
+4. tessitura of verses
+5. instrument/register constraints
+6. Artist DNA key-family tendencies
+
+This is more useful than copying the original key of a successful song.
+
+The Atlas may store key/mode distributions for research, but generation should prioritize **voice fit** and transposability.
+
+## Era profiles
+
+Create configurable profiles rather than hard rules.
+
+### 70s Soul / R&B
+
+Candidate traits to measure and validate:
+
+- dominant 7/9/11 colors
+- “soul dominant” / sus-dominant behavior
+- gospel/blues borrowing
+- vamps and pedal tones
+- bass-driven harmonic motion
+- call-and-response
+- funk-derived harmonic stasis
+- live-feel groove
+
+### 80s R&B / Quiet Storm
+
+Candidate traits to measure and validate:
+
+- maj7 / maj9 / min7 / min9 colors
+- slower harmonic rhythm
+- pedal-based harmony
+- electric-piano / synth-pad harmonic beds
+- smooth inner-voice motion
+- spacious verses
+- stronger register/texture lift into chorus
+- restrained verse phrasing with higher-intensity chorus/ad-libs
+
+### 90s R&B
+
+Candidate traits to measure and validate:
+
+- loop progressions and R&B-line behavior
+- richer prechorus-to-chorus lift
+- gospel-derived harmony where appropriate
+- layered background vocals
+- stronger vocal-run/ad-lib vocabulary
+- verse/chorus register contrast
+- drum groove increasingly influenced by hip-hop
+
+### Neo-Soul
+
+Candidate traits:
+
+- 7/9/11/13 harmony
+- altered/secondary dominants
+- modal interchange
+- borrowed chords
+- passing chords
+- rootless/compact voicings
+- strong voice-leading
+- intentional microtiming / laid-back pocket
+- melody woven around rather than strictly on the grid
+
+### 2000s / Contemporary R&B
+
+Candidate traits to measure and validate:
+
+- reduced harmonic rhythm / loop-based harmony
+- minor/modal palettes
+- stronger production-driven section contrast
+- hybrid-tonic / ambiguous-center possibilities
+- sparse verse / expanded chorus
+- vocal rhythm as a major hook carrier
+- optional pop crossover axis-type loops
+
+### Modern Alternative R&B
+
+Candidate traits to measure and validate:
+
+- harmonic minimalism when appropriate
+- modal ambiguity
+- texture/atmosphere as structural material
+- sub-bass-centered arrangement
+- conversational or highly syncopated lead phrasing
+- contrast created by timbre, register and negative space
+- selective use of rich extended chords rather than constant density
+
+These era profiles are **starting hypotheses**. Auralis should refine them from curated research and approved datasets, not freeze them as stereotypes.
+
+## Human-readable “R&B Cheat Sheet”
+
+The user requested an Excel-style cheat sheet.
+
+Plan a human-readable workbook:
+
+`docs/research/RNB_THEORY_ATLAS.xlsx`
+
+Recommended sheets:
+
+1. **Era Profiles**
+   - era
+   - subgenre
+   - BPM tendency
+   - harmonic rhythm
+   - chord colors
+   - groove feel
+   - vocal behavior
+   - structure tendencies
+   - production notes
+
+2. **Progression Families**
+   - id
+   - Roman numeral pattern
+   - mode
+   - cadence/loop type
+   - tension profile
+   - era affinity
+   - section affinity
+   - reharmonization options
+
+3. **Chord Vocabulary**
+   - chord quality
+   - function
+   - common approach
+   - common exit
+   - extensions
+   - omissions
+   - inversion/rootless behavior
+   - era affinity
+
+4. **Vocal Phrase Patterns**
+   - section
+   - scale-degree start/end
+   - contour
+   - phrase bars
+   - pickup behavior
+   - syncopation
+   - melisma density
+   - register
+   - hook repetition
+
+5. **Groove / Pocket**
+   - era
+   - BPM band
+   - swing feel
+   - kick/snare/bass relationship
+   - microtiming profile
+   - quantization range
+
+6. **Song Evidence**
+   - song
+   - artist
+   - year
+   - chart/source dataset
+   - abstract harmonic/form/vocal observations
+   - source citation
+   - confidence
+
+7. **Sources**
+   - title
+   - author
+   - publisher
+   - URL/DOI
+   - year
+   - notes
+
+### Source-of-truth rule for the workbook
+
+Do not make the binary XLSX the only runtime database.
+
+Preferred flow:
+
+```text
+research / approved rows
+        ↓
+RNB_THEORY_ATLAS.xlsx   ← human review/editing
+        ↓
+CSV/JSON export
+        ↓
+auralis/theory/rnb_atlas.json
+        ↓
+Auralis Composer
+```
+
+Or, if implementation simplicity is better, keep JSON as canonical and regenerate XLSX for human review. Pick one canonical representation and document it; do not maintain two unsynchronized truth sources.
+
+## Runtime architecture
+
+Add later:
+
+```text
+auralis/theory/
+    schema.py
+    atlas.py
+    era_profiles.py
+    retrieval.py
+    scoring.py
+    copyright_guard.py
+```
+
+Blueprint request example:
+
+```json
+{
+  "genre": "rnb",
+  "era": "80s_quiet_storm",
+  "harmony_color": "romantic_extended",
+  "groove": "laid_back",
+  "vocal_style": "smooth_with_chorus_runs",
+  "artist_dna_weight": 0.65,
+  "theory_atlas_weight": 0.35
+}
+```
+
+The composer should retrieve **multiple compatible options**, not one deterministic “correct” progression.
+
+Example internal response:
+
+```text
+ERA: 80s R&B / Quiet Storm
+
+Harmony candidates:
+A. pedal + maj9 color
+B. slow ii–V-derived extended cycle
+C. IV/ii-centered borrowed-color loop
+
+Voice fit:
+transpose candidate B down 2 semitones
+because target chorus peak exceeds comfortable range
+
+Artist DNA:
+prefers minor key family and 82–94 BPM
+
+Final blueprint:
+original hybrid selected from theory + Artist DNA
+```
+
+## Scoring
+
+Score candidates across separate dimensions:
+
+```text
+era_fit
+artist_fit
+voice_fit
+harmonic_coherence
+section_contrast
+hook_support
+novelty
+similarity_risk
+```
+
+Do not collapse this into a fake “hit probability.”
+
+## Copyright / originality boundary
+
+Do not assume that “chords are never copyrighted.”
+
+The U.S. Copyright Office describes musical works as potentially including **melody, rhythm and/or harmony**. Therefore Auralis should take the conservative engineering approach:
+
+### Third-party research songs
+
+Store:
+
+- Roman-numeral abstractions
+- chord-quality statistics
+- transition counts
+- key/mode
+- tempo bands
+- form
+- aggregate scale-degree tendencies
+- contour classes
+- rhythmic/microtiming descriptors
+- melisma density
+- section-level characteristics
+- citation/provenance
+
+Do **not** store as reusable generation templates:
+
+- complete note-for-note lead melodies
+- long exact MIDI transcriptions
+- lyric text
+- raw audio
+- identifiable full melodic hooks
+- exact arrangement reconstruction
+
+### User-owned catalog
+
+Auralis may analyze the user’s own authorized material at full detail locally, but the existing originality/similarity guard still applies so new output does not merely duplicate an earlier song.
+
+U.S. Copyright Office references:
+https://www.copyright.gov/help/faq/faq-gram.html
+https://www.copyright.gov/comp3/2017version/docs/compendium.pdf
+
+This is an engineering risk-reduction rule, not legal advice.
+
+## Build-order change
+
+Do **not** wait until the end of the roadmap to add this intelligence.
+
+Revised sequence around composition:
+
+```text
+AU-03   Artist DNA V1
+        ↓
+AU-03B  R&B Theory Atlas Data Foundation
+        ↓
+AU-04   Song Blueprint Generator
+        ↓
+AU-05   MIDI / Structured Composer
+```
+
+### AU-03B — R&B Theory Atlas Data Foundation
+
+Implement only the research/data layer:
+
+- schema
+- era profiles
+- curated research rows
+- source/provenance records
+- progression families
+- chord vocabulary
+- vocal-pattern abstractions
+- groove/microtiming profiles
+- JSON/CSV runtime representation
+- optional XLSX human-review export
+
+No audio generation yet.
+
+**Gate:**
+
+> Given an era selector such as “80s R&B,” Auralis can return several documented, transposable harmony/groove/vocal-profile candidates with source provenance, without reproducing a copyrighted melody.
+
+### AU-04 integration
+
+Song Blueprint should combine:
+
+```text
+prompt
++
+Artist DNA
++
+R&B Theory Atlas
++
+voice range
++
+originality constraints
+```
+
+and explain why a candidate was chosen.
+
+### AU-05 integration
+
+The structured composer should use:
+
+- Roman numeral progression
+- selected key/transposition
+- voicing rules
+- voice-leading targets
+- groove timing profile
+- section lift
+- vocal phrase constraints
+
+instead of blindly copying song examples.
+
+## UI addition
+
+Create should eventually expose:
+
+```text
+ERA
+70s Soul
+80s R&B / Quiet Storm
+90s R&B
+Neo-Soul
+2000s R&B
+Modern R&B
+
+HARMONY
+Familiar
+Rich
+Gospel-influenced
+Dark
+Romantic
+Experimental
+
+VOCAL APPROACH
+Smooth
+Conversational
+Melismatic
+Falsetto-heavy
+Power ballad
+Ad-lib heavy
+
+GROOVE
+Straight
+Laid-back
+Deep pocket
+Swing
+Hip-hop influenced
+```
+
+Keep advanced controls collapsible. Default Create remains simple.
+
+## Research principle going forward
+
+For third-party songs, Auralis should learn **relationships and distributions**, not memorize songs.
+
+For the user’s own songs, Auralis can use deeper local analysis.
+
+Target philosophy:
+
+```text
+UNDERSTAND WHY THE STYLE WORKS
++
+UNDERSTAND HOW I WRITE
++
+WRITE SOMETHING NEW FOR MY VOICE
+```
+
+---
+
+## Session 005 — 2026-09-24 — R&B Theory Atlas research added
+
+### Goal
+Research a copyright-conscious theory layer for R&B generation and add it to the roadmap before AU-04/AU-05 composition work.
+
+### Result
+**DOCUMENTED / RESEARCH COMPLETE FOR V1 DESIGN.**
+
+The session now includes:
+- corpus-backed soul-dominant concept
+- Quiet Storm pedal/harmonic-stasis model
+- neo-soul extensions/borrowing/voice-leading
+- groove microtiming
+- R&B vocal phrase descriptors
+- section-lift/form descriptors
+- era-profile schema
+- XLSX cheat-sheet plan
+- JSON runtime plan
+- copyright/originality boundary
+- new AU-03B phase inserted between Artist DNA and Song Blueprint
+
+### Next Action
+Continue the existing next step first: finish the user’s My Music spot-check/include-exclude cleanup, then AU-03 Artist DNA V1. After AU-03 passes, build AU-03B before AU-04.
+
