@@ -113,7 +113,7 @@ function SongDetail({ song, play }) {
   </div>;
 }
 
-export default function MyMusic({ API, play }) {
+export default function MyMusic({ API, play, nowPlayingId }) {
   const [library, setLibrary] = useState({ sources: [], songs: [] });
   const [path, setPath] = useState("");
   const [query, setQuery] = useState("");
@@ -253,7 +253,13 @@ export default function MyMusic({ API, play }) {
             {songs.map(s => <tr key={s.id} className={selected?.id === s.id ? "active" : ""} onClick={() => open(s.id)}>
               <td>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
-                  <Cover id={s.id} size={40} radius={9} />
+                  <button className={`mm-play${s.id === nowPlayingId ? " on" : ""}`} aria-label={`Play ${s.title}`}
+                    onClick={e => { e.stopPropagation(); play(s); }}>
+                    <Cover id={s.id} size={40} radius={9} />
+                    <span className="mm-play-glyph" aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z" /></svg>
+                    </span>
+                  </button>
                   <div style={{ minWidth: 0 }}>
                     <button className="mm-song" onClick={e => { e.stopPropagation(); open(s.id); }}>{s.title}</button>
                     <div className="mm-tags">

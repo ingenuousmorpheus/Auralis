@@ -52,7 +52,7 @@ export default function App() {
 
   let content;
   if (page === "create") content = <CreatePage API={API} go={setPage} play={play} nowPlayingId={track?.id} />;
-  else if (page === "music") content = <MyMusic API={API} play={play} />;
+  else if (page === "music") content = <MyMusic API={API} play={play} nowPlayingId={track?.id} />;
   else if (page === "studio") content = <StudioPage go={setPage} tools={TOOLS} />;
   else if (page === "master" || page === "mix") content = <MasterMix API={API} mode={page} />;
   else if (page === "projects") content = <div className="au-page-scroll"><ProjectsPanel API={API} /></div>;

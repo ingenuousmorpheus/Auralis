@@ -95,3 +95,16 @@
 .mm-bar-row { display: grid; grid-template-columns: 70px 1fr 44px; gap: 8px; align-items: center; font-size: 12px; }
 .mm-bar { height: 7px; border-radius: 99px; background: #161b24; overflow: hidden; }
 .mm-bar > div { height: 100%; background: linear-gradient(90deg, #8a6a2c, #e9cf8a); }
+
+/* Cover doubles as the play button, like a streaming app. */
+.mm-play {
+  position: relative; flex-shrink: 0; padding: 0; border: none; background: transparent;
+  cursor: pointer; border-radius: 9px;
+}
+.mm-play-glyph {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  border-radius: 9px; background: rgba(5, 6, 8, 0.55); color: var(--gold-light);
+  opacity: 0; transition: opacity 0.15s;
+}
+.mm-play:hover .mm-play-glyph, .mm-play:focus-visible .mm-play-glyph, .mm-play.on .mm-play-glyph { opacity: 1; }
+.mm-play.on { box-shadow: 0 0 0 2px var(--gold); }

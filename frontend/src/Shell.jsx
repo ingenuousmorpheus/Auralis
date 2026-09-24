@@ -116,13 +116,14 @@ export function PlayerBar({ API, track, onOpen }) {
           {track ? track.title : "Nothing playing"}
         </div>
         <div className="au-mono" style={{ fontSize: 12, color: error ? "var(--warn)" : "var(--steel)" }}>
-          {error || (loading && track ? "preparing preview…" : track ? [track.bpm && `${track.bpm} BPM`, track.key].filter(Boolean).join(" · ") : "choose a song to listen")}
+          {error || (loading && track ? "preparing preview…" : track ? [track.bpm && `${track.bpm} BPM`, track.key].filter(Boolean).join(" · ") : "click a song cover to play")}
         </div>
       </div>
     </div>
     <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", minWidth: 0 }}>
       <span className="au-mono" style={{ fontSize: 11, color: "var(--steel)" }}>{fmtTime(time)}</span>
-      <button className="au-play" onClick={toggle} disabled={!track} aria-label={playing ? "Pause" : "Play"}>
+      <button className="au-play" onClick={toggle} disabled={!track} aria-label={playing ? "Pause" : "Play"}
+        title={track ? undefined : "Click a song cover to play it"}>
         <PlayGlyph playing={playing} />
       </button>
       <div className="au-progress" style={{ maxWidth: 560 }} onClick={seek} role="slider" aria-label="Position"
