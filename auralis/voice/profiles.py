@@ -14,6 +14,12 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 
+def _now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def _default_root() -> Path:
     base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
     return Path(base) / "Auralis" / "voices"
@@ -43,6 +49,14 @@ class VoiceProfile:
     config_path: str | None = None
     paired_calibration_count: int = 0
     paired_calibration_seconds: float = 0.0
+    # Voice card metadata (My Voice library). Old profiles load with defaults.
+    created_at: str | None = None
+    created_via: str = "upload"          # "upload" | "microphone"
+    singer_name: str | None = None
+    consent_at: str | None = None
+    consent_clip: bool = False           # a spoken consent clip is stored (never trained on)
+    take_count: int = 0
+    last_take: dict | None = None        # the latest take report (level, noise, singing seconds…)
 
     def public_dict(self) -> dict:
         data = asdict(self)
@@ -90,6 +104,7 @@ class VoiceProfileStore:
         sf.write(reference_path, prepared, 44100, subtype="PCM_24")
 
         profile = VoiceProfile(
+            created_at=_now(),
             id=profile_id,
             name=clean_name,
             reference_path=str(reference_path),
@@ -102,6 +117,75 @@ class VoiceProfileStore:
         (profile_dir / "profile.json").write_text(
             json.dumps(asdict(profile), indent=2), encoding="utf-8"
         )
+        return profile
+
+    def create_from_take(self, name: str, take_path: str, consent_confirmed: bool,
+                         singer_name: str | None = None, consent_clip_path: str | None = None) -> tuple[VoiceProfile, dict]:
+        """Save a voice from one microphone take (Kits/Suno style).
+
+        The take is checked (``capture.analyse_take``); its steadiest 6–20 s of
+        singing becomes the reference, and the whole take goes into the dataset
+        so range and readiness are measured straight away. The raw take is kept
+        in ``takes/``; a spoken consent clip, if given, is kept as
+        ``consent.wav`` and is never used for training.
+        """
+        from .capture import analyse_take
+
+        if not consent_confirmed:
+            raise ValueError("The singer must agree before their voice is saved.")
+        audio, sr = sf.read(take_path, always_2d=True, dtype="float32")
+        report = analyse_take(audio, sr)
+        if not report.usable:
+            raise ValueError("This take can't make a good voice yet: " + " ".join(report.issues) +
+                             (" " + " ".join(report.tips) if report.tips else ""))
+        a, b = int(report.reference_start * sr), int(report.reference_end * sr)
+        ref_dir = self.root / f".incoming_{uuid.uuid4().hex[:8]}"
+        ref_dir.mkdir(parents=True)
+        try:
+            ref_path = ref_dir / "reference.wav"
+            sf.write(ref_path, audio[a:b], sr, subtype="PCM_24")
+            profile = self.create(name, str(ref_path), consent_confirmed)
+        finally:
+            shutil.rmtree(ref_dir, ignore_errors=True)
+        now = _now()
+        profile.created_via = "microphone"
+        profile.singer_name = (re.sub(r"[^A-Za-z0-9 ._'-]+", "", singer_name or "").strip()[:64] or None)
+        profile.consent_at = now
+        profile_dir = self._profile_dir(profile.id)
+        if consent_clip_path:
+            shutil.copy2(consent_clip_path, profile_dir / "consent.wav")
+            profile.consent_clip = True
+        self.save(profile)
+        profile = self.add_take(profile.id, take_path, report=report)
+        return profile, report.to_dict()
+
+    def add_take(self, profile_id: str, take_path: str, report=None) -> VoiceProfile:
+        """Keep a microphone take and add it to the voice's dataset."""
+        from .capture import analyse_take
+
+        profile = self.get(profile_id)
+        if report is None:
+            audio, sr = sf.read(take_path, always_2d=True, dtype="float32")
+            report = analyse_take(audio, sr)
+            if not report.usable:
+                raise ValueError("This take can't be used: " + " ".join(report.issues))
+        takes = self._profile_dir(profile_id) / "takes"
+        takes.mkdir(exist_ok=True)
+        index = len(list(takes.glob("take_*"))) + 1
+        shutil.copy2(take_path, takes / f"take_{index:03d}{Path(take_path).suffix.lower() or '.wav'}")
+        profile = self.add_recordings(profile_id, [take_path])
+        profile.take_count = index
+        profile.last_take = report.to_dict()
+        self.save(profile)
+        return profile
+
+    def rename(self, profile_id: str, name: str) -> VoiceProfile:
+        profile = self.get(profile_id)
+        clean = re.sub(r"[^A-Za-z0-9 ._-]+", "", name).strip()[:64]
+        if not clean:
+            raise ValueError("Voice name is required.")
+        profile.name = clean
+        self.save(profile)
         return profile
 
     def add_recordings(self, profile_id: str, source_paths: list[str]) -> VoiceProfile:

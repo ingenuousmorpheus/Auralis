@@ -2437,3 +2437,63 @@ The user approved the plans and asked for AU work first, then the My Voice redes
 
 ### Next Action
 Session 009: My Voice redesign (V1 layout, V2 history), plus **voices saved from a microphone take** (the user's request: a friend sings into the mic, and Auralis analyses the take and saves the voice).
+
+## Session 009 — 2026-09-24 — My Voice redesign (Kits-style) + voices saved from the microphone
+
+### Goal
+The user's request: "save voices just like kits.ai and suno does so if my friend comes over he can just sing on the mic and it will analyze and copy his voice and save it." Build that, plus the planned My Voice layout (plan V1–V3), in the existing console shell.
+
+### Starting State
+- `main` at `5279e3e` (AU-05), equal to `origin/main`.
+- The user's uncommitted Harmonic Reference work was still in the tree. Only this session's hunks of `auralis/api/main.py` are staged.
+- One voice existed: the user's trained studio profile. Live Seed-VC conversion is still unverified on this host (commit memory).
+
+### Changed
+- **Backend:**
+  - new `auralis/voice/capture.py` (take analysis and reference-window choice)
+  - new `auralis/voice/history.py` (`VoiceHistoryStore`)
+  - `auralis/voice/profiles.py`: voice-card fields (created_at, created_via, singer_name, consent_at, consent_clip, take_count, last_take; all default, so old profiles load) and `create_from_take`, `add_take`, `rename`
+  - new `auralis/api/voices.py`: take check, voice from take, add take, rename, sample playback, history endpoints, `ENGINE_LOCK`, `record_conversion`
+  - `auralis/api/main.py`: router include; conversions wait on the engine lock and are recorded to history; a plain explanation for `os error 1455`
+- **Frontend:**
+  - new `VoicePage.jsx`/`.css` (hero, tabs, Convert queue, voice cards, history)
+  - new `VoiceCapture.jsx` (New voice / Record more wizard)
+  - new `recorder.js` (AudioWorklet mic capture, in-browser WAV)
+  - `App.jsx` mounts VoicePage; the classic VoiceStudio lives under *My voices → Studio tools*
+- **Docs and tests:**
+  - `docs/VOICE_STUDIO_PLAN.md` §7 build status
+  - architecture doc
+  - new `tests/test_voice_library.py` (11)
+
+### Verification
+- `pytest -q` including the local harmony tests → **177 passed** (157 committed + 20). `npm run build` passes.
+- **Browser pane, real app (restarted with the launcher scripts), full mic flow.** The pane has no microphone, so `getUserMedia` was replaced in the page with a synthetic singer: harmonic tones from 196 to 392 Hz with vibrato and breaths. Everything after the microphone was the real code path.
+  - Name + singer + consent, then *Start recording*: live meter at −9 dB, the timer and prompts advanced ("Sing a song" at 0:39).
+  - *Stop*, then *Check the take*: "Good take", 39 s singing, level −14 dB, room 51 dB below, sample window 20–40 s.
+  - *Save voice*: "Saved “UI Test Voice”. Range G3–G4…". **G3–G4 is exactly the simulated 196–392 Hz.** The voice card showed singer, mic, consent time and "works now as an instant voice"; the sample endpoint served a 2.6 MB WAV.
+- **Test voice deleted.** The test voice was deleted through the API right after, and only the user's real voice remains. The page's selected voice was set back to it.
+- No horizontal overflow at 375 px in any tab.
+- The console showed one real bug, fixed and re-checked: stop/unmount closed the AudioContext twice. After the fix, 0 errors through record → stop → record again → stop → tab switch.
+- **Not verified live:** a real Seed-VC conversion on this host (memory). The conversion → history → A/B → project path and the one-at-a-time lock are covered by API tests with a fake provider.
+
+### Result
+**COMPLETE** for the user's request and plan V1–V3. A guest can sing into the mic, and Auralis checks the take, saves the voice (with consent on record), measures its range and makes it selectable for conversion. Studio training unlocks at 10 minutes of singing. V4 (My Music stems as guide) and V5 (full-song separation) remain planned.
+
+### Findings
+- **Instant voice vs trained voice.** A mic voice works at once as a Seed-VC *instant* voice (reference prompt). Kits-level likeness needs the existing studio training, which needs ≥10 minutes of singing. The card says how much more singing unlocks it, and *Record more* adds takes.
+- **Consent.** The consent checkbox is required. The spoken consent clip is optional and is stored apart from the dataset. Delete requires typing the voice name, and it removes the sample, takes, dataset, history and model.
+- **Singing seconds are approximate.** The frame gate counts decays and short breaths as singing (39 s reported for about 34 s sung). This is fine for the purpose; the dataset segmentation does the precise work.
+- Browser processing (echo cancellation, noise suppression, auto gain) is switched off on purpose, because it colours a voice and would train that colour in.
+
+### Gate/Blocker
+- None for this work.
+- Still open: live Seed-VC conversion (host memory), and the user's My Music spot-check and switch-off cleanup.
+
+### Do Not Redo
+- Voice creation from a take goes through the unchanged `create` / `prepare_reference` / `add_recordings`. Extend those; do not fork them.
+- `ENGINE_LOCK` is the single gate for Seed-VC conversions. Future voice jobs (guide singer, AU-08) should take it too.
+
+### Next Action
+- Try it with a real singer: *My Voice → New voice*.
+- Then the roadmap continues: AU-06 Atmosphere Engine, or AU-07 Guide Singer, which would sing the AU-05 melody guide so a saved voice can perform a whole blueprint.
+- Plan V4/V5 when wanted.

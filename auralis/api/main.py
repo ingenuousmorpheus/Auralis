@@ -32,6 +32,7 @@ from ..voice.pitch import pitch_polish
 from ..voice.paired import ingest_paired_calibration
 from .artist import router as artist_router
 from .composer import router as composer_router
+from .voices import router as voices_router
 from .theory import router as theory_router
 from .projects import router as projects_router
 
@@ -40,6 +41,7 @@ app.include_router(projects_router)
 app.include_router(artist_router)
 app.include_router(theory_router)
 app.include_router(composer_router)
+app.include_router(voices_router)
 
 # The frontend dev server runs on a different localhost port; allow it.
 app.add_middleware(
@@ -600,25 +602,35 @@ def _run_voice_conversion(
         def progress(stage: str, pct: float):
             job.update(stage=stage, pct=float(pct))
 
-        result = VOICE_PROVIDER.convert(
-            source_path=job["input"],
-            reference_path=profile.reference_path,
-            output_path=out_path,
-            semitone_shift=semitone_shift,
-            quality=quality,
-            checkpoint_path=profile.checkpoint_path,
-            config_path=profile.config_path,
-            progress=progress,
-        )
+        from .voices import ENGINE_LOCK, record_conversion
+
+        # One Seed-VC run at a time; queued conversions wait here.
+        job.update(stage="waiting for the voice engine", pct=0.0)
+        with ENGINE_LOCK:
+            result = VOICE_PROVIDER.convert(
+                source_path=job["input"],
+                reference_path=profile.reference_path,
+                output_path=out_path,
+                semitone_shift=semitone_shift,
+                quality=quality,
+                checkpoint_path=profile.checkpoint_path,
+                config_path=profile.config_path,
+                progress=progress,
+            )
         result.update(
             profile_id=profile.id,
             profile_name=profile.name,
             consent_confirmed=profile.consent_confirmed,
         )
         job["result"] = result
+        record_conversion(job, job_id)
         job.update(stage="done", pct=100.0)
     except Exception as exc:
-        job.update(stage="error", error=str(exc))
+        message = str(exc)
+        if "1455" in message or "paging file" in message.lower():
+            message += (" (Windows ran out of memory for the voice engine: close large apps such as "
+                        "local LLMs, or enlarge the page file, then try again.)")
+        job.update(stage="error", error=message)
 
 
 @app.post("/voice/convert")

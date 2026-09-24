@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** AU-05 (Structured Composer + instrumental render), 2026-09-24
+**Last updated:** My Voice redesign + microphone voice capture (Session 009), 2026-09-24
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -55,7 +55,7 @@ Status vocabulary:
 |---|---|---|
 | `%TEMP%\auralis_jobs\<job_id>\` | Uploads, stems, renders, reports for every job | **Never cleaned up** (no cleanup code exists) |
 | `%TEMP%\auralis_voice_profile_*`, `auralis_voice_dataset_*`, `auralis_paired_*` | Upload staging for voice endpoints | Deleted in `finally:` blocks |
-| `%LOCALAPPDATA%\Auralis\voices\<profile_id>\` | `profile.json`, `reference.wav`, `dataset/clip_*.wav`, `paired/<id>/`, `model/ft_model.pth` + config | Persistent until the profile is deleted |
+| `%LOCALAPPDATA%\Auralis\voices\<profile_id>\` | `profile.json`, `reference.wav`, `dataset/clip_*.wav`, `paired/<id>/`, `model/ft_model.pth` + config. Since Session 009 also `takes/take_NNN.wav` (raw microphone takes), `consent.wav` (optional spoken consent, never trained on) and `history/` (`index.json` + one folder per kept conversion: `output.wav`, `input.*`, cached waveform peaks) | Persistent until the profile is deleted |
 | `%LOCALAPPDATA%\Auralis\providers\seed-vc\` | Cloned Seed-VC repo, its own `.venv` (torch 2.4.0+cu121), `checkpoints/` (HF cache, ~3.3 GB), `runs/` | Persistent, installed by `tools/install_seed_vc.ps1` |
 | `%LOCALAPPDATA%\Auralis\projects\<project_id>\` | `project.json` + `sources/ stems/ vocals/ mixes/ masters/ reports/ generated/` (AU-01) | Persistent until the project is deleted |
 | `%LOCALAPPDATA%\Auralis\artist\library\library.json` + `artist\analyses\<song_id>.json` | My Music index (catalog folders, songs, file fingerprints) and one analysis per song (AU-02). Catalog audio is **not** copied here | Persistent until the folder is removed from the library |
@@ -160,6 +160,18 @@ Privacy properties the code enforces:
 - `VoiceProfile.public_dict()` strips `reference_path`, `checkpoint_path` and `config_path`. The live check found no private paths in the API response.
 - `/voice/provider` does return the provider install path, which includes the Windows username. It only goes to localhost.
 
+### Microphone voices and history (Session 009)
+
+- **`voice/capture.analyse_take`** checks a take in 50 ms frames:
+  - level (median of the sung frames)
+  - room floor (quietest 10%) and SNR
+  - clipping, and singing seconds (frames well above the floor)
+  - the reference window: the 6–20 s stretch with the most singing and the steadiest level, with clipping ruled out
+  It returns a quality (`great` / `good` / `usable` / `retake`), plain-language issues and tips, and `usable`.
+- **`VoiceProfileStore.create_from_take`** refuses without consent or with an unusable take. It creates the voice from the reference window via the unchanged `create` / `prepare_reference`, records singer, `created_via="microphone"`, `consent_at` and the optional consent clip, then calls **`add_take`**. `add_take` keeps the raw take in `takes/` and feeds it to the unchanged `add_recordings` segmentation and range/readiness analysis. New profile fields default, so older `profile.json` files still load.
+- **`voice/history.VoiceHistoryStore`** keeps finished conversions per voice. The index is written atomically; files are copied, never moved. `_run_voice_conversion` calls `api/voices.record_conversion` when a conversion finishes.
+- **One conversion at a time.** `api/voices.ENGINE_LOCK` wraps `SeedVCProvider.convert`; waiting jobs show "waiting for the voice engine". An `os error 1455` / paging-file failure now carries a plain explanation.
+
 ---
 
 ## API Surface
@@ -189,6 +201,10 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | Pitch | `GET /voice/pitch-styles`, `POST /voice/pitch`, `GET /voice/pitch/{id}/download\|report` | |
 | Finish | `GET /voice/finish-presets`, `GET /voice/rack-modules`, `POST /voice/finish`, `GET /voice/finish/{id}/download\|preview\|report\|source` | |
 | Auto polish | `POST /voice/auto-polish`, `GET /voice/auto-polish/{id}/download\|preview` | |
+| Voice library (Session 009, `api/voices.py`) | `POST /voice/takes/check` | Analyse a take without saving: level, room noise, singing seconds, the chosen reference window, issues and tips |
+| | `POST /voice/profiles/from-take` | Name + singer + consent + take (+ optional spoken consent clip) → a saved voice and its take report. 422 without consent or when the take cannot make a good voice |
+| | `POST /voice/profiles/{id}/takes`, `PATCH /voice/profiles/{id}`, `GET /voice/profiles/{id}/reference` | Add a microphone take to a voice / rename / play the voice's sample |
+| | `GET /voice/history?profile_id=`, `GET /voice/history/{pid}/{take}/audio?which=output\|input`, `…/peaks`, `PATCH`/`DELETE …`, `POST …/to-project` | Kept conversions (all voices without `profile_id`), audio, waveform, rating/note, delete, copy into a project |
 | Projects (AU-01) | `GET/POST /projects`, `GET/PATCH/DELETE /projects/{pid}` | List / create / read (with integrity) / rename or set voice profile / delete |
 | | `POST /projects/{pid}/open`, `POST /projects/{pid}/close`, `GET /projects/{pid}/verify?deep=` | Open/close state. Integrity check (existence + size, or SHA-256 when `deep`) |
 | | `POST /projects/{pid}/import-job` | Copy a finished job's inputs and outputs in, with provenance. Reference tracks are never imported |
@@ -231,7 +247,10 @@ outputs become durable.
 | `frontend/src/MasterMix.jsx` | The master / mix-from-stems workflow (same API calls as before), restyled |
 | `frontend/src/StudioPage.jsx` | Hub for the finishing tools and My Voice |
 | `frontend/src/theme.css`, `frontend/src/ui.jsx` | Theme tokens (void black, brushed gold `#d4af5f`, holo cyan `#7fe6ff`; Michroma / Manrope / JetBrains Mono), effects (metallic logo, light-sweep headings, gold corner brackets, scanlines, all off under reduced motion). The theme also remaps App.css's old tokens so older screens turn gold. `ui.jsx` holds icons, cover tiles and `catalogStats` |
-| `frontend/src/VoiceStudio.jsx` | "My Voice Studio": engine status/install, (1) create profile with consent, (2) Studio Voice dataset + paired calibration + readiness + training depth, (3) convert guide, then pitch polish / one-click auto-polish with A/B players |
+| `frontend/src/VoicePage.jsx` + `VoicePage.css` | **My Voice (Session 009), Kits-style layout.** Hero: voice tile, kind, range, readiness, singer, sample player, Switch voice, + New voice. Tabs: *Convert* (drop up to 5 vocals, quality, pitch shift, one-at-a-time queue with progress, output list), *My voices* (voice cards: Use, Record more, Train studio model at ≥10 min, Rename, Delete by typing the name; classic Studio tools below), *New voice*, *History* (all voices), *Harmonies* (disabled until AU-09). The selected voice is remembered in `localStorage` |
+| `frontend/src/VoiceCapture.jsx` | *New voice* / *Record more* wizard: voice name, singer, consent (+ optional spoken consent clip), guided take with live meter, clipping warning, timer and prompts, playback and waveform, *Check the take*, *Save voice*. A file can be used instead of the mic |
+| `frontend/src/recorder.js` | Microphone capture: AudioWorklet (ScriptProcessor fallback) with echo cancellation, noise suppression and auto gain **off**; 16-bit mono WAV encoded in the browser, so the backend needs no ffmpeg. Stop/cancel are idempotent |
+| `frontend/src/VoiceStudio.jsx` | The classic "My Voice Studio", now shown inside *My voices → Studio tools*: engine status/install, (1) create profile with consent, (2) Studio Voice dataset + paired calibration + readiness + training depth, (3) convert guide, then pitch polish / one-click auto-polish with A/B players |
 | `frontend/src/VocalRack.jsx` | Nectar-style module rack (EQ curve, de-ess, comp, saturate, dimension, space, output) over `/voice/finish` with a `modules` JSON body. Assist mode, in/out/mix monitor |
 | `frontend/src/ProjectsPanel.jsx` | "My Projects" mode (AU-01): create, list, open/close/delete, assets grouped by kind with players, downloads, provenance, integrity badges, add audio files |
 | `frontend/src/SaveToProject.jsx` | "Save to project" control (pick an open project or create one) on the master/mix result, the converted, pitch-polished and studio-polished vocal results, and the Vocal Chain rack result |
@@ -398,7 +417,7 @@ Every decision writes a sentence to `why` (per field) or to the section's `why`,
 
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). The run with the local
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). The run with the local
 uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
@@ -410,6 +429,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
 | `tests/test_composer.py` (30, AU-04) | Brief words and explicit overrides. Lyrics headers (a lyric line starting with "hook" is not a header). 11 Roman-numeral realisations; key parsing. **Gate:** a complete blueprint: tempo, key, 4/4, intro to outro, chords filling every bar, arrangement roles, energy curve, vocal registers inside the voice, chorus above verse, a reason for every decision. No melody keys anywhere. DNA loops re-voiced and used once; chorus differs from verse. Key fits the voice and DNA; a narrow voice gets an honest stretch. An era without the DNA's mode follows the era. Tempo from DNA, half-time, prompt. Form from lyrics and length. Works with no DNA and no voice. Catalog twin flagged. Edits to key, tempo, sections and chords re-derive everything; invalid edits reported; regenerate changes one section type only. Save with revisions and lyrics, survives a new store, refused when closed. API: create, revise, 422, regenerate, save, read |
+| `tests/test_voice_library.py` (11, Session 009) | A synthetic singer (harmonic tones, vibrato, breaths). A clean take is usable with a 6–20 s sung reference; clipped, noisy, short and quiet takes each explain what to fix. A voice saved from a take has the singer, consent time, spoken-consent clip (not in the dataset), take file, dataset clips and the sung range; a second take grows it; rename. Consent and quality are required. Old profiles still load. History survives a new store instance (input kept, peaks, rating, delete). API: take check → save from take → sample → rename → 422 without consent → conversion (fake provider) lands in history → audio / input / peaks / rating / to-project / delete. **Three simultaneous conversions never run at once** (max concurrency 1) |
 | `tests/test_generation.py` (13, AU-05) | Chord tones (6 cases, slash bass). Keys notes are always tones of the sounding chord; no drums where the arrangement has them off; crashes on chorus arrivals. Voice leading moves about a step per voice. The melody guide stays inside each section's register and scale, is deterministic per seed and varies with it. MIDI round trip (tempo, track names, note counts, timing). **Gate (ground truth):** render a 12-bar blueprint, then analyse the audio: tempo within ±3 BPM from the drums stem, the key (or its relative) from keys + bass, a mastered stereo WAV of the right length at ≤ −0.9 dBTP, and the melody guide kept out of the stems. Render job → project assets. API: providers, 422 on a bad blueprint, render job, stem and MIDI downloads, 404 for unknown files, save to project |
 | `tests/test_artist_dna.py` (13, AU-03) | Version-word stripping. Families group versions but not shared first words. Versions share one song's weight. Switched-off songs ignored. Covers down-weighted. Relative keys share a family. Loop rotations merged. Form and lift. Melody only from vocal stems. Voice headroom/footroom. Every trait has confidence. Empty state. API |
 | `tests/test_theory_atlas.py` (22, AU-03B) | Canonical Atlas valid, all 6 eras. Provenance and honest status on every row. Guard rejects melodies/lyrics, absolute chord names, over-long progressions, note sequences in vocal anchors, and 'sourced' rows citing only the placeholder. Roman-numeral parser. **Gate:** 80s R&B returns ≥3 transposable, sourced harmony candidates plus vocal and groove, keys always suggested, no melody keys in the answer. Filters steer results. Keys fit the voice and prefer DNA families; minor keys use the relative-major family; a narrow voice gets an honest stretch answer. API. Export matches the JSON (7 sheets / 7 CSVs) |
@@ -458,7 +478,7 @@ Rules carried forward:
 - Artist DNA, music-library import, retrieval, similarity guard.
 - ~~Song blueprint~~, done in AU-04. Still missing: lyric writing, per-line syllable fitting, meters other than 4/4, and a prompt reader beyond keywords.
 - ~~Composer, MIDI rendering~~, done in AU-05 (the local synth is a sketch-quality provider). Still missing: sample-based instruments, atmosphere (AU-06), generative-audio providers (AU-11).
-- The My Voice redesign (Kits-style convert / clone / history layout) is planned in `docs/VOICE_STUDIO_PLAN.md`, not built.
+- My Voice redesign: V1–V3 and microphone capture built (Session 009). Still planned: V4 (a My Music lead-vocal stem as the guide) and V5 (full-song vocal separation), plus cancelling a queued conversion. See `docs/VOICE_STUDIO_PLAN.md` §7.
 - Guide singer, vocal harmony/doubles generator, full-song voice orchestration.
 - A generic provider interface/registry and a GPU/model scheduler. The audit hit exactly the memory contention this is meant to prevent (see below).
 - Diff-MST "Path B" mixer (comment-only placeholder).

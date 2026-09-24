@@ -6,6 +6,7 @@ import MyMusic from "./MyMusic.jsx";
 import ProjectsPanel from "./ProjectsPanel.jsx";
 import StudioPage from "./StudioPage.jsx";
 import VocalRack from "./VocalRack.jsx";
+import VoicePage from "./VoicePage.jsx";
 import VoiceStudio from "./VoiceStudio.jsx";
 import { PlayerBar, Sidebar } from "./Shell.jsx";
 import "./App.css";
@@ -58,10 +59,10 @@ export default function App() {
   else if (page === "studio") content = <StudioPage go={setPage} tools={TOOLS} />;
   else if (page === "master" || page === "mix") content = <MasterMix API={API} mode={page} />;
   else if (page === "projects") content = <div className="au-page-scroll"><ProjectsPanel API={API} /></div>;
-  else if (page === "voice") content = <div className="au-page-scroll">
-    <main className="voice-stage voice-studio-shell">
+  else if (page === "voice") content = <div className="au-page-scroll" style={{ padding: 0 }}>
+    <VoicePage API={API} classic={<main className="voice-stage voice-studio-shell">
       <VoiceStudio API={API} card={voiceCard} btn={voiceBtn} colors={VOICE_COLORS} />
-    </main>
+    </main>} />
   </div>;
   else if (page === "rack") content = <div className="au-page-scroll"><VocalRack API={API} /></div>;
   else if (page === "harmony" && HarmonicReference) content = <div className="au-page-scroll"><HarmonicReference API={API} /></div>;

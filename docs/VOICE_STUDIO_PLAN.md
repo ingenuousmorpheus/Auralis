@@ -1,7 +1,7 @@
 # My Voice redesign plan: Kits-style voice page in the Auralis console
 
 **Added:** 2026-09-24 (Session 007)
-**Status:** PLAN. Nothing in this document is built yet.
+**Status:** V1–V3 and microphone voice capture BUILT in Session 009 (see §7). V4 and V5 still planned.
 **Asked for by the user:** "make the voice creation page similar to kits.ai and have it working in the same gui structure".
 
 The user shared two screenshots: the current Auralis **My Voice Studio** page and the Kits.ai **Convert** page. This plan takes Kits' *workflow layout* and builds it inside the existing Auralis shell (gold console theme, `Sidebar`, `PlayerBar`, page routing in `App.jsx`). It reuses the voice engine that already works (profiles, Studio Voice dataset, paired calibration, Seed-VC training and conversion, Pitch Polish, Vocal Finish).
@@ -103,3 +103,22 @@ V1–V3 give the Kits-style experience. V4 is an Auralis-only advantage (the use
 1. Should *History* be per voice (Kits-style) or one list across all voices with a filter? The plan assumes per voice with an "all voices" filter.
 2. Should 👍 takes be offered as paired-calibration candidates automatically, or only suggested?
 3. Is V5 (full-mix separation) wanted soon, or is *From My Music* stems enough for now?
+
+## 7. Build status (Session 009)
+
+| Piece | Status | Notes |
+|---|---|---|
+| **Mic voice capture** (added at the user's request: "a friend sings on the mic and it saves his voice") | BUILT | *New voice* tab: voice name, singer, consent checkbox and an optional spoken consent clip (kept as `consent.wav`, never trained on). One guided take with a live meter, clipping warning, timer and prompts. *Check the take* reports level, room noise, singing seconds and the chosen sample window. *Save voice* makes an instant voice from the steadiest 6–20 s and puts the whole take in the dataset, so range and readiness appear straight away. *Record more* grows an existing voice |
+| **V1 Layout** | BUILT | `VoicePage.jsx`: hero (tile, kind, range, readiness, singer, sample player, Switch voice, + New voice), tabs Convert / My voices / New voice / History / Harmonies (disabled, AU-09). Voice cards with Use, Record more, Train studio model (≥10 min), Rename, Delete (type the name to confirm). The classic `VoiceStudio.jsx` stays inside *My voices → Studio tools*, so dataset uploads, paired calibration, deep training and pitch polish are all still reachable |
+| **V2 History** | BUILT | `VoiceHistoryStore` keeps every conversion under the voice's folder, with waveform peaks, A/B against the original, download, 👍/👎, delete and save-to-project (works after restarts) |
+| **V3 Queue** | BUILT, except *cancel a queued item* | Up to 5 files per batch, converted one after another with per-item progress. The server also holds a lock around Seed-VC, so even separate requests never run two conversions at once (test with a fake provider: max concurrency 1) |
+| **V4 From My Music** | PLANNED | |
+| **V5 Song input** | PLANNED | |
+
+The §6 questions were not answered, so these defaults were used:
+- History is per voice in *Convert*, with an all-voices list in *History*.
+- 👍 takes are stored but not auto-offered for calibration.
+- V5 is not started.
+
+Live Seed-VC conversion is still unverified on this host (commit memory, Session 001). The new conversion path is covered by tests with a fake provider. A clearer error now explains `os error 1455`.
+
