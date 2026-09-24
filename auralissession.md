@@ -2381,3 +2381,59 @@ Mid-session the user also asked for a plan to make My Voice work like the Kits.a
 - **Either** AU-05 MIDI / Structured Composer (blueprint → chords, bass, drums, melodic parts → local instruments),
 - **or** My Voice redesign V1–V3 from `docs/VOICE_STUDIO_PLAN.md` if the user wants the Kits-style page first.
 - Ask the user which comes first. Curate more minor-mode Atlas families alongside either.
+
+## Session 008 — 2026-09-24 — AU-05 MIDI / Structured Composer + instrumental render
+
+### Goal
+The user approved the plans and asked for AU work first, then the My Voice redesign (with voices saved from a microphone take, Kits/Suno style). This entry covers AU-05: blueprint → chords, bass, drums and melodic parts → local instruments → a complete instrumental. My Voice follows in Session 009.
+
+### Starting State
+- `main` at `6fe5d70` (AU-04), equal to `origin/main`.
+- The user's uncommitted Harmonic Reference work was still in the tree.
+- `mido` and `pretty_midi` are not installed. The MIDI writer is hand-rolled rather than adding a dependency.
+
+### Changed
+- `auralis/composer/chords.py`: `chord_tones` (intervals and bass for a Roman numeral).
+- New `auralis/composer/arrange.py`: keys, pad, bass, drums, fx and melody-guide tracks.
+- New `auralis/composer/midi.py`: SMF type-1 writer plus a minimal reader.
+- New `auralis/generation/`:
+  - `base.py` (provider interface)
+  - `synth.py` (local numpy instruments)
+  - `__init__.py` (registry, `render_instrumental`, which runs the existing `engine.pipeline.run` for mix and master)
+- `auralis/api/composer.py`: `GET /composer/providers`, `POST /composer/render` (background job, one at a time), `GET /composer/render/{job}/file/{name}`.
+- `auralis/projects/jobs.py`: an `instrumental-render` job saves stems, pre-master, master, melody guide, MIDI, the rendered blueprint and the mix report into a project.
+- `frontend/src/BlueprintView.jsx`: Render instrumental panel.
+- Tests: new `tests/test_generation.py` (13). Architecture doc updated.
+
+### Verification
+- `tests/test_generation.py`: 13 passed.
+- **Ground truth on a full-length render.** The render was a 3:05 blueprint (G♯ minor, 100 BPM, Modern Alternative R&B). Then Auralis's own analysis tools were run on the audio:
+  - the drums stem reads **99.4 BPM**
+  - keys + bass read **A♭ minor** (the same key as G♯ minor), confidence 0.62
+  - on the keys stem, the three strongest pitch classes were all chord tones of the blueprint chord in **38/38** chord windows
+  - render and master took 46 s: −12.7 LUFS, −1.0 dBTP, profile `rhythmic-sparse`
+- **Browser pane (restarted with the launcher scripts):** Create ("romantic 90s slow jam, falsetto") → Render instrumental.
+  - Progress went through arranging, per-part rendering, and mix and master stages.
+  - The master played: 3:27, 80 BPM, B♭ minor, −14.1 LUFS, `vocal-forward-rnb`.
+  - `/composer/render/{job}/file/master` returned 200 `audio/wav` (54.8 MB).
+- Nothing was uploaded; the render uses no samples, downloads or models.
+
+### Result
+**AU-05 COMPLETE** against its gate: *Auralis can render a complete instrumental from a blueprint using local instruments.* The instruments are synthesized sketches (FM electric piano, saw pad, synth/808 bass, synth drums). They show the arrangement faithfully, but they are not production-grade sounds.
+
+### Findings
+- **Stem levels.** Each stem is peak-normalised on render, and the mixer then sets role levels. Section dynamics survive inside each stem (velocities scale with section energy and arrangement level), but the balance between stems is the mixer's heuristic, not the blueprint's.
+- **The melody guide is a guide.** It follows register, scale, chord tones and hook repetition, but it is rule-based and plain. AU-07 will sing it. It is the obvious place for later quality work, such as rhythm vocabulary from the Atlas vocal patterns or DNA phrase lengths.
+- **Half-time.** Grooves switch to half-time drums at 118+ BPM, which is what the DNA's double-time caveat suggests for slow jams read at double speed.
+- The first draft only comped the first bar of chords longer than a bar (pedal and stasis sections). This was fixed before commit.
+
+### Gate/Blocker
+- AU-05: none.
+- Still open: the user's My Music spot-check and switch-off cleanup, and live Seed-VC conversion (host commit memory).
+
+### Do Not Redo
+- `generation.PROVIDERS` is the renderer boundary. Add better instruments as new providers (a SoundFont/sampler in an isolated venv) instead of editing the arranger.
+- The instrumental goes through `engine.pipeline.run` unchanged, with explicit roles. Keep using it.
+
+### Next Action
+Session 009: My Voice redesign (V1 layout, V2 history), plus **voices saved from a microphone take** (the user's request: a friend sings into the mic, and Auralis analyses the take and saves the voice).

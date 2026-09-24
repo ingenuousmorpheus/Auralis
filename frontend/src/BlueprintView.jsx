@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "./Blueprint.css";
+import SaveToProject from "./SaveToProject.jsx";
 import { apiJson, fmtTime } from "./ui.jsx";
 
 /* Song Blueprint (AU-04): the editable plan Create makes before any audio.
@@ -181,6 +182,90 @@ function SaveBox({ API, bp, onSaved }) {
   </div>;
 }
 
+const STEM_NAMES = { drums: "Drums", bass: "Bass", keys: "Keys", pad: "Pad", fx: "FX" };
+
+/* AU-05: render the blueprint with the local instruments, then mix and master
+   it with the existing engine. Progress comes from /jobs/{id}. */
+function RenderPanel({ API, bp }) {
+  const [job, setJob] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  const [seed, setSeed] = useState(0);
+  const renderedRev = status?.result?.blueprint_revision;
+
+  useEffect(() => {
+    if (!job) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const st = await apiJson(`${API}/jobs/${job}`);
+        if (stop) return;
+        setStatus(st);
+        if (st.stage === "error") setError(st.error || "Render failed.");
+        if (st.stage !== "done" && st.stage !== "error") setTimeout(tick, 700);
+      } catch (e) { if (!stop) setError(e.message); }
+    };
+    tick();
+    return () => { stop = true; };
+  }, [job]);
+
+  const start = async (nextSeed = seed) => {
+    setError(""); setStatus(null);
+    try {
+      const r = await apiJson(`${API}/composer/render`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blueprint: bp, seed: nextSeed }) });
+      setSeed(nextSeed);
+      setJob(r.job_id);
+    } catch (e) { setError(e.message); }
+  };
+  const running = status && status.stage !== "done" && status.stage !== "error";
+  const done = status?.stage === "done" ? status.result : null;
+  const file = name => `${API}/composer/render/${job}/file/${name}`;
+
+  return <div className="bp-panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+      <div>
+        <div className="au-caption">Instrumental</div>
+        <div style={{ fontSize: 12, color: "var(--steel)", marginTop: 2 }}>Local instruments play the blueprint, then the Auralis mixer and mastering finish it.</div>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        {done && <button className="au-btn" disabled={running} onClick={() => start(seed + 1)} title="Same blueprint, new performance (melody guide, humanising)">New take</button>}
+        <button className="au-btn gold" disabled={running || !bp.validation?.ok} onClick={() => start(seed)}>
+          {running ? "Rendering…" : done ? "Render again" : "Render instrumental"}</button>
+      </div>
+    </div>
+    {error && <div role="alert" className="bp-alert warn">{error}</div>}
+    {running && <div role="status">
+      <div style={{ fontSize: 12, color: "var(--steel)", marginBottom: 6 }}>{status.stage} · {Math.round(status.pct)}%</div>
+      <div style={{ height: 6, borderRadius: 3, background: "var(--edge)", overflow: "hidden" }}>
+        <div style={{ width: `${status.pct}%`, height: "100%", background: "var(--gold)", transition: "width 0.3s" }} /></div>
+    </div>}
+    {done && <>
+      {renderedRev != null && renderedRev !== bp.revision && <div className="bp-alert note">
+        The blueprint changed since this render (revision {renderedRev} → {bp.revision}). Render again to hear the edits.</div>}
+      <div style={{ fontSize: 12, color: "var(--steel)" }}>
+        {done.tempo} BPM · {done.key} · {fmtTime(done.duration_seconds)} · mastered with <span className="au-mono">{done.profile_id}</span>
+        {done.after_lufs != null && <> · {done.after_lufs} LUFS</>} · take {done.seed + 1}</div>
+      <audio controls preload="none" src={file("master")} style={{ width: "100%" }} aria-label="Mastered instrumental" />
+      <details>
+        <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Stems, melody guide and MIDI</summary>
+        <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+          {Object.keys(done.stems).map(k => <label key={k} style={{ display: "grid", gridTemplateColumns: "90px minmax(0, 1fr)", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <span>{STEM_NAMES[k] || k}</span><audio controls preload="none" src={file(k)} style={{ width: "100%", height: 32 }} /></label>)}
+          {done.melody_guide_path && <label style={{ display: "grid", gridTemplateColumns: "90px minmax(0, 1fr)", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <span title="A plain tone singing the guide melody; not in the instrumental">Melody guide</span>
+            <audio controls preload="none" src={file("melody_guide")} style={{ width: "100%", height: 32 }} /></label>}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <a className="au-btn" href={file("master")} download>Download instrumental</a>
+            <a className="au-btn" href={file("midi")} download>Download MIDI</a>
+          </div>
+        </div>
+      </details>
+      <SaveToProject API={API} jobId={job} label="Save render to project" />
+    </>}
+  </div>;
+}
+
 export default function BlueprintView({ API, blueprint, setBlueprint }) {
   const bp = blueprint;
   const [busy, setBusy] = useState(false);
@@ -263,6 +348,8 @@ export default function BlueprintView({ API, blueprint, setBlueprint }) {
         <Why lines={bp.why.groove} />
       </div>
     </div>
+
+    <RenderPanel API={API} bp={bp} />
 
     <EnergyCurve bp={bp} />
     <Why lines={[...(bp.why.era || []), ...(bp.why.energy || []), ...(bp.why.harmony || [])]} />

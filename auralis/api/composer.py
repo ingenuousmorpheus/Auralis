@@ -155,3 +155,85 @@ def list_revisions(project_id: str):
         return _projects().blueprint_revisions(project_id)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+# ── AU-05: render the blueprint to an instrumental ─────────────────────────
+
+class RenderRequest(BaseModel):
+    blueprint: dict
+    seed: int = 0
+    provider: str = "synth"
+    master: bool = True
+
+
+RENDER_FILES = {"master": "master_path", "mix": "mix_path", "melody_guide": "melody_guide_path",
+                "midi": "midi_path", "report": "report_path"}
+
+
+def _run_render(job_id: str, blueprint: dict, seed: int, provider: str, master: bool):
+    import os
+
+    from ..generation import render_instrumental
+    from .main import JOBS
+
+    job = JOBS[job_id]
+    try:
+        result = render_instrumental(blueprint, os.path.join(job["work"], "render"), seed=seed,
+                                     provider=provider, master=master,
+                                     progress=lambda stage, pct: job.update(stage=stage, pct=pct))
+        job["result"] = result
+        job.update(stage="done", pct=100.0)
+    except Exception as exc:
+        job.update(stage="error", error=str(exc))
+
+
+@router.get("/composer/providers")
+def providers():
+    from ..generation import list_providers
+
+    return list_providers()
+
+
+@router.post("/composer/render")
+async def render(req: RenderRequest):
+    """Blueprint → arrangement → MIDI → local instruments → stems → mix + master.
+    One render at a time (memory). Progress via /jobs/{id}."""
+    import asyncio
+
+    from ..composer.validation import validate_blueprint
+    from ..generation import PROVIDERS
+    from .main import JOBS, _create_job
+
+    if req.provider not in PROVIDERS:
+        raise HTTPException(404, f"Unknown render provider: {req.provider}")
+    if not validate_blueprint(req.blueprint)["ok"]:
+        raise HTTPException(422, "Fix the blueprint's errors before rendering.")
+    if any(j.get("kind") == "instrumental-render" and j.get("stage") not in ("done", "error")
+           for j in JOBS.values()):
+        raise HTTPException(409, "An instrumental is already rendering.")
+    job_id = _create_job()
+    JOBS[job_id].update(kind="instrumental-render", stage="queued", pct=0.0,
+                        blueprint_title=req.blueprint.get("title"))
+    asyncio.create_task(asyncio.to_thread(_run_render, job_id, req.blueprint, req.seed, req.provider, req.master))
+    return {"job_id": job_id, "status": "started"}
+
+
+@router.get("/composer/render/{job_id}/file/{name}")
+def render_file(job_id: str, name: str):
+    import os
+
+    from fastapi.responses import FileResponse
+
+    from .main import JOBS
+
+    job = JOBS.get(job_id)
+    if not job or job.get("kind") != "instrumental-render" or not job.get("result"):
+        raise HTTPException(404, "No finished render with that id.")
+    result = job["result"]
+    path = result["stems"].get(name) if name in result["stems"] else result.get(RENDER_FILES.get(name, ""))
+    if not path or not os.path.isfile(path):
+        raise HTTPException(404, f"No '{name}' in this render.")
+    media = {".wav": "audio/wav", ".mid": "audio/midi", ".md": "text/markdown"}.get(os.path.splitext(path)[1],
+                                                                                   "application/octet-stream")
+    filename = {"master": "instrumental.wav", "midi": "arrangement.mid"}.get(name, os.path.basename(path))
+    return FileResponse(path, media_type=media, filename=filename)

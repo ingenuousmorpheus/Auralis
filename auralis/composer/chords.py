@@ -116,6 +116,53 @@ def realise(token: str, tonic: int, mode: str) -> str:
     return name
 
 
+def chord_tones(token: str, tonic: int, mode: str) -> tuple[int, list[int], int]:
+    """(root pitch class, intervals above the root, bass pitch class).
+
+    The intervals follow the same reading as ``realise``: case gives the
+    triad, a bare 7/9/11/13 on an upper-case numeral is dominant, ``maj``
+    gives a major seventh, ``sus`` replaces the third with the fourth.
+    """
+    m = _TOKEN.match(token)
+    if not m or not is_roman(token):
+        raise ChordError(f"'{token}' is not a Roman numeral")
+    root = (tonic + roman_root(token)) % 12
+    minor = m["num"].islower()
+    qual, ext, suf = m["qual"] or "", m["ext"] or "", m["suf"] or ""
+    if qual == "°":
+        tones = [0, 3, 6] + ([9] if ext == "7" else [])
+    elif qual == "ø":
+        tones = [0, 3, 6, 10]
+    elif qual == "+":
+        tones = [0, 4, 8] + ([10] if ext else [])
+    else:
+        tones = [0, 3, 7] if (minor or qual == "m") else [0, 4, 7]
+        seventh = 11 if qual == "maj" else 10
+        if ext == "6":
+            tones.append(9)
+        elif ext in ("7", "9", "11", "13"):
+            tones.append(seventh)
+            if ext in ("9", "11", "13"):
+                tones.append(14)
+            if ext == "11":
+                tones.append(17)
+            if ext == "13":
+                tones.append(21)
+        elif qual == "maj":
+            tones.append(11)
+    if suf == "sus":
+        tones = [t for t in tones if t not in (3, 4)] + [5]
+    elif suf == "alt":
+        tones = [0, 4, 10, 13, 15]
+    elif suf == "add9":
+        tones.append(14)
+    bass = root
+    if m["bass"]:
+        b = m["bass"]
+        bass = (tonic + (DEGREES[b] if b.isdigit() else NUMERALS[b]) + _acc(m["bacc"])) % 12
+    return root, sorted(set(tones)), bass
+
+
 def note_name(midi: float | None) -> str | None:
     if midi is None:
         return None

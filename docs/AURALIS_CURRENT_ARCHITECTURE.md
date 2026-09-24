@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** AU-04 (Song Blueprint), 2026-09-24
+**Last updated:** AU-05 (Structured Composer + instrumental render), 2026-09-24
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -200,6 +200,9 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | Song Blueprint (AU-04) | `POST /composer/blueprint` | Prompt + lyrics + optional era / harmony / vocal / groove / key / tempo / length, with `use_dna`, `use_voice`, `artist_dna_weight`, `seed` → a complete, explained blueprint (not saved) |
 | | `POST /composer/blueprint/revise` | `{blueprint, changes}` with `title`, `tempo`, `key`, `lyrics`, `sections` (ids to keep, patches, new types) → re-derived blueprint; 422 on invalid edits |
 | | `POST /composer/blueprint/regenerate` | `{blueprint, section_id}` → new chords for that section type (all of its sections); nothing else changes |
+| Instrumental (AU-05) | `GET /composer/providers` | Render providers (today: `synth`, local numpy instruments) |
+| | `POST /composer/render` | `{blueprint, seed, provider, master}` → background job `instrumental-render` (one at a time): arrange → MIDI → stems → mix + master. Progress via `/jobs/{id}` |
+| | `GET /composer/render/{job}/file/{name}` | `master`, `mix`, `midi`, `melody_guide`, `report`, or a stem (`drums`, `bass`, `keys`, `pad`, `fx`). Saving uses `/projects/{pid}/import-job` |
 | | `PUT/GET /projects/{pid}/blueprint`, `GET /projects/{pid}/blueprint/revisions` | Save (open projects and valid blueprints only) / read the current blueprint / list saved revisions |
 | | `GET /artist/library/songs/{song}/preview` | Player audio: a full mix streams from its folder; a stem set is summed once into a cached 16-bit mixdown under `artist\previews\` (never in the catalog) |
 | | `POST /artist/library/sources`, `DELETE /artist/library/sources/{sid}`, `POST /artist/library/rescan` | Add a catalog folder (scans it) / forget one (folder untouched) / rescan |
@@ -222,7 +225,7 @@ outputs become durable.
 | `frontend/src/App.jsx` | **Console shell (UI redesign, 2026-09-24):** `Sidebar` + page + `PlayerBar`. Pages: `create`, `music`, `studio`, `voice`, `projects`, and tools `master`, `mix`, `rack`, plus `harmony` only when `HarmonicReference.jsx` exists in the checkout (`import.meta.glob`, so the build never depends on it). `API = VITE_API ?? http://127.0.0.1:8001` |
 | `frontend/src/Shell.jsx` | `Sidebar`: 3D gold AURALIS wordmark that morphs on press, nav, tools, the trained voice card from `/voice/profiles`. `PlayerBar`: plays catalog songs through `/artist/library/songs/{id}/preview` |
 | `frontend/src/CreatePage.jsx` | Suno-style Simple/Advanced create panel (description or lyrics + styles, suggestions from real catalog aggregates, Era & style, Artist DNA / my-voice switches) beside the workspace. **Create builds a Song Blueprint (AU-04)**, and the workspace switches between *Blueprint* and *My songs*. No audio is rendered yet, and the page says so |
-| `frontend/src/BlueprintView.jsx` + `Blueprint.css` | The editable blueprint (AU-04): title, tempo, key (24 keys), meter and length, groove, an energy-curve chart, and one card per section. Each card has type, bars, move/copy/remove, chord chips with Roman numerals, a Roman-numeral text field, harmony options, "New" chords, chords per bar, energy, arrangement role levels and the vocal register. Below: vocal constraints, arrangement palette, originality checks. "Why?" on every decision; save to an open or new project. Every edit calls `/composer/blueprint/revise` |
+| `frontend/src/BlueprintView.jsx` + `Blueprint.css` | The editable blueprint (AU-04): title, tempo, key (24 keys), meter and length, groove, an energy-curve chart, and one card per section. Each card has type, bars, move/copy/remove, chord chips with Roman numerals, a Roman-numeral text field, harmony options, "New" chords, chords per bar, energy, arrangement role levels and the vocal register. Below: vocal constraints, arrangement palette, originality checks. "Why?" on every decision; save to an open or new project. Every edit calls `/composer/blueprint/revise`. A *Render instrumental* panel (AU-05) renders the blueprint, shows progress, plays the master, stems and melody guide, downloads WAV/MIDI, offers *New take* (next seed), warns when the blueprint changed since the render, and saves the render to a project |
 | `frontend/src/DnaPage.jsx` | "Artist DNA" page (AU-03): a card per trait with its headline, confidence, a small visual (tempo bands, key families, loops, forms, writing range drawn inside the trained voice range), a note, and playable evidence songs; the weighting rules in plain words |
 | `frontend/src/AtlasPanel.jsx` | Collapsible "Era & style" panel in Create's Advanced mode (AU-03B): Era (with *Auto*), Harmony, Vocal approach, Groove; shows Atlas candidates with the key suggested for the user's voice, sourced/hypothesis badges and source links. Since AU-04 Create controls it, so its choices feed the blueprint |
 | `frontend/src/MasterMix.jsx` | The master / mix-from-stems workflow (same API calls as before), restyled |
@@ -274,6 +277,7 @@ The code is in `auralis/projects/store.py` (`ProjectStore`, `Project`,
   | pitch-polish | output → `vocal`, report → `report` |
   | vocal-finish | rack upload → `source`, output → `vocal`, placed preview → `mix`, report → `report` |
   | auto-studio-polish | pitch stage and output → `vocal`, preview → `mix` |
+  | instrumental-render (AU-05) | stems → `stem`, pre-master → `mix`, master → `master`, melody guide / MIDI / rendered blueprint → `generated`, mix report → `report` |
 
   Mastering reference tracks are never imported.
 - **Blueprint (AU-04).** `save_blueprint` writes `blueprint.json` (current) and `blueprints/rNNNN.json` (every saved revision), plus `lyrics.txt` when the blueprint has lyrics. It logs to history and refuses closed projects.
@@ -375,9 +379,26 @@ Every decision writes a sentence to `why` (per field) or to the section's `why`,
 
 ---
 
+## Structured Composer and instrumental render (AU-05)
+
+- **`composer/arrange.py`** turns a blueprint into note tracks, deterministic per seed. A note is `(start_beat, length_beats, midi_pitch, velocity)`.
+  - *keys:* rootless voicings for rich chords, placed so each chord moves as little as possible from the last (E3–E5). The comping rhythm follows the section's keys level and repeats every bar of a long chord.
+  - *pad:* sustained voicings (C4–D6) where the pad is on.
+  - *bass:* root or slash bass (B♭1–A2), a pattern by level and DNA syncopation, and a chromatic approach into the next chord at full level. 808-style long notes when the era palette has an 808.
+  - *drums:* General-MIDI patterns by Atlas groove feel (hip-hop, straight, laid-back, deep pocket, swing, half-time at 118+ BPM). Density comes from the arrangement level. Ghost notes in laid-back feels, fills into choruses, crashes on arrivals.
+  - *fx:* risers into choruses, impacts on chorus arrivals, a downlifter at the outro.
+  - *melody:* a **guide** lead line inside each section's vocal register and the key's scale. Chord tones fall on strong beats, with steps between. Choruses arch to the peak and repeat a hook cell. With lyrics, each line is one phrase with one note per estimated syllable. It is written from rules and the seed only; no song's melody is an input. It is **never mixed into the instrumental**, and the guide singer (AU-07) will use it.
+- **`composer/midi.py`:** type-1 Standard MIDI File writer (tempo/meter track plus one named track per part, GM programs, drums on channel 10) and a minimal reader used by tests. No dependency.
+- **`generation/`:** the provider boundary from roadmap §7. `RenderProvider` / `RenderResult` are in `base.py`; the `PROVIDERS` registry is in `__init__.py`.
+  - `synth.py` (`SynthRenderer`) uses numpy instruments only: FM electric piano, detuned-saw pad, synth and 808 bass, a synthesized drum kit, FX sweeps, and a plain "oo" tone for the melody guide. It applies swing on off-beat sixteenths, the Atlas per-part timing offsets, seeded ±3 ms humanising and a synthetic-IR reverb (overlap-add, memory-light). It writes 24-bit stereo stems.
+  - `render_instrumental` validates the blueprint, arranges it, writes `arrangement.mid` and `blueprint.json`, renders stems, then runs **`engine.pipeline.run`** unchanged, with explicit roles (drums/bass/keys→harmonic/pad→harmonic/fx→other) and the blueprint's `mix_profile`. It writes `render.json`.
+- **Speed and memory:** a 3:05 blueprint renders and masters in about 46 s. Parts render one at a time, so peak memory stays near one stereo stem.
+
+---
+
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). The run with the local
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). The run with the local
 uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
@@ -389,6 +410,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
 | `tests/test_composer.py` (30, AU-04) | Brief words and explicit overrides. Lyrics headers (a lyric line starting with "hook" is not a header). 11 Roman-numeral realisations; key parsing. **Gate:** a complete blueprint: tempo, key, 4/4, intro to outro, chords filling every bar, arrangement roles, energy curve, vocal registers inside the voice, chorus above verse, a reason for every decision. No melody keys anywhere. DNA loops re-voiced and used once; chorus differs from verse. Key fits the voice and DNA; a narrow voice gets an honest stretch. An era without the DNA's mode follows the era. Tempo from DNA, half-time, prompt. Form from lyrics and length. Works with no DNA and no voice. Catalog twin flagged. Edits to key, tempo, sections and chords re-derive everything; invalid edits reported; regenerate changes one section type only. Save with revisions and lyrics, survives a new store, refused when closed. API: create, revise, 422, regenerate, save, read |
+| `tests/test_generation.py` (13, AU-05) | Chord tones (6 cases, slash bass). Keys notes are always tones of the sounding chord; no drums where the arrangement has them off; crashes on chorus arrivals. Voice leading moves about a step per voice. The melody guide stays inside each section's register and scale, is deterministic per seed and varies with it. MIDI round trip (tempo, track names, note counts, timing). **Gate (ground truth):** render a 12-bar blueprint, then analyse the audio: tempo within ±3 BPM from the drums stem, the key (or its relative) from keys + bass, a mastered stereo WAV of the right length at ≤ −0.9 dBTP, and the melody guide kept out of the stems. Render job → project assets. API: providers, 422 on a bad blueprint, render job, stem and MIDI downloads, 404 for unknown files, save to project |
 | `tests/test_artist_dna.py` (13, AU-03) | Version-word stripping. Families group versions but not shared first words. Versions share one song's weight. Switched-off songs ignored. Covers down-weighted. Relative keys share a family. Loop rotations merged. Form and lift. Melody only from vocal stems. Voice headroom/footroom. Every trait has confidence. Empty state. API |
 | `tests/test_theory_atlas.py` (22, AU-03B) | Canonical Atlas valid, all 6 eras. Provenance and honest status on every row. Guard rejects melodies/lyrics, absolute chord names, over-long progressions, note sequences in vocal anchors, and 'sourced' rows citing only the placeholder. Roman-numeral parser. **Gate:** 80s R&B returns ≥3 transposable, sourced harmony candidates plus vocal and groove, keys always suggested, no melody keys in the answer. Filters steer results. Keys fit the voice and prefer DNA families; minor keys use the relative-major family; a narrow voice gets an honest stretch answer. API. Export matches the JSON (7 sheets / 7 CSVs) |
 | `tests/test_artist_library.py` (26, AU-02 + previews) | Stem-role naming (7 cases). KITS instrumental vs stem. Titles/variants. Scan grouping of loose files, a stem folder, a stems zip and a lone stem. Zip loading leaves no temp files. Rescan keeps analyses and marks changed songs stale. **Analysis never writes to the catalog** (size + mtime snapshot). Removing a folder forgets songs but leaves files. **Ground truth on a synthetic song** (90 BPM, C major, I–V–vi–IV, V-C-V-C with chorus backing vocals): tempo ±3, key, progression, chorus found from backing vocals, melody range, rhythm source, instrumentation. Mix-only structure finds repeats. API flow: add folder → analyse job → song analysis → include toggle |
@@ -412,7 +434,7 @@ The generation layer should **feed** these modules, not replace them.
 |---|---|---|
 | **Artist DNA** (AU-03) | **Built (AU-03):** `artist/dna.build_dna` over the AU-02 library, `GET /artist/dna`. Feed its `traits.key.families[].major_tonic`, tempo band, loops, form and `traits.voice` into AU-04. Originally planned from: aggregate `artist/analyses/*.json` over songs with `included = true`, weighting stem sets higher (their melody, structure and rhythm come from stems). Also available: `engine/analysis.analyse` for spectral, loudness, stereo and onset features. `engine/loudness.measure` for LUFS/TP. `voice/pitch.detect_key`, `_track_pitch`, `_segment_notes` for key and melody contour. `voice/profiles.analyse_dataset` for vocal range and readiness. Pipeline `session.json` as a model of provenance output | New: tempo/structure/chord/section analysis, catalog storage under `%LOCALAPPDATA%\Auralis\artist\`. The local uncommitted `engine/harmony.py` (scale-degree profiles, out-of-key notes) could become a harmony-trait extractor if the user commits it |
 | **Song Blueprint** (AU-04) | **Built (AU-04):** `composer.build_blueprint` over `artist/dna`, `theory.candidates`, `theory.suggest_keys`/`key_fit`, the trained voice range and the library summaries; saved via `ProjectStore.save_blueprint`. AU-05 should read `sections[].chords` (bar, beat, beats, roman, chord), `groove`, `arrangement`, `energy_curve` and `sections[].vocal`. `arrangement.mix_profile` names a `StyleProfile` for AU-10 | `composer/chords.parse_key` accepts G♯/D♭ spellings that `voice/pitch.parse_key` rejects |
-| **Composer** (AU-05) | `docs/RECONSTRUCTION_ROADMAP.md` renderer direction (MIDI → local sampler). `engine/console.apply_and_sum` to sum rendered parts | New: harmony, bass, drum and melody generators, MIDI renderer provider |
+| **Composer** (AU-05) | **Built (AU-05):** `composer.arrange` + `composer.midi` + `generation` (provider registry, `synth`) + `engine.pipeline.run` for mix/master | Next: better instruments as extra providers (SoundFont/sampler in an isolated venv), per-section regenerate of a single part |
 | **Atmosphere Engine** (AU-06) | `finish._ambience_send`/`_double_send` as simple width and space primitives. `mastering._set_stereo_width` for M/S width. `analysis` role taxonomy (`"other"`/`"harmonic"`) for routing | New: texture generation/assembly |
 | **Guide Singer** (AU-07) | `voice/paired` DTW alignment to check a synthetic guide against its target melody. `voice/pitch` note tracking to verify the guide is pitched and timed correctly | New: `voice/guide.py`, `voice/singing_provider.py`, installed as an isolated provider like Seed-VC |
 | **My Voice full-song pipeline** (AU-08) | `SeedVCProvider.convert` (with trained checkpoint), then `pitch.pitch_polish`, then `finish.finish_vocal` with instrumental. `_run_auto_studio_polish` already chains pitch and finish | New: long-song chunking and stitching (Seed-VC runs on a whole file; 30 min timeout), plus orchestration from project assets rather than `source_job_id` |
@@ -435,7 +457,7 @@ Rules carried forward:
 - ~~Music-library import and analysis~~, done in AU-02. Still missing: lyrics text analysis, chord qualities beyond major/minor triads (7ths, sus), time signatures other than 4/4, and confident section roles for mix-only songs.
 - Artist DNA, music-library import, retrieval, similarity guard.
 - ~~Song blueprint~~, done in AU-04. Still missing: lyric writing, per-line syllable fitting, meters other than 4/4, and a prompt reader beyond keywords.
-- Composer, MIDI rendering, atmosphere, generative-audio providers.
+- ~~Composer, MIDI rendering~~, done in AU-05 (the local synth is a sketch-quality provider). Still missing: sample-based instruments, atmosphere (AU-06), generative-audio providers (AU-11).
 - The My Voice redesign (Kits-style convert / clone / history layout) is planned in `docs/VOICE_STUDIO_PLAN.md`, not built.
 - Guide singer, vocal harmony/doubles generator, full-song voice orchestration.
 - A generic provider interface/registry and a GPU/model scheduler. The audit hit exactly the memory contention this is meant to prevent (see below).

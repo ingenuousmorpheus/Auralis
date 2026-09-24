@@ -18,7 +18,7 @@ _PROVENANCE_KEYS = (
     "profile_id", "mode", "reference_used", "before_lufs", "after_lufs",
     "before_peak_db", "after_peak_db", "provider", "quality", "diffusion_steps",
     "semitone_shift", "model_mode", "profile_name", "style", "notes_detected",
-    "notes_corrected",
+    "notes_corrected", "seed", "tempo", "blueprint_id", "blueprint_revision",
 )
 
 
@@ -93,6 +93,16 @@ def job_outputs(job: dict) -> list[JobOutput]:
         add(result.get("pitch_path"), "vocal", "pitch-polished vocal", "pitch_polished.wav")
         add(result.get("output_path"), "vocal", "studio-polished vocal", "studio_polished.wav")
         add(result.get("preview_path"), "mix", "vocal in instrumental", "studio_preview.wav")
+    elif kind == "instrumental-render":
+        for part, path in (result.get("stems") or {}).items():
+            add(path, "stem", f"{part} stem", f"{part}.wav")
+        add(result.get("mix_path"), "mix", "instrumental pre-master", "instrumental_pre_master.wav")
+        add(result.get("master_path"), "master", "instrumental master", "instrumental.wav")
+        add(result.get("melody_guide_path"), "generated", "melody guide (not in the instrumental)",
+            "melody_guide.wav")
+        add(result.get("midi_path"), "generated", "arrangement MIDI", "arrangement.mid")
+        add(result.get("blueprint_path"), "generated", "blueprint used", "blueprint_rendered.json")
+        add(result.get("report_path"), "report", "mix report", "mix_report.md")
     else:
         raise ValueError(f"Jobs of kind '{kind}' have nothing to save to a project.")
 
