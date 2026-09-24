@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import SaveToProject from "./SaveToProject.jsx";
 import Knob from "./Knob.jsx";
 
 /* Nectar-style vocal chain rack.
@@ -359,6 +360,8 @@ export default function VocalRack({ API, sourceJobId = null, sourceName = "", on
       <a className="rack-download" href={`${API}/voice/finish/${jobId}/download`}>⬇ WAV</a>
       <a className="rack-download alt" href={`${API}/voice/finish/${jobId}/report`}>report</a>
     </div>}
+
+    {result && <SaveToProject API={API} jobId={jobId} label="Save finished vocal to a project" />}
 
     {result?.decision?.reasons?.length > 0 && <div className="rack-reasons">
       <button className="rack-reasons-toggle" onClick={() => setShowReasons(v => !v)}>

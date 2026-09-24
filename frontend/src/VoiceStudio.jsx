@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import VocalRack from "./VocalRack.jsx";
+import SaveToProject from "./SaveToProject.jsx";
 
 export default function VoiceStudio({API, card, btn, colors, onBack}) {
   const {V,T,PK,PANEL2,TEXT,MUTE} = colors;
@@ -374,6 +375,7 @@ export default function VoiceStudio({API, card, btn, colors, onBack}) {
       <audio controls src={`${API}/voice/download/${jobId}`} style={{width:"100%",marginTop:12}}/>
       <a href={`${API}/voice/download/${jobId}`} style={{...btn(true),display:"block",
         textAlign:"center",textDecoration:"none"}}>Download Converted WAV</a>
+      <SaveToProject API={API} jobId={jobId} label="Save guide + converted vocal to a project"/>
       <div style={{marginTop:12,padding:12,borderRadius:10,background:"#0d1019",border:`1px solid ${T}44`}}>
         <b style={{fontSize:13,color:T}}>One-Click Studio Polish</b>
         <div style={{fontSize:10,color:MUTE,marginTop:4,lineHeight:1.4}}>
@@ -419,6 +421,7 @@ export default function VoiceStudio({API, card, btn, colors, onBack}) {
       </>}
       <a href={`${API}/voice/auto-polish/${autoJobId}/download`} style={{...btn(true),display:"block",
         textAlign:"center",textDecoration:"none"}}>Download Studio-Polished WAV</a>
+      <SaveToProject API={API} jobId={autoJobId} label="Save polished vocal to a project"/>
     </div>}
 
     {result?.output_path && showPitch && <div style={{...card,marginTop:12,border:`1px solid ${T}55`}}>
@@ -480,6 +483,7 @@ export default function VoiceStudio({API, card, btn, colors, onBack}) {
         textAlign:"center",textDecoration:"none"}}>Download Pitch-Polished WAV</a>
       <a href={`${API}/voice/pitch/${pitchJobId}/report`} style={{...btn(false),display:"block",
         textAlign:"center",textDecoration:"none",fontSize:12}}>Download Note Edit Report</a>
+      <SaveToProject API={API} jobId={pitchJobId} label="Save pitch-polished vocal to a project"/>
     </div>}
 
     {result?.output_path && showFinish && <div style={{marginTop:12,gridColumn:"1 / -1"}}>

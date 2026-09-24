@@ -1376,3 +1376,70 @@ Begin **AU-01 Persistent Projects**:
 Optional before or alongside AU-01, no rewrites:
 - Clear the environment blocker and re-verify `/voice/convert`.
 - Fix the `run.py` port (8000 → 8001).
+
+## Session 002 — 2026-09-23 — AU-01 Persistent Projects
+
+### Goal
+Build the project/session model so that a song's sources and generated assets live in a reopenable project that survives backend restarts (§14). Make the existing workflows save into projects **without changing how they run**.
+
+### Starting State
+- `main` at `01cfb8d` (AU-00 done).
+- One AU-00 check was still open: live Seed-VC conversion. At the start of this session commit charge had 6.7 GB free of 63.7 GB, with LM Studio still resident, so the check could not be re-run.
+- The local uncommitted Harmonic Reference work was still in the tree. It shares `auralis/api/main.py`, `frontend/src/App.jsx` and `README.md` with this session's work, so only this session's hunks were staged for commit (see Changed).
+
+### Changed
+- **New backend package `auralis/projects/`:**
+  - `store.py`: `ProjectStore` / `Project` / `ProjectAsset`. Modeled on `VoiceProfileStore`: 12-hex ids, root at `%LOCALAPPDATA%\Auralis\projects\`, kind folders, atomic `project.json`, append-only history, open/closed state (closed means read-only), copy-in assets with size and SHA-256, and `verify(deep=)`.
+  - `jobs.py`: `job_kind` and `job_outputs` map every existing job kind onto assets with provenance. Mastering reference tracks are never imported, which preserves the rule that references live only in the job temp folder.
+- **New `auralis/api/projects.py`:** a FastAPI router for `/projects` (CRUD, open, close, verify, import-job, asset upload/download/delete).
+- **`auralis/api/main.py`:** two added lines (router import and `app.include_router`).
+- **Frontend:**
+  - New: `ProjectsPanel.jsx` ("My Projects" mode), `SaveToProject.jsx` (reusable save control), `Projects.css`.
+  - `App.jsx`: added the Projects home card and mode, and Save-to-project on the master/mix result.
+  - `VoiceStudio.jsx`: Save-to-project on the converted, pitch-polished and studio-polished results.
+  - `VocalRack.jsx`: Save-to-project on the rack result.
+- **Tests and docs:**
+  - New `tests/test_projects.py` (14 tests).
+  - `docs/AURALIS_CURRENT_ARCHITECTURE.md` updated: item 15, directories, API, frontend, new "Project model" section, tests, gaps.
+
+### Verification
+- `pytest -q` including the local harmony tests → 62 passed. Excluding the local untracked harmony tests → 42 passed (28 baseline + 14 new). No baseline test regressed.
+- `npm run build` passes.
+- **Real-process gate run.** uvicorn ran with `LOCALAPPDATA` pointed at a scratch folder so no test data touched the real project store.
+  1. A real 3-stem `/mix` job and a `/voice/finish` job (with instrumental) were imported into project "Gate Test Song". A direct audio upload was added too, for 12 assets in total.
+  2. The project was closed.
+  3. The backend **process was killed and restarted**.
+  4. The project was listed as `closed · 12`.
+  5. `POST /open` reported `integrity.linked = true`, and `verify?deep=true` also gave `linked: true`.
+  6. The master downloaded from the project was **byte-identical** (`cmp`) to the master downloaded from the job before the restart.
+- **UI (browser pane):**
+  - The Projects screen listed the project and showed all 12 assets grouped by kind, with players and provenance.
+  - Close hid "Add audio files". Reopen restored it.
+  - In the Vocal Chain rack, a generated test WAV → Analyze + Render → **Save** gave "✓ Saved 3 files to “Gate Test Song”".
+  - No console errors.
+- All test audio was synthetic. No user audio or voice data was read, and nothing left the machine.
+
+### Result
+**COMPLETE.** AU-01 gate: *"A project can be created, closed, reopened, and all source/generated assets remain linked."* This passed across a real backend restart and in the automated API test `test_api_master_job_saved_to_project_survives_restart`.
+
+### Findings
+- Files are **copied** into projects, never moved or linked. The job temp folder is never cleaned (AU-00 finding 3), but projects must not depend on it, and copying makes that safe.
+- A rack-uploaded vocal is saved as `rack_source.wav`, because vocal-finish jobs do not keep the original upload name. This is cosmetic.
+- Work currently flows **job → project** only. Nothing starts a job *from* a project asset yet. AU-10 assembly will need that direction (e.g. a `/mix` that takes project stem ids).
+- `Project.voice_profile_id` exists and can be set via `PATCH` but is not yet shown in the UI. It is the hook for AU-08.
+
+### Gate/Blocker
+- AU-01: none.
+- Still open from AU-00: the live Seed-VC conversion check, which needs free commit memory (close LM Studio or enlarge the page file).
+
+### Do Not Redo
+- The project storage layout, manifest schema v1, and the job → asset mapping are settled.
+- Extend `auralis/projects/` rather than adding a second persistence layer.
+- Mastering references are intentionally excluded from projects. Do not "fix" this.
+
+### Next Action
+Begin **AU-02 My Music Library**:
+- Catalog import and analysis of user-owned songs under `%LOCALAPPDATA%\Auralis\artist\library\`, reusing the extractors listed in the architecture Reuse Map: `engine/analysis.analyse`, `engine/loudness.measure`, `voice/pitch.detect_key`.
+- New analysis is needed for tempo, section structure and energy curve.
+- Gate: 10 user-owned songs give useful BPM/key/structure/harmony/energy metadata.
+- **This needs the user's own songs.** Ask which folder to import from; never pick files on your own.

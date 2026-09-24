@@ -3,6 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
+**Last updated:** AU-01 (persistent projects), 2026-09-23
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -56,6 +57,7 @@ Status vocabulary:
 | `%TEMP%\auralis_voice_profile_*`, `auralis_voice_dataset_*`, `auralis_paired_*` | Upload staging for voice endpoints | Deleted in `finally:` blocks |
 | `%LOCALAPPDATA%\Auralis\voices\<profile_id>\` | `profile.json`, `reference.wav`, `dataset/clip_*.wav`, `paired/<id>/`, `model/ft_model.pth` + config | Persistent until the profile is deleted |
 | `%LOCALAPPDATA%\Auralis\providers\seed-vc\` | Cloned Seed-VC repo, its own `.venv` (torch 2.4.0+cu121), `checkpoints/` (HF cache, ~3.3 GB), `runs/` | Persistent, installed by `tools/install_seed_vc.ps1` |
+| `%LOCALAPPDATA%\Auralis\projects\<project_id>\` | `project.json` + `sources/ stems/ vocals/ mixes/ masters/ reports/ generated/` (AU-01) | Persistent until the project is deleted |
 | `%LOCALAPPDATA%\Auralis\runtime\` | Launcher PID file and logs | Per launch |
 | `<repo>\checkpoints\` | ~2.4 GB model cache left in the repo root by earlier runs | Gitignored. Not referenced by current code |
 
@@ -105,7 +107,7 @@ deterministic, and none uses a model.
 | 12 | Pitch polish | IMPLEMENTED | `test_parse_key_and_detect_c_major`, `test_pitch_polish_corrects_note_centers_and_writes_report`. Live `/voice/pitch`: 8 notes detected, 7 corrected. Download and report returned 200 |
 | 13 | Vocal Finish | IMPLEMENTED | 4 tests in `test_vocal_finish.py`. Live `/voice/finish` in rack upload mode: download, preview, report and source all returned 200. `/voice/auto-polish` (pitch→finish) download and preview returned 200 |
 | 14 | Instrumental-aware vocal placement | IMPLEMENTED | `finish.analyze_vocal` measures vocal-to-instrument dB and a masking score against an optional instrumental. `_context_mix` renders a placed preview. Pitch Polish uses the instrumental for key detection |
-| 15 | Project/job persistence | PARTIAL | Jobs live in an in-memory dict (lost on restart) plus `%TEMP%` work dirs (never cleaned). Voice profiles persist. **No song-project model exists** |
+| 15 | Project/job persistence | IMPLEMENTED (AU-01) | Jobs are still in memory plus `%TEMP%`. Since AU-01, finished jobs can be saved into persistent projects (`auralis/projects/`). The project survived a real backend restart with all assets linked (see Persistence) |
 | 16 | Frontend/backend communication | IMPLEMENTED | REST + WS as above. No console errors in the browser during the audit |
 | 17 | Local model/provider dirs | IMPLEMENTED | `%LOCALAPPDATA%\Auralis\{voices,providers,runtime}` as described above |
 | 18 | Tests | IMPLEMENTED (backend only) | 28 committed tests pass. No frontend tests or lint. `npm run build` passes |
@@ -186,11 +188,16 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | Pitch | `GET /voice/pitch-styles`, `POST /voice/pitch`, `GET /voice/pitch/{id}/download\|report` | |
 | Finish | `GET /voice/finish-presets`, `GET /voice/rack-modules`, `POST /voice/finish`, `GET /voice/finish/{id}/download\|preview\|report\|source` | |
 | Auto polish | `POST /voice/auto-polish`, `GET /voice/auto-polish/{id}/download\|preview` | |
+| Projects (AU-01) | `GET/POST /projects`, `GET/PATCH/DELETE /projects/{pid}` | List / create / read (with integrity) / rename or set voice profile / delete |
+| | `POST /projects/{pid}/open`, `POST /projects/{pid}/close`, `GET /projects/{pid}/verify?deep=` | Open/close state. Integrity check (existence + size, or SHA-256 when `deep`) |
+| | `POST /projects/{pid}/import-job` | Copy a finished job's inputs and outputs in, with provenance. Reference tracks are never imported |
+| | `POST /projects/{pid}/assets`, `GET/DELETE /projects/{pid}/assets/{aid}` | Add an audio file directly / download / remove |
 
 Chaining convention: the pitch, finish and auto-polish endpoints take a
 `source_job_id` and read `JOBS[src]["result"]["output_path"]`. This is the
 only way stages hand audio to each other today. It is in-memory and does not
-survive a restart.
+survive a restart. Saving to a project (`/projects/{pid}/import-job`) is how
+outputs become durable.
 
 ---
 
@@ -202,6 +209,8 @@ survive a restart.
 | `frontend/src/App.jsx` | Shell with a `mode` state: `home` (mode cards + decorative `SpectralConsole`), `master` and `mix` (4-step `WorkflowRail`: Upload/Stems → Sound → Process → Master, with `InspectorPanel` and `RolePill`), `voice`, `rack`. `API = VITE_API ?? http://127.0.0.1:8001` |
 | `frontend/src/VoiceStudio.jsx` | "My Voice Studio": engine status/install, (1) create profile with consent, (2) Studio Voice dataset + paired calibration + readiness + training depth, (3) convert guide, then pitch polish / one-click auto-polish with A/B players |
 | `frontend/src/VocalRack.jsx` | Nectar-style module rack (EQ curve, de-ess, comp, saturate, dimension, space, output) over `/voice/finish` with a `modules` JSON body. Assist mode, in/out/mix monitor |
+| `frontend/src/ProjectsPanel.jsx` | "My Projects" mode (AU-01): create, list, open/close/delete, assets grouped by kind with players, downloads, provenance, integrity badges, add audio files |
+| `frontend/src/SaveToProject.jsx` | "Save to project" control (pick an open project or create one) on the master/mix result, the converted, pitch-polished and studio-polished vocal results, and the Vocal Chain rack result |
 | `frontend/src/Knob.jsx` | Rotary control used by the rack |
 | `frontend/src/App.css` | Global styling |
 
@@ -222,13 +231,36 @@ two initial fetches resolve. There is no loading state.
 | Voice profiles, datasets, paired pairs | `%LOCALAPPDATA%\Auralis\voices\<id>` | Yes |
 | Trained checkpoints | `voices\<id>\model\ft_model.pth` (copied from provider `runs\auralis_<id>\`) | Yes |
 | Mix provenance | `session.json` + `report.md` per mix job | Yes, as files in temp |
-| Song projects | — | **Do not exist.** Nothing groups sources, stems, vocals, mixes and masters under a reopenable project |
+| Song projects (AU-01) | `%LOCALAPPDATA%\Auralis\projects\<id>\project.json` + kind folders | **Yes.** See below |
+
+### Project model (AU-01)
+
+The code is in `auralis/projects/store.py` (`ProjectStore`, `Project`,
+`ProjectAsset`), `auralis/projects/jobs.py` (job → asset mapping) and
+`auralis/api/projects.py` (router).
+
+- **Manifest.** `project.json` (schema v1) holds id, name, created/updated/opened/closed times, `status` (`open`|`closed`), an optional `voice_profile_id`, `assets[]` and an append-only `history[]`. It is written atomically (temp file + `os.replace`).
+- **Assets.** Each asset records id, kind, name, a path relative to the project folder, size, SHA-256, `origin` (upload, or job id + job kind + role) and `metadata` (scalar provenance such as profile, LUFS, key, quality). Files are **copied** in, so the job temp folder can disappear without breaking the project.
+- **Open/closed.** A closed project is read-only: adding or removing assets returns 409 until it is reopened.
+- **Job mapping.** `jobs.job_outputs`:
+
+  | Job | Becomes |
+  |---|---|
+  | master | input → `source`, master → `master` |
+  | mix | stems → `stem`, pre-master → `mix`, master → `master`, report and session → `report` |
+  | voice-conversion | guide → `source`, output → `vocal` |
+  | pitch-polish | output → `vocal`, report → `report` |
+  | vocal-finish | rack upload → `source`, output → `vocal`, placed preview → `mix`, report → `report` |
+  | auto-studio-polish | pitch stage and output → `vocal`, preview → `mix` |
+
+  Mastering reference tracks are never imported.
+- **Not yet.** There is no `blueprint.json` or `lyrics.txt` (they belong to AU-04). Jobs do not *start* from project assets yet, so work still flows job → project. A rack-uploaded vocal is saved as `rack_source.wav` because the job does not keep the original filename.
 
 ---
 
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s). The run with the local
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. The run with the local
 uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
@@ -239,6 +271,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_voice.py` (6) | Profile privacy (`public_dict` strips paths) and reuse. Consent required. Clipping rejected. Provider status isolated to its dir. Dataset segmentation and readiness scoring. Training state transitions |
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
+| `tests/test_projects.py` (14, AU-01) | Folders and manifest. Name validation. Copy-not-move. Closed projects are read-only. Survives a new store instance. Verify catches missing and changed files. Id validation. Asset removal. Job mapping for master and mix (reference excluded). Unfinished and non-audio jobs rejected. **API gate test:** master job → project → close → simulated restart → reopen → byte-identical download |
 | `tests/test_vocal_finish.py` (4) | Serial compression decision. Rack override clamp, bypass and annotation. `None` overrides are identity. Render + preview + report |
 
 Not covered by tests:
@@ -276,7 +309,7 @@ Rules carried forward:
 
 **Missing (planned by the roadmap):**
 
-- Persistent song projects. Nothing survives a backend restart except voice profiles.
+- ~~Persistent song projects~~, done in AU-01. Still missing: starting jobs *from* project assets, and blueprint/lyrics files.
 - Artist DNA, music-library import, retrieval, similarity guard.
 - Song blueprint, lyrics, composer, MIDI rendering, atmosphere, generative-audio providers.
 - Guide singer, vocal harmony/doubles generator, full-song voice orchestration.
