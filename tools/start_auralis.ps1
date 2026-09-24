@@ -87,7 +87,7 @@ $backend = Start-Process -FilePath "python" `
     -PassThru
 
 Write-Host "Starting Auralis interface..." -ForegroundColor Cyan
-$frontendCommand = "set `"VITE_API=$backendUrl`" && `"$env:ProgramFiles\nodejs\npm.cmd`" run dev -- --host 127.0.0.1"
+$frontendCommand = "set `"VITE_API=$backendUrl`" && `"$env:ProgramFiles\nodejs\npm.cmd`" run dev -- --host 127.0.0.1 --force"
 $frontendProcess = Start-Process -FilePath "cmd.exe" `
     -ArgumentList @("/d", "/s", "/c", $frontendCommand) `
     -WorkingDirectory $frontend `
@@ -104,7 +104,7 @@ $frontendProcess = Start-Process -FilePath "cmd.exe" `
 } | ConvertTo-Json | Set-Content -LiteralPath $pidFile -Encoding UTF8
 
 $ready = $false
-for ($attempt = 0; $attempt -lt 40; $attempt++) {
+for ($attempt = 0; $attempt -lt 80; $attempt++) {
     Start-Sleep -Milliseconds 500
     if ($backend.HasExited) {
         $details = Get-Content -LiteralPath $backendErr -Raw -ErrorAction SilentlyContinue
@@ -114,7 +114,9 @@ for ($attempt = 0; $attempt -lt 40; $attempt++) {
         $details = Get-Content -LiteralPath $frontendErr -Raw -ErrorAction SilentlyContinue
         throw "The interface stopped during startup.`n$details"
     }
-    if ((Test-Http "$backendUrl/health") -and (Test-Http $frontendUrl)) {
+    # The page server answers before its first bundle is built; wait for the
+    # app entry itself so the browser never opens onto a half-built page.
+    if ((Test-Http "$backendUrl/health") -and (Test-Http "$frontendUrl/src/main.jsx")) {
         $ready = $true
         break
     }
