@@ -1443,3 +1443,75 @@ Begin **AU-02 My Music Library**:
 - New analysis is needed for tempo, section structure and energy curve.
 - Gate: 10 user-owned songs give useful BPM/key/structure/harmony/energy metadata.
 - **This needs the user's own songs.** Ask which folder to import from; never pick files on your own.
+
+## Session 003 — 2026-09-24 — AU-02 My Music Library
+
+### Goal
+Import the user's own catalog, analyse every song locally, and produce useful BPM/key/structure/harmony/energy metadata (§3, AU-02 gate). The catalog came from two user-named folders. No Artist DNA aggregation yet (that is AU-03).
+
+### Starting State
+- `main` at `23675b7` (AU-01 done).
+- Seed-VC live check still blocked by host commit memory.
+- The user's local Harmonic Reference work was still uncommitted in the tree, so only this session's hunks of `auralis/api/main.py` and `frontend/src/App.jsx` are staged.
+- The catalog is on a network drive (~4 MB/s reads): 16 stem `.zip` packages, KITS-style stem folders with demos and lyrics `.txt`, and loose mixes/instrumentals/remixes. ~5.7 GB total.
+
+### Changed
+- **New package `auralis/artist/`:**
+  - `library.py`
+    - in-place scanning and grouping: zip → stem set; folder with 2+ named stems → stem set plus `reference` files; else one song per file
+    - lyrics linking by path
+    - stem-role naming, KITS `_backing_` = instrumental, variant tags
+    - `LibraryStore` (`%LOCALAPPDATA%\Auralis\artist\`) with fingerprints, stale detection and the include-for-DNA toggle
+    - `SongAudio` loads zip members one at a time via temp files and sums stems as it reads
+  - `analyze.py` (`ANALYSIS_VERSION = 3`): global loudness/LRA/width, tempo, bars, key, energy, chords/roman numerals/progressions, structure, rhythm, lead-vocal melody, production balance. Details in `docs/AURALIS_CURRENT_ARCHITECTURE.md` → "My Music library".
+  - `__main__.py`: CLI `python -m auralis.artist add|scan|analyse|list`.
+- **New `auralis/api/artist.py`:** `/artist/library` router (folders, rescan, songs, include toggle, background analysis job).
+- **`auralis/api/main.py`:** router include (2 lines).
+- **Frontend:** new `MyMusic.jsx` + `MyMusic.css` ("My Music" mode). `App.jsx` gets the home card and mode.
+- **Tests and docs:** new `tests/test_artist_library.py` (24). Architecture doc updated.
+
+### Verification
+- `pytest -q` including the local harmony tests → 86 passed. Excluding them → 66 passed (42 previous + 24 new). `npm run build` passes.
+- **Ground truth test:** a synthetic song (90 BPM, C major, I–V–vi–IV, V-C-V-C with backing vocals only in choruses) gave:
+  - tempo within ±1 BPM, key C major, the progression
+  - chorus found via backing-vocal activity
+  - melody range from the lead stem
+  - a mix-only repeat found
+  - a silent "Lead Vocals" stem ignored
+- **Real catalog:** 2 folders → 74 songs (33 stem sets: 16 zips + 17 folders; 41 mixes); 3 lone stems skipped. `analyse` v3: **74/74 done, 0 failed**, ~25–120 s per song. A snapshot test proves analysis never writes to catalog folders.
+- **Consistency on the user's own versions of the same song** (the only ground truth available without asking the user):
+  - Tempo agreed within 0.3 BPM for 4 of 5 vocal/instrumental or remix pairs.
+  - One 3:2 error (a vocal version vs its instrumental).
+  - Keys agreed on key family (relative major/minor, or a fifth apart) but not always on the exact tonic.
+- **UI (browser pane, real library):** 74/74 analysed. The song table and detail view render (energy/section timeline, progressions, rhythm, vocal range, stem balance). No console errors. No horizontal overflow at 1024 or 375 px.
+
+### Result
+**COMPLETE** against the gate: well over 10 user-owned songs imported, and every one has BPM, key, structure, harmony and energy metadata. The limits below are documented rather than hidden. The user has not yet spot-checked values against songs they know.
+
+### Findings
+- **Superseded within this session: analysis v1 and v2.**
+  - v1 labelled sections by chord repetition. It fragmented R&B songs that loop one 4-bar cycle (17 all-different sections in one song). Laplacian segmentation was tried and was worse (1–2-bar label flipping). It was replaced by **arrangement-based** segmentation from per-bar stem activity. In stem sets, choruses show up as backing vocals entering.
+  - v2 used arrangement for mix-only songs too. Loud masters have flat arrangement energy, so those came out as "S S". Mix-only songs now use **aligned bar-by-bar repetition** of chroma + timbre.
+  - v1/v2 tempo was **quantised** to librosa's frame grid (~5 BPM steps at 120; 11 songs read exactly 123.0). v3 fits a line through the beat times: on synthetic clicks, 93.0 → 93.0 and 120.0 → 120.0 (the grid gave 92.3 and 117.5).
+  - v1/v2 treated near-silent stems as active and extracted junk "melodies" from separation bleed. Several type-beat packages ship a "Lead Vocals" stem 18–97 dB below the music. v3 ignores stems >30 dB below the loudest, and reports no melody under 5% voiced frames.
+- `global.vocal_melody_found` replaced a first-draft `instrumental_detected` flag. Stem folders whose vocal lives only in the demo MP3 are *not* instrumentals. The 74 saved analyses were migrated in place (derived from the saved `melody` field; no audio re-read).
+- Tempo half/double (and one 3:2) ambiguity is inherent. BPM is folded into 65–145 and alternates are stored. Some slow jams likely read at double time.
+- Key detection is reliable for the **key family** but not the exact tonic/mode (confidence ~0.4). **AU-03 should aggregate keys by pitch-class set / key signature**, not by exact key name.
+- Mix-only structure is noticeably weaker than stem-set structure. AU-03 should weight stem sets higher for form, melody and rhythm traits.
+- Host memory is the practical constraint. Two analysis processes plus a resident local LLM exhausted commit memory (two "Unable to allocate" failures, both succeeded on retry). The stem loader was changed to sum stems as it reads.
+- Catalog metadata (song titles, paths) lives only in `%LOCALAPPDATA%` and is deliberately **not** written into this repo.
+
+### Gate/Blocker
+- AU-02: none.
+- Still open from AU-00: live Seed-VC conversion (host commit memory).
+
+### Do Not Redo
+- The catalog is indexed and analysed at v3. `python -m auralis.artist analyse` only re-runs pending/stale/older-version songs.
+- Laplacian segmentation and chord-repetition labelling were tried and rejected for this catalog (see Findings).
+- Do not re-add `instrumental_detected`. Use `vocal_melody_found`.
+
+### Next Action
+Begin **AU-03 Artist DNA V1**:
+- Aggregate `artist/analyses/*.json` over `included` songs into an inspectable profile. Weight stem sets higher, use key families, report tempo with its octave ambiguity, and describe typical form, chord vocabulary and progressions, groove, vocal range and production balance.
+- Show it in the UI with the evidence behind each trait.
+- **Before that, ask the user to** spot-check 3–5 songs they know (BPM/key), and to untick songs that should not shape their DNA (covers, type beats, other artists' remixes).

@@ -1,0 +1,146 @@
+/* My Music (catalog). Uses the App.css tokens. */
+
+.mm-shell { width: 100%; }
+
+.mm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .mm-grid { grid-template-columns: 1fr; }
+}
+
+.mm-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+  min-width: 0;
+}
+
+.mm-title { margin: 0 0 4px; font-size: 22px; }
+.mm-detail-title { margin: 0 0 2px; font-size: 20px; overflow-wrap: anywhere; }
+.mm-sub { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 12px; overflow-wrap: anywhere; }
+
+.mm-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.mm-input {
+  flex: 1 1 200px;
+  min-width: 0;
+  background: #0d1019;
+  border: 1px solid #2a3050;
+  color: var(--text);
+  padding: 10px 11px;
+  border-radius: 10px;
+}
+
+.mm-button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text);
+  padding: 10px 13px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 750;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.mm-button.primary {
+  border: none;
+  background: linear-gradient(135deg, var(--violet), var(--mint));
+  color: #031018;
+}
+
+.mm-button:disabled { opacity: 0.45; cursor: default; }
+
+.mm-sources { display: grid; gap: 4px; margin-bottom: 8px; }
+
+.mm-source {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--panel-soft);
+  font-size: 12px;
+}
+
+.mm-path { font-family: var(--mono); overflow-wrap: anywhere; }
+
+.mm-link { background: none; border: none; color: var(--cyan); cursor: pointer; font-size: 12px; padding: 0; }
+.mm-link.danger { color: var(--danger); }
+
+.mm-progress { margin-top: 10px; }
+.mm-progress-text { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-bottom: 5px; overflow-wrap: anywhere; }
+.mm-track { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.mm-track > div { height: 100%; background: linear-gradient(90deg, var(--violet), var(--mint)); transition: width 0.3s; }
+
+.mm-error { color: var(--danger); font-size: 12px; margin-top: 8px; }
+.mm-count { color: var(--muted); font-size: 12px; font-family: var(--mono); white-space: nowrap; }
+
+.mm-table-wrap { margin-top: 10px; max-height: 62vh; overflow: auto; }
+
+.mm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mm-table th {
+  position: sticky; top: 0; background: var(--panel-strong);
+  text-align: left; color: var(--muted); font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.08em; padding: 8px 6px;
+}
+.mm-table td { padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+.mm-table tr { cursor: pointer; }
+.mm-table tr:hover td { background: rgba(255, 255, 255, 0.025); }
+.mm-table tr.active td { background: rgba(102, 232, 255, 0.07); }
+
+.mm-song { font-weight: 700; overflow-wrap: anywhere; }
+.mm-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.mm-tag {
+  font-size: 10px; padding: 1px 7px; border-radius: 99px;
+  background: rgba(143, 155, 180, 0.14); color: var(--muted);
+}
+.mm-tag.stems { background: rgba(70, 246, 189, 0.13); color: var(--mint); }
+.mm-tag.bad { background: rgba(255, 107, 154, 0.16); color: var(--danger); }
+
+.mm-num { font-family: var(--mono); white-space: nowrap; }
+.mm-form { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .mm-hide-sm { display: none; }
+}
+
+.mm-empty { color: var(--dim); font-size: 13px; padding: 28px 0; text-align: center; }
+
+.mm-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
+.mm-fact { background: var(--panel-soft); border-radius: 12px; padding: 9px 10px; }
+.mm-fact-label { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; }
+.mm-fact-value { font-size: 16px; font-weight: 800; margin-top: 2px; }
+.mm-fact-note { color: var(--dim); font-size: 10px; margin-top: 2px; font-family: var(--mono); }
+
+.mm-h { margin: 18px 0 6px; font-size: 13px; }
+.mm-guess { color: var(--dim); font-weight: 500; font-size: 11px; margin-left: 6px; }
+
+.mm-timeline { width: 100%; height: 90px; display: block; background: rgba(255, 255, 255, 0.02); border-radius: 10px; }
+
+.mm-sections { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.mm-section {
+  font-size: 11px; padding: 3px 8px; border-radius: 8px;
+  border: 1px solid var(--line); border-left-width: 4px; color: var(--muted);
+}
+.mm-section b { color: var(--text); }
+
+.mm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mm-chip {
+  font-family: var(--mono); font-size: 12px; padding: 4px 9px; border-radius: 8px;
+  background: rgba(141, 112, 255, 0.14); color: var(--text);
+}
+.mm-chords { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.7; overflow-wrap: anywhere; }
+
+.mm-bars { display: grid; gap: 5px; }
+.mm-bar-row { display: grid; grid-template-columns: 70px 1fr 44px; gap: 8px; align-items: center; font-size: 12px; }
+.mm-bar { height: 7px; border-radius: 99px; background: rgba(255, 255, 255, 0.05); overflow: hidden; }
+.mm-bar > div { height: 100%; background: var(--cyan); }

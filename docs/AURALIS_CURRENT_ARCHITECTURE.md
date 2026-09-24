@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** AU-01 (persistent projects), 2026-09-23
+**Last updated:** AU-02 (My Music library), 2026-09-24
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -58,6 +58,7 @@ Status vocabulary:
 | `%LOCALAPPDATA%\Auralis\voices\<profile_id>\` | `profile.json`, `reference.wav`, `dataset/clip_*.wav`, `paired/<id>/`, `model/ft_model.pth` + config | Persistent until the profile is deleted |
 | `%LOCALAPPDATA%\Auralis\providers\seed-vc\` | Cloned Seed-VC repo, its own `.venv` (torch 2.4.0+cu121), `checkpoints/` (HF cache, ~3.3 GB), `runs/` | Persistent, installed by `tools/install_seed_vc.ps1` |
 | `%LOCALAPPDATA%\Auralis\projects\<project_id>\` | `project.json` + `sources/ stems/ vocals/ mixes/ masters/ reports/ generated/` (AU-01) | Persistent until the project is deleted |
+| `%LOCALAPPDATA%\Auralis\artist\library\library.json` + `artist\analyses\<song_id>.json` | My Music index (catalog folders, songs, file fingerprints) and one analysis per song (AU-02). Catalog audio is **not** copied here | Persistent until the folder is removed from the library |
 | `%LOCALAPPDATA%\Auralis\runtime\` | Launcher PID file and logs | Per launch |
 | `<repo>\checkpoints\` | ~2.4 GB model cache left in the repo root by earlier runs | Gitignored. Not referenced by current code |
 
@@ -192,6 +193,10 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | | `POST /projects/{pid}/open`, `POST /projects/{pid}/close`, `GET /projects/{pid}/verify?deep=` | Open/close state. Integrity check (existence + size, or SHA-256 when `deep`) |
 | | `POST /projects/{pid}/import-job` | Copy a finished job's inputs and outputs in, with provenance. Reference tracks are never imported |
 | | `POST /projects/{pid}/assets`, `GET/DELETE /projects/{pid}/assets/{aid}` | Add an audio file directly / download / remove |
+| My Music (AU-02) | `GET /artist/library` | Folders + song table (summary per song) |
+| | `POST /artist/library/sources`, `DELETE /artist/library/sources/{sid}`, `POST /artist/library/rescan` | Add a catalog folder (scans it) / forget one (folder untouched) / rescan |
+| | `GET /artist/library/songs/{song}`, `PATCH /artist/library/songs/{song}` | Song files + full analysis / include-or-exclude for Artist DNA |
+| | `POST /artist/library/analyze` | Background job over pending/stale songs (or given ids). Progress via `/ws/jobs/{id}`. One at a time |
 
 Chaining convention: the pitch, finish and auto-polish endpoints take a
 `source_job_id` and read `JOBS[src]["result"]["output_path"]`. This is the
@@ -211,6 +216,7 @@ outputs become durable.
 | `frontend/src/VocalRack.jsx` | Nectar-style module rack (EQ curve, de-ess, comp, saturate, dimension, space, output) over `/voice/finish` with a `modules` JSON body. Assist mode, in/out/mix monitor |
 | `frontend/src/ProjectsPanel.jsx` | "My Projects" mode (AU-01): create, list, open/close/delete, assets grouped by kind with players, downloads, provenance, integrity badges, add audio files |
 | `frontend/src/SaveToProject.jsx` | "Save to project" control (pick an open project or create one) on the master/mix result, the converted, pitch-polished and studio-polished vocal results, and the Vocal Chain rack result |
+| `frontend/src/MyMusic.jsx` | "My Music" mode (AU-02): catalog folders, analyse-with-progress, filterable song table (BPM, key, form, vocal range, DNA include toggle), song detail (tempo/key/loudness facts, energy curve with section timeline, top progressions, rhythm, lead-vocal range and phrasing, stem balance) |
 | `frontend/src/Knob.jsx` | Rotary control used by the rack |
 | `frontend/src/App.css` | Global styling |
 
@@ -258,6 +264,47 @@ The code is in `auralis/projects/store.py` (`ProjectStore`, `Project`,
 
 ---
 
+## My Music library (AU-02)
+
+The code is in `auralis/artist/library.py` (scan, group, load, `LibraryStore`),
+`auralis/artist/analyze.py` (`analyse_song`), `auralis/artist/__main__.py`
+(CLI: `python -m auralis.artist add|scan|analyse|list`) and
+`auralis/api/artist.py` (router).
+
+**Catalog handling.** Folders are indexed **in place** and only ever read.
+
+- Grouping rules:
+  - a `.zip` of audio is one stem-set song
+  - a folder with 2+ named stems is one stem-set song, with its other audio (demo, vocal guide, full mix) attached as `reference`
+  - any other audio file is its own song
+  - a `.txt` beside a song is linked as its lyrics (path only; the text is not copied)
+- Stem roles come from file names: `lead_vocal`, `backing_vocal`, `vocal`, `drums`, `bass`, `harmonic`, `other`. This covers numbered stem-export names (`0 Lead Vocals.wav`), KITS `_drums_KITS_` names, and `(Bass)`-style names.
+- A KITS `_backing_KITS_` file is an **instrumental**, not a backing vocal.
+- A lone stem among song versions is skipped and counted, not treated as a song.
+- Variant tags come from titles: instrumental, remix, cover, demo, type-beat, live.
+- Zip members are extracted one at a time to a temp folder and deleted immediately. Stems are summed as they are read, to bound memory.
+- Rescans keep analyses of unchanged songs and mark changed ones `stale` (by file size fingerprint).
+
+**Analysis** (`ANALYSIS_VERSION = 3`, deterministic DSP). Stems are used when present, which is why stem sets give the best data. Stems more than 30 dB below the loudest stem are **ignored** (`stems_ignored`): an empty or bleed-only "Lead Vocals" export must not look active or invent a melody. `global.vocal_melody_found` says whether a usable lead melody was extracted (`None` for full mixes). It is **not** an instrumental flag: KITS folders whose vocal lives only in the demo also report `False`.
+
+| Area | Method | Output |
+|---|---|---|
+| Global | BS.1770 + TP via `engine/loudness.measure`; 3 s short-term loudness spread; M/S ratio | LUFS, true peak, loudness range, crest, stereo width |
+| Tempo | librosa beat tracker on the **drums stem** (else the mix), folded into 65–145 BPM, then refined by a line fit through all beat times (the tracker's own tempo is quantised to ~5 BPM steps) | BPM, grid BPM, raw tracker BPM, half/double alternates, stability, pulse clarity |
+| Bars | downbeat phase = strongest low-end onsets every 4 beats | bar grid, bar count |
+| Key | `voice/pitch.detect_key` on **bass + harmonic stems** (no drums or vocals), else the mix | key, confidence, source |
+| Energy | per-bar RMS, 5–95% normalised | energy curve |
+| Harmony | beat-synced CQT chroma (+ bass-stem chroma for roots), 24 triad templates, half-bar resolution | chords per bar, roman numerals vs key, change rate, vocabulary, top 4-bar progressions, diatonic share |
+| Structure | **stems:** novelty on per-bar stem activity + timbre, sections labelled by similar arrangement. **Mix:** novelty on chroma + timbre, sections labelled by aligned bar-by-bar repetition. Adjacent same-label sections are merged | sections with bars, times, energy, per-stem activity, letter form, role guesses (intro/verse/pre-chorus/chorus/bridge/instrumental/outro, where chorus = repeated + most backing vocals + energy) |
+| Rhythm | onset positions within beats (drums stem, else percussive HPSS) | onsets per beat, on-beat/8th/16th shares, syncopation, swing position |
+| Melody | pYIN on the **lead vocal stem** (16 kHz); none reported under 5% voiced frames | range (5–95%), centre, phrases and median length in beats, interval profile (repeat/step/skip/leap, rising share) |
+| Production | 8-band spectrum, centroid; per-stem RMS | band balance, low/sub ratio, instrumentation balance, vocal-to-music dB |
+
+Role guesses are always labelled as guesses in the data (`roles_are_guesses`)
+and in the UI.
+
+---
+
 ## Tests
 
 `pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. The run with the local
@@ -271,6 +318,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_voice.py` (6) | Profile privacy (`public_dict` strips paths) and reuse. Consent required. Clipping rejected. Provider status isolated to its dir. Dataset segmentation and readiness scoring. Training state transitions |
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
+| `tests/test_artist_library.py` (23, AU-02) | Stem-role naming (7 cases). KITS instrumental vs stem. Titles/variants. Scan grouping of loose files, a stem folder, a stems zip and a lone stem. Zip loading leaves no temp files. Rescan keeps analyses and marks changed songs stale. **Analysis never writes to the catalog** (size + mtime snapshot). Removing a folder forgets songs but leaves files. **Ground truth on a synthetic song** (90 BPM, C major, I–V–vi–IV, V-C-V-C with chorus backing vocals): tempo ±3, key, progression, chorus found from backing vocals, melody range, rhythm source, instrumentation. Mix-only structure finds repeats. API flow: add folder → analyse job → song analysis → include toggle |
 | `tests/test_projects.py` (14, AU-01) | Folders and manifest. Name validation. Copy-not-move. Closed projects are read-only. Survives a new store instance. Verify catches missing and changed files. Id validation. Asset removal. Job mapping for master and mix (reference excluded). Unfinished and non-audio jobs rejected. **API gate test:** master job → project → close → simulated restart → reopen → byte-identical download |
 | `tests/test_vocal_finish.py` (4) | Serial compression decision. Rack override clamp, bypass and annotation. `None` overrides are identity. Render + preview + report |
 
@@ -289,7 +337,7 @@ The generation layer should **feed** these modules, not replace them.
 
 | Future feature | Reuse (existing) | Notes |
 |---|---|---|
-| **Artist DNA** (AU-02/03) | `engine/analysis.analyse` for spectral, loudness, stereo and onset features. `engine/loudness.measure` for LUFS/TP. `voice/pitch.detect_key`, `_track_pitch`, `_segment_notes` for key and melody contour. `voice/profiles.analyse_dataset` for vocal range and readiness. Pipeline `session.json` as a model of provenance output | New: tempo/structure/chord/section analysis, catalog storage under `%LOCALAPPDATA%\Auralis\artist\`. The local uncommitted `engine/harmony.py` (scale-degree profiles, out-of-key notes) could become a harmony-trait extractor if the user commits it |
+| **Artist DNA** (AU-03) | **Built on the AU-02 library:** aggregate `artist/analyses/*.json` over songs with `included = true`, weighting stem sets higher (their melody, structure and rhythm come from stems). Also available: `engine/analysis.analyse` for spectral, loudness, stereo and onset features. `engine/loudness.measure` for LUFS/TP. `voice/pitch.detect_key`, `_track_pitch`, `_segment_notes` for key and melody contour. `voice/profiles.analyse_dataset` for vocal range and readiness. Pipeline `session.json` as a model of provenance output | New: tempo/structure/chord/section analysis, catalog storage under `%LOCALAPPDATA%\Auralis\artist\`. The local uncommitted `engine/harmony.py` (scale-degree profiles, out-of-key notes) could become a harmony-trait extractor if the user commits it |
 | **Song Blueprint** (AU-04) | `voice/pitch.parse_key`, `KeyEstimate`, `SCALES`, `KEY_NAMES` as the shared key vocabulary. `engine/profiles_loader.StyleProfile` for the mix/master target the blueprint selects | New: blueprint schema, validation, lyrics |
 | **Composer** (AU-05) | `docs/RECONSTRUCTION_ROADMAP.md` renderer direction (MIDI → local sampler). `engine/console.apply_and_sum` to sum rendered parts | New: harmony, bass, drum and melody generators, MIDI renderer provider |
 | **Atmosphere Engine** (AU-06) | `finish._ambience_send`/`_double_send` as simple width and space primitives. `mastering._set_stereo_width` for M/S width. `analysis` role taxonomy (`"other"`/`"harmonic"`) for routing | New: texture generation/assembly |
@@ -310,6 +358,7 @@ Rules carried forward:
 **Missing (planned by the roadmap):**
 
 - ~~Persistent song projects~~, done in AU-01. Still missing: starting jobs *from* project assets, and blueprint/lyrics files.
+- ~~Music-library import and analysis~~, done in AU-02. Still missing: aggregation into Artist DNA (AU-03), lyrics text analysis, chord qualities beyond major/minor triads (7ths, sus), time signatures other than 4/4, and confident section roles for mix-only songs.
 - Artist DNA, music-library import, retrieval, similarity guard.
 - Song blueprint, lyrics, composer, MIDI rendering, atmosphere, generative-audio providers.
 - Guide singer, vocal harmony/doubles generator, full-song voice orchestration.

@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import VoiceStudio from "./VoiceStudio.jsx";
 import VocalRack from "./VocalRack.jsx";
 import ProjectsPanel from "./ProjectsPanel.jsx";
+import MyMusic from "./MyMusic.jsx";
 import SaveToProject from "./SaveToProject.jsx";
 import "./App.css";
 
@@ -338,6 +339,11 @@ export default function App() {
               <h3>My Projects</h3>
               <p>Keep each song's sources, stems, vocals, mixes and masters together, and reopen them any time.</p>
             </button>
+            <button className="mode-card" style={{ "--accent": "#46f6bd", "--accent-soft": "#46f6bd24" }} onClick={() => { setMode("music"); setStep(0); }}>
+              <div className="mode-icon">♪</div>
+              <h3>My Music</h3>
+              <p>Index your own songs and stems in place and see their tempo, key, structure, chords and vocal range.</p>
+            </button>
             <button className="mode-card" style={{ "--accent": T, "--accent-soft": `${T}24` }} onClick={() => { setMode("master"); setStep(0); }}>
               <div className="mode-icon">M</div>
               <h3>Master a finished mix</h3>
@@ -367,6 +373,10 @@ export default function App() {
         <VoiceStudio API={API} card={card} btn={btn} colors={{ V, T, PK, PANEL2, TEXT, MUTE }} onBack={reset} />
       </main>}
 
+      {mode === "music" && <main className="voice-stage">
+        <MyMusic API={API} onBack={reset} />
+      </main>}
+
       {mode === "projects" && <main className="voice-stage">
         <ProjectsPanel API={API} onBack={reset} />
       </main>}
@@ -375,7 +385,7 @@ export default function App() {
         <VocalRack API={API} onBack={reset} />
       </main>}
 
-      {mode !== "home" && mode !== "voice" && mode !== "rack" && mode !== "projects" && <div className="workbench">
+      {mode !== "home" && mode !== "voice" && mode !== "rack" && mode !== "projects" && mode !== "music" && <div className="workbench">
         <WorkflowRail steps={steps} step={step} mode={mode} reset={reset} />
         <main className="main-panel">
           {mode === "master" && step === 0 && <>
