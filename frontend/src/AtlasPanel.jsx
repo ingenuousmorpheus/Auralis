@@ -35,19 +35,22 @@ function Select({ id, label, value, onChange, options }) {
   </label>;
 }
 
-export default function AtlasPanel({ API }) {
+export default function AtlasPanel({ API, value, onChange }) {
+  /* Controlled by Create when `value`/`onChange` are passed, so the choices
+     feed the blueprint; era "" means Auto (the blueprint picks and explains). */
   const [open, setOpen] = useState(false);
   const [eraList, setEraList] = useState([]);
-  const [era, setEra] = useState("80s_quiet_storm");
-  const [harmony, setHarmony] = useState("");
-  const [vocal, setVocal] = useState("");
-  const [groove, setGroove] = useState("");
+  const [local, setLocal] = useState({ era: "", harmony: "", vocal: "", groove: "" });
+  const sel = value || local;
+  const set = key => v => (onChange || setLocal)({ ...sel, [key]: v });
+  const { era, harmony, vocal, groove } = sel;
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => { if (open && !eraList.length) apiJson(`${API}/theory/eras`).then(setEraList).catch(e => setError(e.message)); }, [open]);
   useEffect(() => {
     if (!open) return;
+    if (!era) { setResult(null); return; }
     const q = new URLSearchParams({ era, ...(harmony && { harmony }), ...(vocal && { vocal }), ...(groove && { groove }) });
     apiJson(`${API}/theory/candidates?${q}`).then(r => { setResult(r); setError(""); }).catch(e => setError(e.message));
   }, [open, era, harmony, vocal, groove]);
@@ -64,13 +67,15 @@ export default function AtlasPanel({ API }) {
 
     {open && <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-        <Select id="atlas-era" label="Era" value={era} onChange={setEra}
-          options={eraList.length ? eraList.map(e => [e.id, e.name]) : [[era, "Loading…"]]} />
-        <Select id="atlas-harmony" label="Harmony" value={harmony} onChange={setHarmony} options={HARMONY} />
-        <Select id="atlas-vocal" label="Vocal approach" value={vocal} onChange={setVocal} options={VOCAL} />
-        <Select id="atlas-groove" label="Groove" value={groove} onChange={setGroove} options={GROOVE} />
+        <Select id="atlas-era" label="Era" value={era} onChange={set("era")}
+          options={[["", "Auto (from prompt + DNA)"], ...eraList.map(e => [e.id, e.name])]} />
+        <Select id="atlas-harmony" label="Harmony" value={harmony} onChange={set("harmony")} options={HARMONY} />
+        <Select id="atlas-vocal" label="Vocal approach" value={vocal} onChange={set("vocal")} options={VOCAL} />
+        <Select id="atlas-groove" label="Groove" value={groove} onChange={set("groove")} options={GROOVE} />
       </div>
       {error && <div role="alert" style={{ color: "var(--warn)", fontSize: 13 }}>{error}</div>}
+      {!era && <div style={{ fontSize: 12, color: "var(--steel)", lineHeight: 1.5 }}>
+        Auto lets the blueprint pick the era from your prompt and Artist DNA and explain why. Pick an era to preview its candidates.</div>}
 
       {result && <>
         <div style={{ fontSize: 12, color: "var(--steel)", lineHeight: 1.5 }}>

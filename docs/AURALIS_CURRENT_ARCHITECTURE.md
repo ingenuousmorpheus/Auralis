@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** AU-03 (Artist DNA) + AU-03B (R&B Theory Atlas), 2026-09-24
+**Last updated:** AU-04 (Song Blueprint), 2026-09-24
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -197,6 +197,10 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | Artist DNA (AU-03) | `GET /artist/dna?voice_profile_id=` | Traits across songs switched on in My Music, computed live on every call (tempo, key families, harmony loops, form and lift, groove, melody, voice fit, production) with evidence and confidence |
 | R&B Atlas (AU-03B) | `GET /theory/eras`, `GET /theory/sources` | Era list; the source table |
 | | `GET /theory/candidates?era=&section=&harmony=&vocal=&groove=&n=&use_voice=&use_dna=` | Several documented, transposable harmony / vocal / groove candidates for an era, each with sources and status; keys fitted to the trained voice range and the DNA key families |
+| Song Blueprint (AU-04) | `POST /composer/blueprint` | Prompt + lyrics + optional era / harmony / vocal / groove / key / tempo / length, with `use_dna`, `use_voice`, `artist_dna_weight`, `seed` → a complete, explained blueprint (not saved) |
+| | `POST /composer/blueprint/revise` | `{blueprint, changes}` with `title`, `tempo`, `key`, `lyrics`, `sections` (ids to keep, patches, new types) → re-derived blueprint; 422 on invalid edits |
+| | `POST /composer/blueprint/regenerate` | `{blueprint, section_id}` → new chords for that section type (all of its sections); nothing else changes |
+| | `PUT/GET /projects/{pid}/blueprint`, `GET /projects/{pid}/blueprint/revisions` | Save (open projects and valid blueprints only) / read the current blueprint / list saved revisions |
 | | `GET /artist/library/songs/{song}/preview` | Player audio: a full mix streams from its folder; a stem set is summed once into a cached 16-bit mixdown under `artist\previews\` (never in the catalog) |
 | | `POST /artist/library/sources`, `DELETE /artist/library/sources/{sid}`, `POST /artist/library/rescan` | Add a catalog folder (scans it) / forget one (folder untouched) / rescan |
 | | `GET /artist/library/songs/{song}`, `PATCH /artist/library/songs/{song}` | Song files + full analysis / include-or-exclude for Artist DNA |
@@ -217,9 +221,10 @@ outputs become durable.
 | `frontend/src/main.jsx` | React root |
 | `frontend/src/App.jsx` | **Console shell (UI redesign, 2026-09-24):** `Sidebar` + page + `PlayerBar`. Pages: `create`, `music`, `studio`, `voice`, `projects`, and tools `master`, `mix`, `rack`, plus `harmony` only when `HarmonicReference.jsx` exists in the checkout (`import.meta.glob`, so the build never depends on it). `API = VITE_API ?? http://127.0.0.1:8001` |
 | `frontend/src/Shell.jsx` | `Sidebar`: 3D gold AURALIS wordmark that morphs on press, nav, tools, the trained voice card from `/voice/profiles`. `PlayerBar`: plays catalog songs through `/artist/library/songs/{id}/preview` |
-| `frontend/src/CreatePage.jsx` | Suno-style Simple/Advanced create panel (description or lyrics + styles, suggestions from real catalog aggregates, Artist DNA / my-voice switches) beside the workspace list of catalog songs. **Create is not wired yet**: it says generation is the next phase rather than pretending |
+| `frontend/src/CreatePage.jsx` | Suno-style Simple/Advanced create panel (description or lyrics + styles, suggestions from real catalog aggregates, Era & style, Artist DNA / my-voice switches) beside the workspace. **Create builds a Song Blueprint (AU-04)**, and the workspace switches between *Blueprint* and *My songs*. No audio is rendered yet, and the page says so |
+| `frontend/src/BlueprintView.jsx` + `Blueprint.css` | The editable blueprint (AU-04): title, tempo, key (24 keys), meter and length, groove, an energy-curve chart, and one card per section. Each card has type, bars, move/copy/remove, chord chips with Roman numerals, a Roman-numeral text field, harmony options, "New" chords, chords per bar, energy, arrangement role levels and the vocal register. Below: vocal constraints, arrangement palette, originality checks. "Why?" on every decision; save to an open or new project. Every edit calls `/composer/blueprint/revise` |
 | `frontend/src/DnaPage.jsx` | "Artist DNA" page (AU-03): a card per trait with its headline, confidence, a small visual (tempo bands, key families, loops, forms, writing range drawn inside the trained voice range), a note, and playable evidence songs; the weighting rules in plain words |
-| `frontend/src/AtlasPanel.jsx` | Collapsible "Era & style" panel in Create's Advanced mode (AU-03B): Era, Harmony, Vocal approach, Groove; shows Atlas candidates with the key suggested for the user's voice, sourced/hypothesis badges and source links |
+| `frontend/src/AtlasPanel.jsx` | Collapsible "Era & style" panel in Create's Advanced mode (AU-03B): Era (with *Auto*), Harmony, Vocal approach, Groove; shows Atlas candidates with the key suggested for the user's voice, sourced/hypothesis badges and source links. Since AU-04 Create controls it, so its choices feed the blueprint |
 | `frontend/src/MasterMix.jsx` | The master / mix-from-stems workflow (same API calls as before), restyled |
 | `frontend/src/StudioPage.jsx` | Hub for the finishing tools and My Voice |
 | `frontend/src/theme.css`, `frontend/src/ui.jsx` | Theme tokens (void black, brushed gold `#d4af5f`, holo cyan `#7fe6ff`; Michroma / Manrope / JetBrains Mono), effects (metallic logo, light-sweep headings, gold corner brackets, scanlines, all off under reduced motion). The theme also remaps App.css's old tokens so older screens turn gold. `ui.jsx` holds icons, cover tiles and `catalogStats` |
@@ -271,7 +276,8 @@ The code is in `auralis/projects/store.py` (`ProjectStore`, `Project`,
   | auto-studio-polish | pitch stage and output → `vocal`, preview → `mix` |
 
   Mastering reference tracks are never imported.
-- **Not yet.** There is no `blueprint.json` or `lyrics.txt` (they belong to AU-04). Jobs do not *start* from project assets yet, so work still flows job → project. A rack-uploaded vocal is saved as `rack_source.wav` because the job does not keep the original filename.
+- **Blueprint (AU-04).** `save_blueprint` writes `blueprint.json` (current) and `blueprints/rNNNN.json` (every saved revision), plus `lyrics.txt` when the blueprint has lyrics. It logs to history and refuses closed projects.
+- **Not yet.** Jobs do not *start* from project assets yet, so work still flows job → project. A rack-uploaded vocal is saved as `rack_source.wav` because the job does not keep the original filename.
 
 ---
 
@@ -343,9 +349,35 @@ and in the UI.
 
 ---
 
+## Song Blueprint (AU-04)
+
+`auralis/composer/`: a structured, editable song plan. No audio and no melody.
+
+- **`brief.py`.** `parse_brief` is a deterministic keyword reader, not a language model. It picks up era, harmony colour, vocal approach, groove, tempo ("92 BPM"), tempo feel (slow jam / uptempo), key ("in F♯ minor"), mood → mode, length ("3:10", "short"), bridge / no bridge and "big chorus". Every match is recorded in `heard` with the words that caused it. Explicit settings override words (`set_by_you`). `parse_lyrics` splits lyrics on bracketed or bare headers (`[Verse 1]`, `Chorus:`).
+- **`chords.py`.** Keys and Roman numerals. Numerals are chromatic from the tonic on the major scale, the same convention as the Atlas and the library analysis, so `♭VI` and `iv6` are explicit. `realise` turns a numeral into a chord name in any key (`IV/V` in A♭ → `D♭/E♭`, `V9sus` → `G9sus4`), spelled with the key's sharps or flats.
+- **`blueprint.py`.** `build_blueprint` decides in this order:
+  - mode: the key asked for, mood words, the DNA's minor share, or the requested era's Atlas modes
+  - era: asked for, or the best fit by tempo, mode, vocal and groove
+  - tempo: asked for, or the DNA median moved into the era/feel band (trying half and double time)
+  - form: lyrics headers, or R&B defaults shaped by the DNA's pre-chorus/bridge habits, intro bars, first-chorus time and chorus length, then fitted to the target length
+  - harmony per section type (below)
+  - key **last**: `theory.suggest_keys`, voice range first, DNA key families second
+  - groove: the Atlas profile holding the tempo, plus the DNA's syncopation
+  - arrangement: per-section role levels, an era palette labelled *editorial*, a mix profile, the Atlas section lift
+  - energy: verse floor, chorus lift from the DNA, final chorus peak, pre-chorus ramps, outro fade
+  - vocal registers per section inside the voice range (`theory.key_fit` gives the tonic's octave)
+- **Harmony options.** Per section type, the Atlas families in the song's mode (in-era first, other eras at a penalty) and the artist's own DNA loops are ranked together by `artist_dna_weight`. DNA loops are **re-voiced** with the era's chord colours (triads → 7ths/9ths), never used as detected.
+- **Originality rules.** Only one section type may use a DNA loop. Each type prefers a progression no other type has. The chorus never repeats the verse. `originality.checks` reports: no melody, lyrics or audio carried over; DNA loop reuse; verse/chorus contrast; and a catalog-twin check (same tempo ±2 BPM, key and form as one of the user's switched-on songs).
+- **Editing.** `revise(blueprint, changes)` applies edits and re-derives chord names, start bars and times, duration, energy curve, vocal registers, originality and validation. `regenerate` picks the next option for one section type.
+- **`validation.py`.** Errors: tempo 40–220, 4/4 only, a parsable key, known section types, 1–64 bars, energy 0–1, chords per bar ½/1/2 (¼ accepted), Roman numerals only (no absolute chord names), role levels off/light/medium/full, 12 minutes at most, and none of the Atlas's forbidden keys (melody, notes, midi…) anywhere except the user's own lyrics. Warnings: peaks at the top of the range, crowded lyric lines, a tonic chord of the opposite mode, and flagged originality checks.
+
+Every decision writes a sentence to `why` (per field) or to the section's `why`, naming the words, DNA trait or Atlas row behind it.
+
+---
+
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. The run with the local
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). The run with the local
 uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
@@ -356,6 +388,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_voice.py` (6) | Profile privacy (`public_dict` strips paths) and reuse. Consent required. Clipping rejected. Provider status isolated to its dir. Dataset segmentation and readiness scoring. Training state transitions |
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
+| `tests/test_composer.py` (30, AU-04) | Brief words and explicit overrides. Lyrics headers (a lyric line starting with "hook" is not a header). 11 Roman-numeral realisations; key parsing. **Gate:** a complete blueprint: tempo, key, 4/4, intro to outro, chords filling every bar, arrangement roles, energy curve, vocal registers inside the voice, chorus above verse, a reason for every decision. No melody keys anywhere. DNA loops re-voiced and used once; chorus differs from verse. Key fits the voice and DNA; a narrow voice gets an honest stretch. An era without the DNA's mode follows the era. Tempo from DNA, half-time, prompt. Form from lyrics and length. Works with no DNA and no voice. Catalog twin flagged. Edits to key, tempo, sections and chords re-derive everything; invalid edits reported; regenerate changes one section type only. Save with revisions and lyrics, survives a new store, refused when closed. API: create, revise, 422, regenerate, save, read |
 | `tests/test_artist_dna.py` (13, AU-03) | Version-word stripping. Families group versions but not shared first words. Versions share one song's weight. Switched-off songs ignored. Covers down-weighted. Relative keys share a family. Loop rotations merged. Form and lift. Melody only from vocal stems. Voice headroom/footroom. Every trait has confidence. Empty state. API |
 | `tests/test_theory_atlas.py` (22, AU-03B) | Canonical Atlas valid, all 6 eras. Provenance and honest status on every row. Guard rejects melodies/lyrics, absolute chord names, over-long progressions, note sequences in vocal anchors, and 'sourced' rows citing only the placeholder. Roman-numeral parser. **Gate:** 80s R&B returns ≥3 transposable, sourced harmony candidates plus vocal and groove, keys always suggested, no melody keys in the answer. Filters steer results. Keys fit the voice and prefer DNA families; minor keys use the relative-major family; a narrow voice gets an honest stretch answer. API. Export matches the JSON (7 sheets / 7 CSVs) |
 | `tests/test_artist_library.py` (26, AU-02 + previews) | Stem-role naming (7 cases). KITS instrumental vs stem. Titles/variants. Scan grouping of loose files, a stem folder, a stems zip and a lone stem. Zip loading leaves no temp files. Rescan keeps analyses and marks changed songs stale. **Analysis never writes to the catalog** (size + mtime snapshot). Removing a folder forgets songs but leaves files. **Ground truth on a synthetic song** (90 BPM, C major, I–V–vi–IV, V-C-V-C with chorus backing vocals): tempo ±3, key, progression, chorus found from backing vocals, melody range, rhythm source, instrumentation. Mix-only structure finds repeats. API flow: add folder → analyse job → song analysis → include toggle |
@@ -378,7 +411,7 @@ The generation layer should **feed** these modules, not replace them.
 | Future feature | Reuse (existing) | Notes |
 |---|---|---|
 | **Artist DNA** (AU-03) | **Built (AU-03):** `artist/dna.build_dna` over the AU-02 library, `GET /artist/dna`. Feed its `traits.key.families[].major_tonic`, tempo band, loops, form and `traits.voice` into AU-04. Originally planned from: aggregate `artist/analyses/*.json` over songs with `included = true`, weighting stem sets higher (their melody, structure and rhythm come from stems). Also available: `engine/analysis.analyse` for spectral, loudness, stereo and onset features. `engine/loudness.measure` for LUFS/TP. `voice/pitch.detect_key`, `_track_pitch`, `_segment_notes` for key and melody contour. `voice/profiles.analyse_dataset` for vocal range and readiness. Pipeline `session.json` as a model of provenance output | New: tempo/structure/chord/section analysis, catalog storage under `%LOCALAPPDATA%\Auralis\artist\`. The local uncommitted `engine/harmony.py` (scale-degree profiles, out-of-key notes) could become a harmony-trait extractor if the user commits it |
-| **Song Blueprint** (AU-04) | `voice/pitch.parse_key`, `KeyEstimate`, `SCALES`, `KEY_NAMES` as the shared key vocabulary. `engine/profiles_loader.StyleProfile` for the mix/master target the blueprint selects | New: blueprint schema, validation, lyrics |
+| **Song Blueprint** (AU-04) | **Built (AU-04):** `composer.build_blueprint` over `artist/dna`, `theory.candidates`, `theory.suggest_keys`/`key_fit`, the trained voice range and the library summaries; saved via `ProjectStore.save_blueprint`. AU-05 should read `sections[].chords` (bar, beat, beats, roman, chord), `groove`, `arrangement`, `energy_curve` and `sections[].vocal`. `arrangement.mix_profile` names a `StyleProfile` for AU-10 | `composer/chords.parse_key` accepts G♯/D♭ spellings that `voice/pitch.parse_key` rejects |
 | **Composer** (AU-05) | `docs/RECONSTRUCTION_ROADMAP.md` renderer direction (MIDI → local sampler). `engine/console.apply_and_sum` to sum rendered parts | New: harmony, bass, drum and melody generators, MIDI renderer provider |
 | **Atmosphere Engine** (AU-06) | `finish._ambience_send`/`_double_send` as simple width and space primitives. `mastering._set_stereo_width` for M/S width. `analysis` role taxonomy (`"other"`/`"harmonic"`) for routing | New: texture generation/assembly |
 | **Guide Singer** (AU-07) | `voice/paired` DTW alignment to check a synthetic guide against its target melody. `voice/pitch` note tracking to verify the guide is pitched and timed correctly | New: `voice/guide.py`, `voice/singing_provider.py`, installed as an isolated provider like Seed-VC |
@@ -401,7 +434,9 @@ Rules carried forward:
 - ~~Artist DNA V1~~, done in AU-03. ~~R&B Atlas data layer~~, done in AU-03B (still to do: curate more rows and validate the `hypothesis` rows against real data; ingest approved corpus statistics).
 - ~~Music-library import and analysis~~, done in AU-02. Still missing: lyrics text analysis, chord qualities beyond major/minor triads (7ths, sus), time signatures other than 4/4, and confident section roles for mix-only songs.
 - Artist DNA, music-library import, retrieval, similarity guard.
-- Song blueprint, lyrics, composer, MIDI rendering, atmosphere, generative-audio providers.
+- ~~Song blueprint~~, done in AU-04. Still missing: lyric writing, per-line syllable fitting, meters other than 4/4, and a prompt reader beyond keywords.
+- Composer, MIDI rendering, atmosphere, generative-audio providers.
+- The My Voice redesign (Kits-style convert / clone / history layout) is planned in `docs/VOICE_STUDIO_PLAN.md`, not built.
 - Guide singer, vocal harmony/doubles generator, full-song voice orchestration.
 - A generic provider interface/registry and a GPU/model scheduler. The audit hit exactly the memory contention this is meant to prevent (see below).
 - Diff-MST "Path B" mixer (comment-only placeholder).

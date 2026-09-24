@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import AtlasPanel from "./AtlasPanel.jsx";
+import BlueprintView from "./BlueprintView.jsx";
 import { Cover, Icon, apiJson, catalogStats, fmtTime } from "./ui.jsx";
 
-/* Create: the prompt / lyrics panel beside the workspace list.
+/* Create: the prompt / lyrics panel beside the workspace.
 
-   Song generation (blueprint → composer → guide singer) is roadmap AU-04+.
-   Until then the Create button says so plainly instead of pretending, while
-   everything around it (voice, DNA readouts, the catalog list, playback) is
-   real. */
+   Create builds a Song Blueprint (AU-04) from the prompt, lyrics, Era & style
+   choices, Artist DNA and the trained voice range, and shows it editable in
+   the workspace. Audio (composer → guide singer → voice) is the next phase,
+   so nothing here pretends to render a song. */
 
 const FILTERS = ["All", "Stem sets", "Full mixes", "With vocal"];
 
@@ -23,6 +24,10 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
+  const [style, setStyle] = useState({ era: "", harmony: "", vocal: "", groove: "" });
+  const [blueprint, setBlueprint] = useState(null);
+  const [view, setView] = useState("songs");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     apiJson(`${API}/artist/library`).then(d => setSongs(d.songs)).catch(() => setSongs([]));
@@ -47,9 +52,28 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
   });
 
   const addTag = tag => setStyles(prev => (prev.trim() ? `${prev.trim().replace(/,$/, "")}, ${tag}` : tag));
-  const create = () => setNotice(
-    "Song generation is the next build phase (Song Blueprint → composer → guide singer). " +
-    "Your prompt, DNA and voice choices here are the inputs it will use.");
+  const create = async () => {
+    const prompt = mode === "simple" ? idea : [styles, idea].filter(s => s.trim()).join(", ");
+    setCreating(true);
+    setNotice("");
+    try {
+      const bp = await apiJson(`${API}/composer/blueprint`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt, lyrics: mode === "advanced" ? lyrics : "", use_dna: useDna, use_voice: useVoice,
+          ...(mode === "advanced" && Object.fromEntries(Object.entries(style).filter(([, v]) => v))),
+          seed: blueprint ? (blueprint.inputs.seed || 0) + 1 : 0,
+        }),
+      });
+      setBlueprint(bp);
+      setView("blueprint");
+      setNotice("Blueprint ready: edit it on the right, then save it to a project. Rendering audio from it is the next build phase.");
+    } catch (e) {
+      setNotice(`Could not build a blueprint: ${e.message}`);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return <div className="au-page" style={{ display: "grid", gridTemplateColumns: "452px minmax(0, 1fr)" }}>
     <section aria-label="Create a song" style={{ borderRight: "1px solid var(--hairline)", display: "flex", flexDirection: "column", minHeight: 0, background: "var(--deck)" }}>
@@ -100,7 +124,7 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
             </div>}
           </div>
 
-          <AtlasPanel API={API} />
+          <AtlasPanel API={API} value={style} onChange={setStyle} />
 
           <div className="au-card au-console" style={{ padding: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: "1px solid var(--hairline)", gap: 12 }}>
@@ -125,20 +149,30 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
       </div>
 
       <div style={{ padding: "14px 20px 18px", borderTop: "1px solid var(--hairline)" }}>
-        <button className="au-btn gold big" style={{ width: "100%" }} onClick={create}><Icon name="create" size={18} width={2.4} />Create</button>
+        <button className="au-btn gold big" style={{ width: "100%" }} onClick={create} disabled={creating}>
+          <Icon name="create" size={18} width={2.4} />{creating ? "Writing blueprint…" : blueprint ? "Create another" : "Create"}</button>
       </div>
     </section>
 
     <section aria-label="Workspace" style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 28px 12px", gap: 12, flexWrap: "wrap" }}>
-        <h1 className="au-title au-shine" style={{ fontSize: 22 }}>My workspace</h1>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: 12, background: "var(--panel)", border: "1px solid var(--edge)", color: "var(--steel)", width: 260, boxSizing: "border-box" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <h1 className="au-title au-shine" style={{ fontSize: 22 }}>{view === "blueprint" && blueprint ? "Song blueprint" : "My workspace"}</h1>
+          {blueprint && <div className="au-segment" role="tablist" aria-label="Workspace view">
+            <button role="tab" aria-selected={view === "blueprint"} onClick={() => setView("blueprint")}>Blueprint</button>
+            <button role="tab" aria-selected={view === "songs"} onClick={() => setView("songs")}>My songs</button>
+          </div>}
+        </div>
+        {view === "songs" && <label style={{ display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: 12, background: "var(--panel)", border: "1px solid var(--edge)", color: "var(--steel)", width: 260, boxSizing: "border-box" }}>
           <Icon name="search" size={16} />
           <input aria-label="Search songs" placeholder="Search" value={query} onChange={e => setQuery(e.target.value)}
             style={{ background: "transparent", border: "none", outline: "none", color: "var(--ivory)", fontFamily: "inherit", fontSize: 14, width: "100%" }} />
-        </label>
+        </label>}
       </div>
-      <div style={{ display: "flex", gap: 8, padding: "0 28px 14px", flexWrap: "wrap" }}>
+      {view === "blueprint" && blueprint && <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto" }}>
+        <BlueprintView API={API} blueprint={blueprint} setBlueprint={setBlueprint} />
+      </div>}
+      {view === "songs" && <><div style={{ display: "flex", gap: 8, padding: "0 28px 14px", flexWrap: "wrap" }}>
         {FILTERS.map(f => <button key={f} className="au-pill" aria-pressed={filter === f} onClick={() => setFilter(f)}>{f}</button>)}
       </div>
       <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto", padding: "0 16px 16px" }}>
@@ -172,7 +206,7 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
             </div>
           </button>;
         })}
-      </div>
+      </div></>}
     </section>
   </div>;
 }

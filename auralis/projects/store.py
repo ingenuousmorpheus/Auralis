@@ -271,6 +271,48 @@ class ProjectStore:
             "deep": deep,
         }
 
+    # ── Song blueprint (AU-04) ────────────────────────────────────────────
+
+    def save_blueprint(self, project_id: str, blueprint: dict) -> dict:
+        """Write ``blueprint.json`` (current) and ``blueprints/r0001.json``...
+        (every saved revision), plus ``lyrics.txt`` when there are lyrics."""
+        with self._lock:
+            project = self.get(project_id)
+            if project.status != "open":
+                raise PermissionError("Reopen this project before saving a blueprint.")
+            project_dir = self._project_dir(project_id)
+            folder = project_dir / "blueprints"
+            folder.mkdir(exist_ok=True)
+            saved = len(list(folder.glob("r*.json"))) + 1
+            data = dict(blueprint, saved_revision=saved, saved_at=_now(), project_id=project_id)
+            text = json.dumps(data, indent=2, ensure_ascii=False)
+            (folder / f"r{saved:04d}.json").write_text(text, encoding="utf-8")
+            temp = project_dir / "blueprint.json.tmp"
+            temp.write_text(text, encoding="utf-8")
+            os.replace(temp, project_dir / "blueprint.json")
+            lyrics = (blueprint.get("lyrics") or "").strip()
+            if lyrics:
+                (project_dir / "lyrics.txt").write_text(lyrics + "\n", encoding="utf-8")
+            self._log(project, "blueprint saved",
+                      f"r{saved}: {blueprint.get('key')}, {blueprint.get('tempo')} BPM")
+            self._save(project)
+            return data
+
+    def blueprint(self, project_id: str) -> dict | None:
+        path = self._project_dir(project_id) / "blueprint.json"
+        self.get(project_id)
+        return json.loads(path.read_text("utf-8")) if path.is_file() else None
+
+    def blueprint_revisions(self, project_id: str) -> list[dict]:
+        self.get(project_id)
+        folder = self._project_dir(project_id) / "blueprints"
+        out = []
+        for path in sorted(folder.glob("r*.json")) if folder.is_dir() else []:
+            data = json.loads(path.read_text("utf-8"))
+            out.append({"saved_revision": data.get("saved_revision"), "saved_at": data.get("saved_at"),
+                        "key": data.get("key"), "tempo": data.get("tempo"), "title": data.get("title")})
+        return out
+
     # ── Internals ────────────────────────────────────────────────────────
 
     def _project_dir(self, project_id: str) -> Path:

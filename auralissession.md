@@ -2307,3 +2307,77 @@ Both have the caveats below.
 - Combine prompt + `GET /artist/dna` (tempo band, key families, loops, form, voice) + `GET /theory/candidates` (era, harmony, groove, vocal, fitted keys) + originality constraints into a structured, editable blueprint.
 - Show why each choice was made.
 - No audio yet.
+
+## Session 007 — 2026-09-24 — AU-04 Song Blueprint Generator (+ My Voice redesign plan)
+
+### Goal
+Build AU-04: prompt + Artist DNA + R&B Theory Atlas + voice range + originality constraints → a structured, editable Song Blueprint (tempo, key, sections, chords as Roman numerals plus chord names, arrangement, energy curve, vocal-range constraints), with the reason for each choice, wired into Create's button. No audio.
+Mid-session the user also asked for a plan to make My Voice work like the Kits.ai convert page inside the Auralis shell, added to GitHub.
+
+### Starting State
+- `main` at `8b9f1fa`, equal to `origin/main` (nothing to pull).
+- The user's uncommitted Harmonic Reference work was still in the tree, so only this session's hunks of `auralis/api/main.py` are staged.
+- The user's My Music spot-check and include/exclude cleanup is still pending. The blueprint reads DNA live, so it follows those toggles whenever they are made.
+
+### Changed
+- **New package `auralis/composer/`:**
+  - `brief.py`: keyword brief reader and lyrics header splitter
+  - `chords.py`: keys and Roman numerals → chord names in any key
+  - `blueprint.py`: `build_blueprint`, `revise`, `regenerate`
+  - `validation.py`: errors and warnings
+- **API:** new `auralis/api/composer.py`:
+  - `POST /composer/blueprint`, `/revise`, `/regenerate`
+  - `PUT/GET /projects/{pid}/blueprint`, `GET …/blueprint/revisions`
+  - Included in `main.py` (2 lines).
+- **Projects:** `ProjectStore.save_blueprint` / `blueprint` / `blueprint_revisions` write `blueprint.json`, `blueprints/rNNNN.json` and `lyrics.txt`.
+- **Atlas:** `theory.key_fit` factored out of `suggest_keys` so the blueprint places vocal registers with the same rule that picks the key. `suggest_keys` behaviour is unchanged.
+- **Frontend:**
+  - new `BlueprintView.jsx` + `Blueprint.css`
+  - `CreatePage.jsx`: the Create button builds a blueprint, and the workspace gains Blueprint / My songs tabs
+  - `AtlasPanel.jsx`: controllable, with an Auto era
+- **Docs:**
+  - new `docs/VOICE_STUDIO_PLAN.md` (Kits-style My Voice plan)
+  - architecture doc updated
+- **Tests:** new `tests/test_composer.py` (30).
+
+### Verification
+- `pytest -q` including the local harmony tests → **153 passed**. Excluding them → 133 passed (103 before + 30 new). `npm run build` passes.
+- **Real DNA (74 songs) + trained voice, "Dark late-night R&B, big chorus":**
+  - Modern Alternative R&B, minor (from "Dark"), 94 BPM (the DNA median), B♭ minor, 10 sections / 72 bars / about 3:03.
+  - First chorus near the DNA's 0:37. The chorus uses the user's own loop, re-voiced `i9 i9 i9 ♭VImaj7`; the other sections use Atlas families.
+  - Vocal registers stay inside D3–C5, with a 7-semitone chorus lift.
+  - Validation clean, every decision explained.
+- **"romantic quiet storm ballad with falsetto":** switched to major and said why ("every 80s R&B / Quiet Storm family in the Atlas is major"), A♭ major, soul-dominant pre-chorus, pedal maj9 chorus.
+- **Browser pane (restarted with `stop_auralis.ps1` / `start_auralis.ps1 -NoBrowser`):**
+  - Create built the blueprint and showed it with the energy curve and 10 editable section cards.
+  - Changing the key to E minor and typing `i9 iv7 ♭VIImaj7 V7` into Verse 1 gave revision 3, "edited: key, sections", and chords Em9 · Am7 · Dmaj7 · B7.
+  - No console errors, no horizontal overflow at 1600 px.
+- **Not done in the UI:** saving to a project, to avoid adding a test project to the user's real project list. Saving is covered by the store and API tests (revisions, lyrics, survives a new store instance, refused when closed).
+
+### Result
+**AU-04 COMPLETE** against its gate: *Auralis can create and edit a complete blueprint with tempo, key, sections, chords, arrangement and vocal-range constraints.* The Kits-style My Voice redesign is **PLANNED ONLY** (`docs/VOICE_STUDIO_PLAN.md`, phases V1–V5); none of it is built.
+
+### Findings
+- **The Atlas minor vocabulary is thin.** Only 2 of its 12 progression families are minor (`minor_flat_six_loop`, `dorian_vamp`), while 62% of the user's songs are minor. Minor blueprints therefore lean on the user's own loops and reuse those two families across sections. Adding sourced minor families (minor ii–V, i–iv vamps, ♭VI–♭VII–i cadences, minor-plagal colour) is the most useful Atlas curation next.
+- **First-draft problems, fixed before commit:**
+  - Verse, pre-chorus and bridge all got the same progression. Each section type now prefers a progression no other type has.
+  - Regenerate could hand the chorus another section's chords. It now avoids them.
+  - A lyric line starting with "hook" was read as a section header. Headers must now be bracketed or the bare word.
+- **Key spelling.** `voice/pitch.parse_key` rejects `G♯`. The composer has its own parser, and the catalog-twin check compares pitch classes, not names.
+- Arrangement palettes and role levels are **editorial defaults**, labelled that way in the blueprint. They are not Atlas research.
+- Python's text mode on Windows wrote CRLF into `main.py` and three new files during editing. It was converted back to LF (the repo's `.gitattributes` is `eol=lf`), and the diff is unaffected.
+
+### Gate/Blocker
+- AU-04: none.
+- Still open: the user's BPM/key spot-check and include/exclude cleanup in My Music, and live Seed-VC conversion (host commit memory).
+- The My Voice plan has three open questions for the user (§6 of the plan).
+
+### Do Not Redo
+- The blueprint schema (v1), the Roman-numeral convention (chromatic from the tonic, major-scale reference) and the decision order are settled. AU-05 reads `sections[].chords`, `groove`, `arrangement`, `energy_curve` and `sections[].vocal`.
+- Keys are chosen last from the voice. Do not reintroduce "key of the reference song".
+- DNA loops are always re-voiced and limited to one section type. Keep that originality rule.
+
+### Next Action
+- **Either** AU-05 MIDI / Structured Composer (blueprint → chords, bass, drums, melodic parts → local instruments),
+- **or** My Voice redesign V1–V3 from `docs/VOICE_STUDIO_PLAN.md` if the user wants the Kits-style page first.
+- Ask the user which comes first. Curate more minor-mode Atlas families alongside either.

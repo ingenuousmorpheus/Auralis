@@ -113,6 +113,24 @@ def candidates(
     }
 
 
+def key_fit(tonic: int, voice_range: tuple[float, float]) -> tuple[float, float, int]:
+    """(stretch, margin, tonic MIDI note) for the best octave of ``tonic``.
+
+    The lead spans tonic - 5 to tonic + 14 and wants a semitone of headroom;
+    ``stretch`` is how far that span leaves the range (0 when it fits).
+    """
+    low, high = voice_range
+    best = None
+    for octave in (2, 3, 4):
+        t = 12 * (octave + 1) + tonic
+        span_low, peak = t - 5, t + 14
+        stretch = max(0.0, low - span_low) + max(0.0, peak - (high - 1))
+        margin = min(span_low - low, high - 1 - peak)
+        if best is None or (stretch, -margin) < (best[0], -best[1]):
+            best = (stretch, margin, t)
+    return best
+
+
 def suggest_keys(mode: str, voice_range: tuple[float, float] | None,
                  dna_key_families: list[int] | None = None, n: int = 3) -> list[dict]:
     """Rank keys for a progression by voice fit, then by the artist's key habits.
@@ -128,16 +146,7 @@ def suggest_keys(mode: str, voice_range: tuple[float, float] | None,
     for tonic in range(12):
         reasons, score = [], 0.0
         if voice_range:
-            low, high = voice_range
-            best = None                       # (stretch, margin, tonic midi)
-            for octave in (2, 3, 4):
-                t = 12 * (octave + 1) + tonic
-                span_low, peak = t - 5, t + 14
-                stretch = max(0.0, low - span_low) + max(0.0, peak - (high - 1))
-                margin = min(span_low - low, high - 1 - peak)
-                if best is None or (stretch, -margin) < (best[0], -best[1]):
-                    best = (stretch, margin, t)
-            stretch, margin, _ = best
+            stretch, margin, _ = key_fit(tonic, voice_range)
             if stretch == 0:
                 score += 1.0 + min(margin, 4) * 0.1
                 reasons.append(f"verse and chorus peak fit your range with {margin:.0f} semitone(s) to spare")

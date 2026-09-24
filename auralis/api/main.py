@@ -31,6 +31,7 @@ from ..voice.pitch import STYLES as PITCH_POLISH_STYLES
 from ..voice.pitch import pitch_polish
 from ..voice.paired import ingest_paired_calibration
 from .artist import router as artist_router
+from .composer import router as composer_router
 from .theory import router as theory_router
 from .projects import router as projects_router
 
@@ -38,6 +39,7 @@ app = FastAPI(title="Auralis", version="0.8.0")
 app.include_router(projects_router)
 app.include_router(artist_router)
 app.include_router(theory_router)
+app.include_router(composer_router)
 
 # The frontend dev server runs on a different localhost port; allow it.
 app.add_middleware(
