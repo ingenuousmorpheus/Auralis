@@ -4,6 +4,7 @@ import { Cover, Icon, PlayGlyph, apiJson, fmtTime } from "./ui.jsx";
 const MAIN = [
   { id: "create", label: "Create", icon: "create" },
   { id: "music", label: "My Music", icon: "music" },
+  { id: "dna", label: "Artist DNA", icon: "dna" },
   { id: "studio", label: "Studio", icon: "studio" },
   { id: "voice", label: "My Voice", icon: "voice" },
   { id: "projects", label: "Projects", icon: "projects" },

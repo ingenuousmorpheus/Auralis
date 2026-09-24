@@ -2228,3 +2228,82 @@ The session now includes:
 ### Next Action
 Continue the existing next step first: finish the user’s My Music spot-check/include-exclude cleanup, then AU-03 Artist DNA V1. After AU-03 passes, build AU-03B before AU-04.
 
+
+## Session 006 — 2026-09-24 — AU-03 Artist DNA V1 + AU-03B R&B Theory Atlas
+
+### Goal
+The user said to start both, so I built AU-03 (Artist DNA V1) and then AU-03B (R&B Theory Atlas data foundation), in the order Session 005's build order sets. No audio generation.
+
+### Starting State
+- `main` at `e17cb28`: the merge of the user's Session 005 research addendum with the play-from-cover fix.
+- Session 005 asked for the My Music spot-check and include/exclude cleanup before AU-03. That was not done yet, so **DNA is computed live on every request** and follows the user's toggles whenever they make them. Nothing needs redoing afterwards.
+- The user's uncommitted Harmonic Reference work was still in the tree.
+
+### Changed
+- **AU-03:**
+  - `auralis/artist/dna.py`: `build_dna`, `family_key`, `_families`, `canonical_loop`.
+  - `GET /artist/dna` on the artist router. The router prefix is now `/artist`, and the library routes spell out `/library`; URLs are unchanged.
+  - `frontend/src/DnaPage.jsx`, plus an "Artist DNA" sidebar item and helix icon.
+- **AU-03B:**
+  - `auralis/theory/`: `schema.py` (validation and copyright guard), `atlas.py` (candidates, `suggest_keys`), `data/rnb_atlas.json` (canonical).
+  - `auralis/api/theory.py`: `/theory/eras`, `/theory/sources`, `/theory/candidates`, included in `main.py` (2 lines).
+  - `tools/export_atlas.py` produces `docs/research/RNB_THEORY_ATLAS.xlsx`.
+  - `frontend/src/AtlasPanel.jsx`: the "Era & style" panel in Create's Advanced mode.
+- **Other:**
+  - `pyproject.toml`: `research` extra (openpyxl, installed locally for the export) and package data for the Atlas JSON and profile YAMLs.
+  - Tests: `tests/test_artist_dna.py` (13), `tests/test_theory_atlas.py` (22).
+
+### Verification
+- `pytest -q` including the local harmony tests → 123 passed. Excluding them → 103 passed. `npm run build` passes.
+- **DNA on the real library**: 74 songs, 51 song families, 33 stem sets.
+
+  | Trait | Result |
+  |---|---|
+  | Tempo | 83–120 BPM, centred on 94 |
+  | Key | 62% minor, spread across keys (top family only 15%) |
+  | Harmony | ~1.4 chord changes per bar, 92% diatonic |
+  | Form | first chorus ~0:37, intros ~8 bars |
+  | Groove | syncopated (49% off the beat), straight |
+  | Melody | written F♯3–B♭4, against a trained voice of D3–C5 |
+
+- **DNA page (browser pane, real data):** every trait card renders.
+- **Atlas gate:** "80s R&B / Quiet Storm" with the user's voice range and DNA families gives:
+  - three `sourced` harmony candidates (pedal maj9 stasis, maj7 sway a fourth apart, soul-dominant arrival), each keyed to A♭ major because it "fits your range with 1 semitone to spare; a key family you use often"
+  - vocal and groove profiles, each with sources and status
+  - no melody fields anywhere in the answer
+- **Era & style panel (browser pane):** shows the same results.
+- **Workbook:** 7 sheets written (6 eras, 12 progressions, 12 chord colours, 6 vocal patterns, 6 grooves, 2 evidence rows, 12 sources).
+
+### Result
+**AU-03 COMPLETE** against its gate: the UI describes recurring traits across the user's music without generating anything.
+
+**AU-03B COMPLETE** against its gate: given "80s R&B", Auralis returns several documented, transposable harmony, groove and vocal candidates with provenance, without reproducing a copyrighted melody.
+
+Both have the caveats below.
+
+### Findings
+- **First-draft DNA problems, fixed before commit.**
+  - Loop rotations were counted as different loops ("i–v–i–v" and "v–i–v–i"); `canonical_loop` merges them.
+  - "Common forms" was dominated by trivial "S" forms from weak mix-only structure. Only chorus-bearing forms of 4+ sections count now.
+  - The key headline named a "most often" family holding only 15%. It now says the keys are spread out.
+  - Tempo bands were sorted as text ("100s" before "60s").
+- **First-draft key-fit rule was wrong.** It assumed a 23-semitone lead span, which is wider than the user's whole trained range (21.6), so it suggested no keys at all. It now uses tonic−5 to tonic+14, and when nothing fits it ranks keys by how little they stretch the range instead of returning nothing.
+- **The copyright guard caught my own prose field** named `notes`. The field was renamed to `comment` rather than weakening the guard.
+- **Atlas content is honest about its basis.** Only rows backed by the sources in the research addendum are `sourced`. Everything else (e.g. most tempo bands, several grooves and vocal patterns) is `hypothesis` and needs validation against curated data. The two evidence rows restate the addendum's summaries of the cited papers; re-read those papers before relying on their specifics.
+- **Family grouping is heuristic.** A title spelled two ways (e.g. a split vs joined word) stays as two songs; one shared first word never merges songs.
+
+### Gate/Blocker
+- None for AU-03 or AU-03B.
+- The user's include/exclude cleanup is still recommended (DNA currently counts all 74 songs).
+- Live Seed-VC is still unverified (host memory).
+
+### Do Not Redo
+- DNA is computed live; do not add a cached DNA file unless it becomes slow.
+- The Atlas JSON is canonical. Regenerate the workbook with `python tools/export_atlas.py` and never hand-edit it.
+- Keep the copyright guard strict: rename prose fields rather than loosening forbidden keys.
+
+### Next Action
+**AU-04 Song Blueprint Generator:**
+- Combine prompt + `GET /artist/dna` (tempo band, key families, loops, form, voice) + `GET /theory/candidates` (era, harmony, groove, vocal, fitted keys) + originality constraints into a structured, editable blueprint.
+- Show why each choice was made.
+- No audio yet.

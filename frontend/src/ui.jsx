@@ -17,6 +17,7 @@ const PATHS = {
   folder: <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
   wave: <path d="M3 13h2M8 8v10M12 4v18M16 9v8M20 6v14M24 12v2" />,
   back: <path d="M15 18l-6-6 6-6" />,
+  dna: <path d="M7 3c0 6 10 6 10 12s-10 6-10 6M17 3c0 6-10 6-10 12s10 6 10 6M8 7h8M8 17h8" />,
 };
 
 export function Icon({ name, size = 19, stroke = "currentColor", width = 2 }) {

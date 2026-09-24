@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import AtlasPanel from "./AtlasPanel.jsx";
 import { Cover, Icon, apiJson, catalogStats, fmtTime } from "./ui.jsx";
 
 /* Create: the prompt / lyrics panel beside the workspace list.
@@ -98,6 +99,8 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
               }}>+ {tag}</button>)}
             </div>}
           </div>
+
+          <AtlasPanel API={API} />
 
           <div className="au-card au-console" style={{ padding: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: "1px solid var(--hairline)", gap: 12 }}>

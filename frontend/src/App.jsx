@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import CreatePage from "./CreatePage.jsx";
+import DnaPage from "./DnaPage.jsx";
 import MasterMix from "./MasterMix.jsx";
 import MyMusic from "./MyMusic.jsx";
 import ProjectsPanel from "./ProjectsPanel.jsx";
@@ -53,6 +54,7 @@ export default function App() {
   let content;
   if (page === "create") content = <CreatePage API={API} go={setPage} play={play} nowPlayingId={track?.id} />;
   else if (page === "music") content = <MyMusic API={API} play={play} nowPlayingId={track?.id} />;
+  else if (page === "dna") content = <DnaPage API={API} go={setPage} play={play} />;
   else if (page === "studio") content = <StudioPage go={setPage} tools={TOOLS} />;
   else if (page === "master" || page === "mix") content = <MasterMix API={API} mode={page} />;
   else if (page === "projects") content = <div className="au-page-scroll"><ProjectsPanel API={API} /></div>;

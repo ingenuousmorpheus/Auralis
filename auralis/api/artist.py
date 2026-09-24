@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from ..artist.analyze import ANALYSIS_VERSION
 from ..artist.library import LibraryStore
 
-router = APIRouter(prefix="/artist/library", tags=["artist"])
+router = APIRouter(prefix="/artist", tags=["artist"])
 LIBRARY = LibraryStore()
 
 
@@ -38,7 +38,7 @@ def _song_row(song) -> dict:
     }
 
 
-@router.get("")
+@router.get("/library")
 def get_library():
     return {
         "sources": [s.__dict__ for s in LIBRARY.sources()],
@@ -47,7 +47,7 @@ def get_library():
     }
 
 
-@router.post("/sources")
+@router.post("/library/sources")
 def add_source(req: SourceAdd):
     try:
         source = LIBRARY.add_source(req.path.strip().strip('"'))
@@ -56,7 +56,7 @@ def add_source(req: SourceAdd):
     return {"source": source.__dict__, "scan": LIBRARY.rescan()}
 
 
-@router.delete("/sources/{source_id}")
+@router.delete("/library/sources/{source_id}")
 def remove_source(source_id: str):
     """Forget a folder and its analyses. The folder itself is never touched."""
     try:
@@ -66,7 +66,7 @@ def remove_source(source_id: str):
     return {"removed": source_id}
 
 
-@router.post("/rescan")
+@router.post("/library/rescan")
 def rescan():
     try:
         return LIBRARY.rescan()
@@ -74,7 +74,7 @@ def rescan():
         raise HTTPException(404, str(exc)) from exc
 
 
-@router.get("/songs/{song_id}")
+@router.get("/library/songs/{song_id}")
 def get_song(song_id: str):
     try:
         song = LIBRARY.song(song_id)
@@ -87,7 +87,7 @@ def get_song(song_id: str):
     return row
 
 
-@router.get("/songs/{song_id}/preview")
+@router.get("/library/songs/{song_id}/preview")
 def song_preview(song_id: str):
     """Playable audio for the player bar, served only to this machine.
 
@@ -109,12 +109,35 @@ def _media_type(path) -> str:
             ".aif": "audio/aiff", ".aiff": "audio/aiff"}.get(path.suffix.lower(), "audio/wav")
 
 
-@router.patch("/songs/{song_id}")
+@router.patch("/library/songs/{song_id}")
 def update_song(song_id: str, req: SongUpdate):
     try:
         return _song_row(LIBRARY.update_song(song_id, included=req.included))
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@router.get("/dna")
+def artist_dna(voice_profile_id: str | None = None):
+    """Artist DNA from the songs currently switched on. Computed live, so it
+    always reflects the latest include/exclude choices and analyses."""
+    from ..artist.dna import build_dna
+    from ..voice import VoiceProfileStore
+
+    songs = LIBRARY.songs()
+    analyses = {s.id: LIBRARY.analysis(s.id) for s in songs if s.analysis_status == "done"}
+    voice = None
+    try:
+        store = VoiceProfileStore()
+        if voice_profile_id:
+            voice = store.get(voice_profile_id)
+        else:
+            profiles = store.list()
+            voice = next((p for p in profiles if p.training_status == "trained"), None) or \
+                (profiles[0] if profiles else None)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return build_dna(songs, analyses, voice)
 
 
 def _run_analysis(job_id: str, song_ids: list[str]):
@@ -141,7 +164,7 @@ def _run_analysis(job_id: str, song_ids: list[str]):
     job.update(stage="done", pct=100.0)
 
 
-@router.post("/analyze")
+@router.post("/library/analyze")
 async def analyse(req: AnalyseRequest):
     from .main import JOBS, _create_job
 
