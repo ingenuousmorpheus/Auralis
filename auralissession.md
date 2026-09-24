@@ -1265,3 +1265,114 @@ AURALIS MIX / MASTER
 ```
 
 That is the path from the current repository to the desired product.
+
+---
+
+# 23. Session Log
+
+Entries are appended oldest-first. Each entry uses: Goal, Starting State, Changed, Verification, Result, Findings, Gate/Blocker, Do Not Redo, Next Action.
+
+## Session 001 — 2026-09-23 — AU-00 Audit + Baseline
+
+### Goal
+Establish a trustworthy baseline of what Auralis actually implements, verify it by running tests and the live app, and map it in `docs/AURALIS_CURRENT_ARCHITECTURE.md`. No feature work.
+
+### Starting State
+- Local `main` was at `87704d5`, one commit behind `origin/main`. `4910b1c` added this file.
+- The working tree held uncommitted local work, an unrelated **Harmonic Reference** feature:
+  - modified: `README.md`, `auralis/api/main.py`, `frontend/src/App.jsx`
+  - untracked: `auralis/engine/harmony.py`, `docs/HARMONIC_REFERENCE.md`, `frontend/src/HarmonicReference.{jsx,css}`, `tests/test_harmony.py`
+- The incoming commit touched only `auralissession.md`, so `git merge --ff-only origin/main` was safe. No reset, clean, stash or overwrite was used.
+- **Starting HEAD after sync:** `4910b1c` (matches `origin/main`).
+
+### Changed
+- Added `docs/AURALIS_CURRENT_ARCHITECTURE.md`, the full architecture map, 19-item status table, API/frontend surface, persistence, tests, reuse map and gaps.
+- Added this entry to `auralissession.md`.
+- No source code changed. The local Harmonic Reference work was left exactly as found and is **not** part of the AU-00 commit.
+
+### Verification
+- **Backend tests:** `pytest -q --ignore=tests/test_harmony.py` → 28 passed (committed baseline). `pytest -q` including the local untracked harmony tests → 48 passed.
+- **Frontend:**
+  - `npm run build` passes.
+  - `npm test` and `npm run lint` do not exist in `package.json`, so they were not run.
+- **Live backend:** uvicorn on 127.0.0.1:8001.
+  - `/health` → `0.8.0`.
+  - The OpenAPI listing showed all routes documented in the architecture map.
+- **Master:** synthetic stereo tone → `/upload` → `/master` (warm-soul) gave `internal-target`, −15.0 LUFS (the profile target), and `/download` returned 200.
+  - A reference run with a distinct reference gave `mode: reference` at −14.0 LUFS.
+  - A reference run that reused the target file was correctly rejected by Matchering.
+- **Stem mix:** 3 synthetic stems → `/mix` (vocal-forward-rnb) gave −14.0 LUFS and −1.0 dBTP.
+  - Roles vocal/drums/bass were detected at 0.98.
+  - WAV, report and session downloads returned 200.
+- **Voice APIs:**
+  - `/voice/provider` → installed.
+  - `/voice/profiles` → 1 profile, `studio-trained`, 1000 steps, 16.1 min / 137 clips, readiness 72, 1 paired calibration. No private paths in the response.
+  - `/voice/finish` (rack upload plus instrumental), `/voice/pitch` (8 notes detected, 7 corrected) and `/voice/auto-polish` all returned 200 on every download, preview and report.
+- **UI (browser pane):** home, master, stem, Voice Studio and Vocal Chain rack screens rendered with no console errors.
+- **Seed-VC provider:** the provider venv has torch 2.4.0+cu121 with CUDA on an RTX 4070, and the trained `model/ft_model.pth` is present.
+- **Live conversion FAILED for environmental reasons.** One 6 s synthetic test was run offline (`HF_HUB_OFFLINE=1`, nothing downloaded).
+  - Running `inference.py` directly gave Windows `os error 1455` (paging file too small) while loading Whisper.
+  - Host commit charge had 5.6 GB free of 63.7 GB, with LM Studio resident.
+- All test audio was synthetic and generated in a scratch directory. No user audio was read, and nothing was uploaded.
+
+### Result
+**COMPLETE**, with one verification gated on the host environment: live Seed-VC conversion was not demonstrated this session. The code path, provider install, CUDA and trained checkpoint were verified. Profile `1fb8f19a27a9` shows the path has worked before: it was trained through it.
+
+### Findings
+- The implementation matches §1 of this file. The table below adds the caveats found in the code; the full evidence per item is in `docs/AURALIS_CURRENT_ARCHITECTURE.md`.
+
+  | Area | Status |
+  |---|---|
+  | Mastering | IMPLEMENTED |
+  | Stem mixing | IMPLEMENTED |
+  | Reference matching | IMPLEMENTED |
+  | Loudness/TP | IMPLEMENTED |
+  | Voice profiles | IMPLEMENTED |
+  | Dataset handling | IMPLEMENTED |
+  | Training | IMPLEMENTED |
+  | Pitch Polish | IMPLEMENTED |
+  | Vocal Finish | IMPLEMENTED |
+  | Instrumental-aware placement | IMPLEMENTED |
+  | Launcher | IMPLEMENTED |
+  | Style profiles | PARTIAL: `low_end_weight` is never read, and there are no bundled references |
+  | Paired calibration | Ingest IMPLEMENTED. Pair-aware training DOCUMENTED-ONLY |
+  | Persistence | PARTIAL: in-memory jobs, and `%TEMP%` job dirs that are never cleaned |
+  | Diff-MST mixer | PLACEHOLDER |
+  | Windows packaging | DOCUMENTED-ONLY |
+  | Persistent song projects | NOT FOUND |
+
+- §1 also omits `auralis/engine/console.py`, the DSP execution and summing layer that the mix path depends on. This is an addition, not a correction.
+- Version drift and stale text:
+  - Code and UI are `0.8.0`, which is consistent across `pyproject.toml`, `__init__.py`, `/health` and `package.json`.
+  - The `6e28bbc` commit message says 0.5.
+  - `RECONSTRUCTION_ROADMAP.md` says 0.3.
+  - `DESIGN.md` is titled "LocalMaster".
+  - The `api/main.py` docstring still says "Phase 1 — master-only".
+- Port drift: `auralis/run.py` and `DESIGN.md` use 8000. The launcher, README and frontend use 8001.
+- Provider error surfacing: through `SeedVCProvider.convert` the host-memory failure appeared as "Unknown Seed-VC error" with empty output. The direct run showed the real traceback.
+- Out-of-repo experiment: the live profile and provider contain `*_paired_20260625_*` model and holdout artifacts. No code on `main` produces them.
+- Naming collision to resolve before AU-09: the local uncommitted `auralis/engine/harmony.py` is note-domain reference *analysis*. §10 plans `auralis/voice/harmony.py` for harmony/doubles *generation*.
+- The memory contention in §16 (GPU Strategy) already shows up in practice: a resident local LLM (LM Studio) alongside Seed-VC exhausted commit memory. This supports building the scheduler before stacking more heavy models.
+
+### Gate/Blocker
+- Live Seed-VC conversion needs more free commit memory: close LM Studio or other large processes, or enlarge the page file. After that, re-run one conversion through `POST /voice/convert` to close the last verification.
+- AU-00 was otherwise not blocked.
+
+### Do Not Redo
+- The DSP engine, voice pipeline and API surface are mapped in `docs/AURALIS_CURRENT_ARCHITECTURE.md`. Update that document instead of re-auditing from scratch.
+- Seed-VC is installed with CUDA working, and the profile is already trained. Do not reinstall or retrain to "verify".
+- Matchering rejecting a reference identical to the target is expected behavior, not a bug.
+
+### Next Action
+Begin **AU-01 Persistent Projects**:
+- Add `auralis/projects/store.py`, a `ProjectStore` modeled on `VoiceProfileStore`:
+  - root `%LOCALAPPDATA%\Auralis\projects\<12-hex id>\`
+  - id regex validation
+  - `project.json` + `sources/ stems/ vocals/ mixes/ masters/ reports/`
+- Add API routes to create, list, open and close projects.
+- Add a way to register an existing job's outputs (`output_path`, `master_path`, `session_path`) into a project, so the current master, mix and voice workflows save into projects unchanged.
+- Gate test: create, restart the backend, reopen, and confirm all assets are still linked.
+
+Optional before or alongside AU-01, no rewrites:
+- Clear the environment blocker and re-verify `/voice/convert`.
+- Fix the `run.py` port (8000 → 8001).
