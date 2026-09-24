@@ -1515,3 +1515,57 @@ Begin **AU-03 Artist DNA V1**:
 - Aggregate `artist/analyses/*.json` over `included` songs into an inspectable profile. Weight stem sets higher, use key families, report tempo with its octave ambiguity, and describe typical form, chord vocabulary and progressions, groove, vocal range and production balance.
 - Show it in the UI with the evidence behind each trait.
 - **Before that, ask the user to** spot-check 3–5 songs they know (BPM/key), and to untick songs that should not shape their DNA (covers, type beats, other artists' remixes).
+
+## Session 004 — 2026-09-24 — Console UI redesign (not a roadmap phase)
+
+### Goal
+Replace the old home-card interface with the Suno-style layout the user asked for: sidebar, Create panel beside a song list, and a persistent player. Restyle it as an elegant metallic-gold "starship bridge in a cyberpunk city" console, with a 3D morphing logo and light-sweep headings. It was designed first in Claude Design (private canvas "Auralis Studio Redesign") and approved by the user, then built into the real app.
+
+### Starting State
+- `main` at `3708acb` (AU-02).
+- The user's uncommitted Harmonic Reference work was still in the tree.
+- During this session the Claude session crashed and the user restarted it. The user then reported "Auralis never opened".
+
+### Changed
+- **New frontend files:**
+  - `theme.css`: tokens, effects, shell; remaps the old App.css tokens to gold
+  - `ui.jsx`: icons, covers, `catalogStats`
+  - `Shell.jsx`: `Sidebar` with morphing logo and voice card; `PlayerBar`
+  - `CreatePage.jsx`, `MasterMix.jsx`, `StudioPage.jsx`
+- **Rewritten:**
+  - `App.jsx`: the shell and page routing. Harmonic Reference loads through `import.meta.glob` only when its file exists.
+  - `MyMusic.jsx` and `MyMusic.css`: design layout, "Your sound so far" from real aggregates, play button.
+- **Small edits:**
+  - `VoiceStudio.jsx`: the back button is optional, and a "Checking the local engine…" state fixes the AU-00 loading flash.
+  - `index.html`: background colour.
+- **Backend:**
+  - `LibraryStore.preview_path` + `GET /artist/library/songs/{id}/preview`, so the player can play the catalog.
+  - `LibraryStore._forget` deletes previews along with analyses.
+- **Tests:** 2 new tests in `tests/test_artist_library.py`.
+
+### Verification
+- `pytest -q` including the local harmony tests → 88 passed. Excluding them → 68 passed. `npm run build` passes.
+- **Real launcher:** `tools/stop_auralis.ps1` stopped the instance the user had started at 15:48. It was still running and serving live-reloaded work-in-progress files, which is the likely cause of "never opened". `tools/start_auralis.ps1` then printed "Auralis is ready" (exit 0) and opened the browser.
+- **Preview endpoint on real data:** a full mix gives 200 `audio/wav` in 6.7 s (network drive). A zipped stem set renders in 10.1 s on first play and serves from cache in 0.03 s.
+- **Browser pane, real library:**
+  - All 9 screens render with no runtime errors: Create, My Music, Studio, My Voice, Projects, Master, Mix, Vocal chain, Harmonic reference.
+  - A catalog song played through the player (position advancing).
+  - My Voice shows the installed engine and the trained profile once loaded.
+
+### Result
+**COMPLETE.** The redesigned UI is live on the existing backend. Song generation behind the Create button is honestly labelled as the next phase.
+
+### Findings
+- The launcher treats an already-running instance as success ("already running", then it opens the browser). If that instance serves half-written files mid-edit, the user sees a broken or blank page. Restart it with Stop/Run after large frontend changes.
+- `import.meta.glob` lets the committed shell show the user's uncommitted Harmonic Reference locally without making the GitHub build depend on it.
+- Suno's layout was the reference; no Suno or Star Trek names, logos or assets are used. The "LCARS" look was deliberately not copied: only the mood (gold on black, console brackets, scanlines) was.
+
+### Gate/Blocker
+- None for the UI.
+- Still open: live Seed-VC check (host commit memory). The user's spot-check and DNA include/exclude choices come before AU-03.
+
+### Do Not Redo
+- The shell, theme tokens and page map are settled. New features add a page or a card, not a new shell.
+
+### Next Action
+AU-03 Artist DNA V1, once the user has spot-checked a few songs and set the DNA toggles in My Music.

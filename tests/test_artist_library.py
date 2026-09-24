@@ -312,3 +312,46 @@ def test_api_library_flow(tmp_path, monkeypatch):
     assert song["analysis"]["tempo"]["bpm"] > 0
     assert client.patch(f"/artist/library/songs/{song_id}", json={"included": False}).json()["included"] is False
     assert client.post("/artist/library/analyze", json={}).json()["total"] == 0
+
+
+# ── Player previews ────────────────────────────────────────────────────────
+
+def test_preview_streams_mixes_and_caches_one_stem_mixdown(tmp_path):
+    root = tmp_path / "catalog"
+    _catalog(root)
+    store = LibraryStore(tmp_path / "artist")
+    source = store.add_source(str(root))
+    store.rescan()
+    songs = {s.title: s for s in store.songs()}
+
+    mix = songs["Song One"]
+    assert store.preview_path(mix.id) == root / "01 Song One.wav"      # served in place
+
+    before = _snapshot(root)
+    stems = songs["Song Four"]
+    first = store.preview_path(stems.id)
+    assert first.parent == tmp_path / "artist" / "previews"            # never in the catalog
+    data, sr = sf.read(first, always_2d=True)
+    assert sr == SR and data.shape[1] == 2 and np.max(np.abs(data)) <= 0.99
+    mtime = first.stat().st_mtime_ns
+    assert store.preview_path(stems.id) == first and first.stat().st_mtime_ns == mtime  # cached
+    assert _snapshot(root) == before
+
+    store.remove_source(source.id)
+    assert not first.exists()
+
+
+def test_api_preview_route(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from auralis.api import artist, main
+
+    monkeypatch.setattr(artist, "LIBRARY", LibraryStore(tmp_path / "artist"))
+    client = TestClient(main.app)
+    root = tmp_path / "catalog"
+    _catalog(root)
+    client.post("/artist/library/sources", json={"path": str(root)})
+    songs = {s["title"]: s["id"] for s in client.get("/artist/library").json()["songs"]}
+    response = client.get(f"/artist/library/songs/{songs['Song Four']}/preview")
+    assert response.status_code == 200 and response.headers["content-type"] == "audio/wav"
+    assert client.get("/artist/library/songs/nope/preview").status_code == 404

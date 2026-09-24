@@ -381,7 +381,7 @@ class LibraryStore:
             data["songs"] = [s for s in data["songs"] if s["source_id"] != source_id]
             self._save(data)
             for song_id in gone:
-                (self.root / "analyses" / f"{song_id}.json").unlink(missing_ok=True)
+                self._forget(song_id)
 
     def rescan(self) -> dict:
         """Re-walk every source. Keeps analyses of unchanged songs; marks changed ones stale."""
@@ -408,7 +408,7 @@ class LibraryStore:
             ids = {s.id for s in found}
             removed = [i for i in old if i not in ids]
             for song_id in removed:
-                (self.root / "analyses" / f"{song_id}.json").unlink(missing_ok=True)
+                self._forget(song_id)
             return {"songs": len(found), "new": len(ids - set(old)), "removed": len(removed),
                     "skipped_lone_stems": len(skipped)}
 
@@ -422,6 +422,12 @@ class LibraryStore:
                     return Song.from_dict(s)
             raise FileNotFoundError(f"Unknown song: {song_id}")
 
+    def _forget(self, song_id: str) -> None:
+        """Drop a song's derived files: its analysis and any cached preview."""
+        (self.root / "analyses" / f"{song_id}.json").unlink(missing_ok=True)
+        for preview in (self.root / "previews").glob(f"{song_id}_*.wav"):
+            preview.unlink(missing_ok=True)
+
     def resummarise(self) -> int:
         """Rebuild table summaries from saved analyses (after a summary format change)."""
         with self._lock:
@@ -434,6 +440,35 @@ class LibraryStore:
                     count += 1
             self._save(data)
             return count
+
+    def preview_path(self, song_id: str) -> Path:
+        """A playable file for the song: the mix itself, or a cached stem mixdown."""
+        import soundfile as sf
+
+        song = self.song(song_id)
+        if song.kind == "mix":
+            path = Path(song.files[0].path)
+            if not path.is_file():
+                raise FileNotFoundError("The song file is no longer in its folder.")
+            return path
+        previews = self.root / "previews"
+        previews.mkdir(exist_ok=True)
+        target = previews / f"{song_id}_{song.fingerprint}.wav"
+        if target.is_file():
+            return target
+        with self._lock:
+            if target.is_file():
+                return target
+            for stale in previews.glob(f"{song_id}_*.wav"):
+                stale.unlink(missing_ok=True)
+            mix, sr, _ = SongAudio(song).load()
+            peak = float(np.max(np.abs(mix))) if mix.size else 0.0
+            if peak > 0.98:                       # summed stems can clip
+                mix = mix * np.float32(0.98 / peak)
+            temp = target.with_suffix(".tmp.wav")
+            sf.write(temp, mix, sr, subtype="PCM_16")
+            os.replace(temp, target)
+        return target
 
     # analyses
     def analysis(self, song_id: str) -> dict | None:

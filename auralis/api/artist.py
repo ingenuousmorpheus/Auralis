@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ..artist.analyze import ANALYSIS_VERSION
@@ -84,6 +85,28 @@ def get_song(song_id: str):
                      "in_zip": f.member is not None, "size": f.size} for f in song.files]
     row["analysis"] = LIBRARY.analysis(song_id)
     return row
+
+
+@router.get("/songs/{song_id}/preview")
+def song_preview(song_id: str):
+    """Playable audio for the player bar, served only to this machine.
+
+    A full mix streams straight from the catalog. A stem set has no mix file, so
+    its stems are summed once into a 16-bit preview under the library's local
+    folder (never into the catalog) and reused after that.
+    """
+    try:
+        path = LIBRARY.preview_path(song_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return FileResponse(path, media_type=_media_type(path))
+
+
+def _media_type(path) -> str:
+    return {".mp3": "audio/mpeg", ".flac": "audio/flac", ".ogg": "audio/ogg",
+            ".aif": "audio/aiff", ".aiff": "audio/aiff"}.get(path.suffix.lower(), "audio/wav")
 
 
 @router.patch("/songs/{song_id}")

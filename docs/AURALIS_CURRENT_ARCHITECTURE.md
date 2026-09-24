@@ -194,6 +194,7 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | | `POST /projects/{pid}/import-job` | Copy a finished job's inputs and outputs in, with provenance. Reference tracks are never imported |
 | | `POST /projects/{pid}/assets`, `GET/DELETE /projects/{pid}/assets/{aid}` | Add an audio file directly / download / remove |
 | My Music (AU-02) | `GET /artist/library` | Folders + song table (summary per song) |
+| | `GET /artist/library/songs/{song}/preview` | Player audio: a full mix streams from its folder; a stem set is summed once into a cached 16-bit mixdown under `artist\previews\` (never in the catalog) |
 | | `POST /artist/library/sources`, `DELETE /artist/library/sources/{sid}`, `POST /artist/library/rescan` | Add a catalog folder (scans it) / forget one (folder untouched) / rescan |
 | | `GET /artist/library/songs/{song}`, `PATCH /artist/library/songs/{song}` | Song files + full analysis / include-or-exclude for Artist DNA |
 | | `POST /artist/library/analyze` | Background job over pending/stale songs (or given ids). Progress via `/ws/jobs/{id}`. One at a time |
@@ -211,14 +212,19 @@ outputs become durable.
 | File | Screen / role |
 |---|---|
 | `frontend/src/main.jsx` | React root |
-| `frontend/src/App.jsx` | Shell with a `mode` state: `home` (mode cards + decorative `SpectralConsole`), `master` and `mix` (4-step `WorkflowRail`: Upload/Stems → Sound → Process → Master, with `InspectorPanel` and `RolePill`), `voice`, `rack`. `API = VITE_API ?? http://127.0.0.1:8001` |
+| `frontend/src/App.jsx` | **Console shell (UI redesign, 2026-09-24):** `Sidebar` + page + `PlayerBar`. Pages: `create`, `music`, `studio`, `voice`, `projects`, and tools `master`, `mix`, `rack`, plus `harmony` only when `HarmonicReference.jsx` exists in the checkout (`import.meta.glob`, so the build never depends on it). `API = VITE_API ?? http://127.0.0.1:8001` |
+| `frontend/src/Shell.jsx` | `Sidebar`: 3D gold AURALIS wordmark that morphs on press, nav, tools, the trained voice card from `/voice/profiles`. `PlayerBar`: plays catalog songs through `/artist/library/songs/{id}/preview` |
+| `frontend/src/CreatePage.jsx` | Suno-style Simple/Advanced create panel (description or lyrics + styles, suggestions from real catalog aggregates, Artist DNA / my-voice switches) beside the workspace list of catalog songs. **Create is not wired yet**: it says generation is the next phase rather than pretending |
+| `frontend/src/MasterMix.jsx` | The master / mix-from-stems workflow (same API calls as before), restyled |
+| `frontend/src/StudioPage.jsx` | Hub for the finishing tools and My Voice |
+| `frontend/src/theme.css`, `frontend/src/ui.jsx` | Theme tokens (void black, brushed gold `#d4af5f`, holo cyan `#7fe6ff`; Michroma / Manrope / JetBrains Mono), effects (metallic logo, light-sweep headings, gold corner brackets, scanlines, all off under reduced motion). The theme also remaps App.css's old tokens so older screens turn gold. `ui.jsx` holds icons, cover tiles and `catalogStats` |
 | `frontend/src/VoiceStudio.jsx` | "My Voice Studio": engine status/install, (1) create profile with consent, (2) Studio Voice dataset + paired calibration + readiness + training depth, (3) convert guide, then pitch polish / one-click auto-polish with A/B players |
 | `frontend/src/VocalRack.jsx` | Nectar-style module rack (EQ curve, de-ess, comp, saturate, dimension, space, output) over `/voice/finish` with a `modules` JSON body. Assist mode, in/out/mix monitor |
 | `frontend/src/ProjectsPanel.jsx` | "My Projects" mode (AU-01): create, list, open/close/delete, assets grouped by kind with players, downloads, provenance, integrity badges, add audio files |
 | `frontend/src/SaveToProject.jsx` | "Save to project" control (pick an open project or create one) on the master/mix result, the converted, pitch-polished and studio-polished vocal results, and the Vocal Chain rack result |
 | `frontend/src/MyMusic.jsx` | "My Music" mode (AU-02): catalog folders, analyse-with-progress, filterable song table (BPM, key, form, vocal range, DNA include toggle), song detail (tempo/key/loudness facts, energy curve with section timeline, top progressions, rhythm, lead-vocal range and phrasing, stem balance) |
 | `frontend/src/Knob.jsx` | Rotary control used by the rack |
-| `frontend/src/App.css` | Global styling |
+| `frontend/src/App.css` | Styling of the older screens (VoiceStudio, VocalRack); colours now come from `theme.css` tokens |
 
 Verified live in the browser pane: the home, master upload, stem upload,
 Voice Studio (engine ✓, trained profile, readiness 72%) and Vocal Chain screens

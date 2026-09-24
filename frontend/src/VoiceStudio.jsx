@@ -194,7 +194,7 @@ export default function VoiceStudio({API, card, btn, colors, onBack}) {
     ? Math.round(selectedProfile.pitch_high_midi-selectedProfile.pitch_low_midi) : 0;
 
   return <div className="voice-command-center">
-    <button style={{...btn(false),marginTop:0}} onClick={onBack}>← Auralis home</button>
+    {onBack && <button style={{...btn(false),marginTop:0}} onClick={onBack}>← Auralis home</button>}
     <h2 style={{marginBottom:4}}>My Voice Studio</h2>
     <p style={{color:MUTE,fontSize:13,marginTop:0}}>
       Convert a dry guide vocal into your singing timbre while preserving its melody and timing.
@@ -204,15 +204,15 @@ export default function VoiceStudio({API, card, btn, colors, onBack}) {
 
     <div style={{...card,marginBottom:12,border:`1px solid ${provider?.installed?T+"66":V+"55"}`}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div style={{fontSize:22}}>{provider?.installed?"✓":"⚙"}</div>
+        <div style={{fontSize:22}}>{provider?.installed?"✓":provider?"⚙":"…"}</div>
         <div style={{flex:1}}>
           <b style={{fontSize:14}}>Local singing engine</b>
           <div style={{fontSize:11,color:MUTE,marginTop:3}}>
-            {provider?.installed?"Seed-VC is installed and GPU-ready.":"One-time isolated install. Model files stay on this PC."}
+            {!provider?"Checking the local engine…":provider.installed?"Seed-VC is installed and GPU-ready.":"One-time isolated install. Model files stay on this PC."}
           </div>
         </div>
       </div>
-      {!provider?.installed && <button disabled={busy} style={{...btn(true),opacity:busy?.6:1}} onClick={installEngine}>
+      {provider && !provider.installed && <button disabled={busy} style={{...btn(true),opacity:busy?.6:1}} onClick={installEngine}>
         Install Voice Engine
       </button>}
     </div>
