@@ -546,7 +546,7 @@ def build_blueprint(prompt: str = "", lyrics: str = "", *, dna: dict | None = No
 # ─── Revise ─────────────────────────────────────────────────────────────────
 
 EDITABLE = ("title", "tempo", "key", "sections", "lyrics")
-SECTION_FIELDS = ("type", "bars", "energy", "chords_per_bar", "arrangement", "lyrics")
+SECTION_FIELDS = ("type", "bars", "energy", "chords_per_bar", "arrangement", "lyrics", "renderer")
 
 
 def revise(blueprint: dict, changes: dict, catalog: list[dict] | None = None) -> dict:

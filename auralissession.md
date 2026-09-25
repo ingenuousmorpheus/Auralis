@@ -2850,3 +2850,86 @@ The user said "Continue" without choosing among the model-dependent items (AU-11
 Waiting for the user's choice in `docs/MODEL_OPTIONS.md`. Otherwise, local improvements:
 - demos: chords from a played instrument, and pickup notes
 - a model scheduler (roadmap §16), the prerequisite for ACE-Step
+
+## Session 017 — 2026-09-25 — Demo chords and pickups, backing levels, engines and model lifecycle
+
+### Goal
+The user chose "Neither yet": no purchase, no DiffSinger voicebank, no ACE-Step download or install, no large model changes. Instead:
+- finish the demo improvements: played chords, pickups, adjustable backing-vocal levels, while keeping the pitch-correction and My Voice conversion/cancel behaviour
+- build the model lifecycle (unload one heavy model, load another, finish the job, release)
+- create clean provider interfaces for ACE-Step sections, a guide singer (DiffSinger or other) and Seed-VC
+- keep Create simple and put the advanced controls in Studio
+- test everything, document what remains, and commit so another agent can resume
+
+### Starting State
+- `main` at `556abb0` (Session 016), equal to `origin/main`.
+- The user's Harmonic Reference work was untouched. Only this session's hunks of `auralis/api/main.py` are staged.
+- Host: LM Studio resident; 7.5–10 GB commit free during the session.
+
+### Completed
+1. **Demos (commit `23485c6`):**
+   - **Played chords:** a melody-masked CQT separates what an instrument plays from the sung line (a voice's overtones otherwise look like a major triad). Chords are read per bar and kept as played; unclear bars are harmonized. Demos with chords and no singing work. The key comes from the notes plus the chords read.
+   - **Pickups:** from the phrasing, from where played chords change, or set by hand. Pickup notes sound just before the section.
+   - Rejected along the way: hiss counted as "an instrument" (fixed with a spectral peak-contrast gate: played notes about 41 dB, hiss about 7.5 dB); a missed first sung note shifting the chord grid (fixed by taking the bar line from the chord changes).
+2. **Backing-vocal levels (same commit):** per-part and whole-stack levels when singing, and a rebalance of saved parts in the Song studio without re-singing.
+3. **Engines and model lifecycle (this commit):**
+   - new `auralis/models/`: `lifecycle.py` (`ModelManager`, the `balanced` / `keep_warm` / `low_memory` policies, memory gate), `interfaces.py`, `builtin.py` (Seed-VC and vocalise adapters; ACE-Step and DiffSinger adapters, not installed), `worker.py` (resident-worker protocol), `registry.py`
+   - `api/engines.py`: `/models`, `/models/policy`, `/models/select`, `/models/release`
+   - `api/voices.convert_with_voice` replaces `ENGINE_LOCK` for `/voice/convert`, Sing and Make the whole song
+   - `sing_song` takes its guide singer from the registry
+   - `render_instrumental` sends sections marked `renderer` to a section generator (a `generated` stem)
+   - `frontend/src/EnginesPanel.jsx` in Studio → Advanced; a "Render with" choice on blueprint sections appears only if a section generator is installed
+   - `docs/MODEL_INTEGRATION.md`
+4. **Tests:**
+   - demos +7 (voice-only never an instrument; played I–vi–IV–V kept exactly; singing over a quieter instrument; pickups from phrasing, chords and by hand; the API override)
+   - backing +3
+   - engines +16 (`tests/test_models.py`)
+   - `tests/conftest.py`: memory gate off in tests (they use fake engines) and a temporary engines config, so the user's settings are never touched
+
+### Verification
+- Demo tests 15/15. Calibrated on synthetic ground truth: voice-only leaves 0.8% residual (no instrument); piano-only reads I vi IV V ×2 exactly with the release tail dropped; voice over a quieter piano reads 7/8 bars; a 1-beat pickup is found from phrasing and from chord changes.
+- Engines tests 16/16. A real subprocess worker loads, answers, errors cleanly and is gone after unload. The manager never runs two jobs at once and never holds two resident models.
+- Staged tree for the demo/backing commit: **209 passed**, frontend builds.
+- Staged tree for this commit: result recorded in the commit message.
+- **Real app** (restarted with the launcher scripts):
+  - Studio → Advanced shows Engines: Seed-VC installed, vocalise built in, DiffSinger and ACE-Step not installed with their licences and VRAM, the policy selector, 7.5 GB free.
+  - The Create page shows no engine or model wording.
+- **Preserved behaviour:**
+  - pitch correction is unchanged (`pitch_polish` default path; the Session 016 tests pass)
+  - the conversion queue and cancel UI is unchanged
+  - one-conversion-at-a-time is still tested (`test_conversions_never_run_two_at_once` passes through the model manager)
+
+### What remains (needs the user)
+- **Purchases / large downloads (not done, by instruction):**
+  - an English DiffSinger voicebank with a suitable licence
+  - ACE-Step weights (Apache-2.0, several GB, about 8–12 GB VRAM)
+  - a separation model with commercially usable weights for V5 (Demucs weights are non-commercial)
+- **Design decision still open:** whether generated sections (ACE-Step) should ever replace the synth by default, or only when chosen per section. Currently per section, off by default.
+
+### What remains (engineering, no purchase needed)
+- A live VRAM reading (e.g. `nvidia-smi`) in the engines status. The gate uses commit memory, which is what failed on this host.
+- Demos: seventh chords in played-chord reading; melody extraction from singing over a loud instrument needs separation (V5).
+- Backing-vocal level presets per era; lyric phonemes (ARPAbet) for a future lyric singer, which would live in its worker.
+
+### Future integration points (exact)
+- **ACE-Step:**
+  - `auralis/models/builtin.py::ACEStepSections`
+  - provider folder `%LOCALAPPDATA%\Auralis\providers\ace-step\` (`.venv\Scripts\python.exe` + `auralis_worker.py`)
+  - worker op `generate_section` (`prompt, seconds, tempo, key, seed, out_dir, stems` → `paths.mix`)
+  - selected in Studio → Engines; per-section `renderer: "ace-step"` in the blueprint
+  - consumed by `generation.render_instrumental` → `generated` stem
+  - tested seam: `tests/test_models.py::test_render_uses_a_section_generator_for_marked_sections_only`
+- **DiffSinger:**
+  - `auralis/models/builtin.py::DiffSingerGuide`
+  - provider folder `providers\diffsinger\`
+  - worker op `sing` (`notes` from `voice/guide.GuideNote`, `seconds`, `seed`, `out_path`)
+  - selected in Studio → Engines; used by `voice/full_song.sing_song` for the lead and every backing part, inside the model manager before Seed-VC
+- **Seed-VC:**
+  - `auralis/models/builtin.py::SeedVCConverter` → `voice/seed_vc.SeedVCProvider` (unchanged)
+  - entry point `api/voices.convert_with_voice`
+- The full guide is in `docs/MODEL_INTEGRATION.md`; licences and hardware are in `docs/MODEL_OPTIONS.md`.
+
+### Do Not Redo
+- All heavy work goes through `MODELS.use(...)`; never add another lock or a direct provider call.
+- New engines are adapters in `auralis/models/builtin.py`, living in their own venv behind `SubprocessWorker`; never import them into the MIT package.
+- Keep engine choices out of Create.

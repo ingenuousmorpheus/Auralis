@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-import threading
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -20,9 +19,29 @@ from ..voice.history import VoiceHistoryStore
 
 router = APIRouter(prefix="/voice", tags=["voice library"])
 
-# Only one Seed-VC conversion at a time: host memory is tight, and two
-# provider processes loading Whisper at once exhausted commit memory before.
-ENGINE_LOCK = threading.Lock()
+def convert_with_voice(profile, source: str, output: str, quality: str = "studio", semitone_shift: int = 0,
+                       label: str = "", on_stage=None, progress=None) -> dict:
+    """Convert ``source`` into ``profile``'s voice with the registry's voice converter.
+
+    Runs inside the model manager (``auralis.models.MODELS``): one heavy model at a time
+    (so two conversions never overlap: host memory is tight, and two Seed-VC processes
+    loading Whisper at once exhausted commit memory before), a memory check before
+    loading, and release after the job according to the lifecycle policy."""
+    from ..models import MODELS, REGISTRY, ConversionRequest
+
+    converter = REGISTRY.voice_converter()
+    if on_stage:
+        on_stage(f"waiting for the voice engine ({profile.name})")
+    with MODELS.use(converter.spec.id, label=label or f"convert to {profile.name}"):
+        if on_stage:
+            on_stage(f"converting to {profile.name} (voice engine running)")
+        result = converter.convert(ConversionRequest(
+            source_path=source, output_path=output, reference_path=profile.reference_path,
+            checkpoint_path=profile.checkpoint_path, config_path=profile.config_path,
+            quality=quality, semitone_shift=semitone_shift, progress=progress))
+    if result.get("output_path") and result["output_path"] != output and os.path.isfile(result["output_path"]):
+        shutil.copyfile(result["output_path"], output)
+    return result
 MAX_TAKE_BYTES = 200 * 1024 * 1024          # about 18 min of 48 kHz mono 16-bit WAV
 
 

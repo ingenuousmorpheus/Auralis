@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** Session 016 (pitch polish speed, queue cancel, model options), 2026-09-25
+**Last updated:** Session 017 (engines and model lifecycle, demo chords/pickups, backing levels), 2026-09-25
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -70,8 +70,13 @@ There is one provider boundary today, **Seed-VC** (`auralis/voice/seed_vc.py`):
 - Auralis talks to it only through `subprocess` calls to `inference.py` and `train.py`.
 - `SeedVCProvider.status()` checks that `.venv\Scripts\python.exe` and `inference.py` exist.
 
-There is no provider base class, registry or scheduler yet. Seed-VC is the
-pattern to copy.
+Since Session 017 there **is** a provider layer, `auralis/models/`:
+- `ModelManager`: one heavy model on the GPU at a time, a memory check before loading, load and unload by policy
+- interfaces for voice converters, guide singers and section generators
+- a registry that picks one engine per kind
+- a `SubprocessWorker` protocol for resident engines in their own venv
+
+Seed-VC is wrapped by `SeedVCConverter`; ACE-Step and DiffSinger have registered, not-installed adapters. See "Engines and model lifecycle" below and `docs/MODEL_INTEGRATION.md`.
 
 ---
 
@@ -169,15 +174,39 @@ Privacy properties the code enforces:
   - hiss and stop onsets, and a breath before each phrase
   - the output is dry mono at 44.1 kHz, about −20 dBFS RMS with peaks below −3 dBFS
   It sings the melody and the lyrics' rhythm and vowels, **not intelligible words** (`sings_words = False`). A lyric-capable engine (e.g. DiffSinger, isolated like Seed-VC) plugs in behind the same interface.
+- **Backing levels (Session 017).** `sing_song(backing_levels={part: dB}, backing_db=4.0)` shifts parts from their producer defaults and sets the whole stack's offset in the song mix. `assemble.rebalance_backing` rebuilds the bus from a project's saved `bv_*` parts with new levels, without re-singing, as the newest `backing_vocals` stem. `remix_project(..., backing_levels=)` does that before remixing (`GET /projects/{pid}/backing-parts`).
 - **Pitch polish speed (Session 016).** `pitch_polish(..., track_sr=)` optionally tracks pitch on a resampled copy and still renders the edits on the original audio. `sing_song` uses 22.05 kHz when the lead sings for more than 2 minutes. Measured on a converted vocal with a known score: 2.4× faster, 94% vs 96% of notes within 25 cents after polish, the same 10-cent median. The default elsewhere is unchanged.
 - **`voice/full_song.sing_song`** runs the chain: guide score, guide vocal, the chosen voice through an injected `convert`, `pitch_polish` (`natural`, key from the blueprint via `_pitch_key`), `finish_vocal` (`smooth-rnb`, 0.7, against the render's pre-master), then `engine.pipeline.run` over the render's stems plus the vocal (role `vocal`, the atmosphere and FX offsets kept).
   - It arranges with the render's seed, so the vocal melody is the same one the instrumental was built around.
   - Vocals up to 6 minutes are converted in one Seed-VC call. Longer ones are cut in the middle of rests into pieces of about 4 minutes (`plan_chunks`).
 - **`SeedVCProvider.convert`** now decodes the subprocess output as UTF-8 with replacement. Seed-VC's progress bars used to crash the output reader under the Windows code page, which is why failures surfaced as "Unknown Seed-VC error" (gap 2, now fixed).
 
+### Engines and model lifecycle (Session 017)
+
+`auralis/models/`:
+- **`lifecycle.ModelManager`** (the process-wide `MODELS`). `use(model_id, label)` is a context manager that:
+  - takes the **single GPU slot** (waits for other jobs; re-entrant in one thread; refuses a *different* model nested inside a job)
+  - **checks free commit memory** (`free_commit_gb` via `GlobalMemoryStatusEx`, psutil fallback, unknown = no block; `AURALIS_MEMORY_CHECK=off` disables it) against `spec.min_commit_gb`, or `commit_gb` under `low_memory`, counting memory held by resident models about to be unloaded as free
+  - **unloads other resident models**
+  - **loads** this one if it is resident
+  - **releases per policy:** `balanced` unloads after the job (default); `keep_warm` keeps it until another model needs the slot or `idle_seconds` pass; `low_memory` is like balanced with the stricter memory rule
+  It also offers `release_all()`, `status()` and an event log.
+- **`interfaces`:** `VoiceConverter.convert(ConversionRequest)`, `GuideSinger.sing(score, total_seconds, seed)` (with `sings_words`, `languages`), `SectionGenerator.generate(SectionRequest) → SectionResult`, and `section_prompt(blueprint, section)` (never mentions vocals).
+- **`builtin`:**
+  - `SeedVCConverter` wraps `SeedVCProvider` unchanged (heavy, not resident; about 6 GB minimum, 9 GB typical commit; `provider_getter` points it at the API's shared provider)
+  - `VocaliseGuide` (built in)
+  - **`ACEStepSections`** and **`DiffSingerGuide`**: complete adapters over a resident worker in `providers/ace-step` and `providers/diffsinger`. They report *not installed* until a provider is installed, and nothing is downloaded.
+- **`worker.SubprocessWorker`:** the JSON-lines protocol for resident engines. Start prints `{"ready": true}`; requests and replies carry `id` and `ok`; stop sends `shutdown` then kills. stderr goes to a log file whose tail is shown on errors.
+- **`registry.Registry`** (`REGISTRY`) holds one choice per kind (`voice_converter` seed-vc, `guide_singer` vocalise, `section_generator` none) in `%LOCALAPPDATA%\Auralis\models.json`, together with the policy. A chosen engine that isn't installed falls back to the built-in one and says why.
+
+**Pipeline wiring:**
+- `api/voices.convert_with_voice` is the single path for `/voice/convert`, Sing and Make the whole song. It uses the registry's converter inside `MODELS.use`; `ENGINE_LOCK` is gone, and its one-at-a-time guarantee is kept and tested.
+- `sing_song` gets its guide singer from the registry (heavy singers run inside `MODELS.use`) and records `guide_singer`.
+- `render_instrumental(..., section_generator="registry")` sends sections with `renderer: <id>` to the chosen section generator inside `MODELS.use`. The result goes into a `generated` stem (mixed as harmonic, saved into projects); every other section stays with the synth, and unavailable generators fall back and say so.
+
 ### Demo-to-song (AU-13, Session 014)
 
-`composer/demo.py`:
+`composer/demo.py` (Session 017 additions come after this list):
 - **`analyse_demo`:**
   - Melody notes come from the library's `analyze.melody_notes` (pYIN at 16 kHz).
   - **Tempo from the sung notes** (`tempo_from_notes`: the densest inter-onset interval, folded into 65–145 BPM), then `fit_tempo` searches ±4% for the tempo that puts onsets on the eighth-note grid. The librosa beat tracker is only a fallback: on soft sung attacks it gave 3:2 and 4:3 readings.
@@ -185,6 +214,13 @@ Privacy properties the code enforces:
   - A tempo or key the user sets wins.
 - **`melody_to_beats`** quantizes to a 16th grid, with the first note on the bar line.
 - **`harmonize`** gives one key triad per bar holding the most melody (by length, strong beats and root), starting and ending on the tonic and avoiding a third bar of the same chord; era colour comes from `blueprint._colour`.
+- **Session 017 additions:**
+  - **Instrument detection:** `accompaniment` masks the melody's harmonic series (±1.2 semitones, 12 partials) in a C1–C8 CQT and measures what is left between C2 and E5. An instrument is playing when at least 25% of that energy remains **and** the residual is tonal (median peak-to-median contrast of at least 15 dB). A voice alone leaves under 1%, and hiss sits around 7.5 dB contrast.
+  - **Played chords:** `played_chords` does per-bar triad matching on the masked chroma (bass counts more). A bar that is silent or only a release tail (under 35% of the median bar energy) is skipped. A chord counts at a strength of 0.6 or more, since real played triads measured 0.65–0.72.
+  - **Key:** from the sung notes plus the triads read, because raw chroma was misled by an electric piano's inharmonic partial.
+  - **Pickups:** with an instrument, the bar line is where its chords change and earlier sung notes become the pickup. Singing alone, `find_pickup` scores metric placement: a pickup must be short notes (≤ 2 beats) and beat starting on the first note by 15%. `pickup_beats` overrides it.
+  - `melody_to_beats` gives pickup notes negative beats, and `arrange` places them just before each demo section, clearing generated notes that would overlap.
+  - Chords-only demos (no singing) keep the chords, and the composer writes the melody.
 - **`build_from_demo`** builds the normal blueprint with the demo's tempo and key, sets every `role` section to the demo's length (4–16 bars) with those chords (`source: "demo"`), and stores the demo as `blueprint.demo.line` (the key is named `line` because the validator forbids `melody` and `notes` keys, which keep third-party material out). `arrange` puts that line into every `role` section and writes melodies only for the others.
 
 ### Song assembly (AU-10) and retrieval / originality (AU-12), Session 013
@@ -282,6 +318,8 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | | `GET /composer/sing/{job}/file/{name}` | `song`, `song_mix`, `vocal` (finished lead), `backing` (stereo bus), `double_l`, `double_r`, `harmony_high`, `harmony_low`, `adlibs`, `polished`, `converted`, `guide`, `preview`, `report`. Saving uses `/projects/{pid}/import-job` |
 | Song (AU-10) | `POST /composer/song` | Blueprint fields + `profile_id` (none = instrumental only), `production`, `quality`, `project_name` → background job `song-assembly`: blueprint → instrumental → vocals → master, all saved into a **new project** (stems tagged with their mix role, blueprint.json, lyrics.txt) |
 | | `GET /projects/{pid}/stems`, `POST /projects/{pid}/remix` | The project's mixable stems / rebuild the master from them with `{levels: {asset_id: {gain_db, mute, solo}}}` (job `project-remix`), saved as `remix_NN.wav` |
+| Engines (Session 017) | `GET /models` | Engine per kind (active, why, options), every model's spec (licence, VRAM, memory), installed/loaded, GPU policy, busy/holder, free commit memory, recent lifecycle events |
+| | `POST /models/policy`, `POST /models/select`, `POST /models/release` | `balanced` / `keep_warm` / `low_memory`; choose an installed engine for a kind (422 if not installed); unload every resident model now |
 | Demo (AU-13) | `POST /composer/demo` | Multipart demo (WAV/FLAC/OGG/MP3, ≤ 3 min) + `prompt`, `lyrics`, `role` (chorus / verse / bridge), optional `tempo`, `key`, `era`, `use_dna`, `use_voice` → a blueprint whose `role` sections keep the demo's melody and carry chords written under it |
 | Retrieval + originality (AU-12) | `POST /artist/retrieve` | `{bpm, mode, picked, n}` → the closest switched-on songs with reasons |
 | | `POST /composer/similarity` | `{blueprint, seed}` → job: chords vs every switched-on song, the take's melody guide vs the closest lead vocals (extracted once, cached), audio not compared |
@@ -310,6 +348,7 @@ outputs become durable.
 | `frontend/src/Shell.jsx` | `Sidebar`: 3D gold AURALIS wordmark that morphs on press, nav, tools, the trained voice card from `/voice/profiles`. `PlayerBar`: plays catalog songs through `/artist/library/songs/{id}/preview` |
 | `frontend/src/CreatePage.jsx` | Suno-style Simple/Advanced create panel (description or lyrics + styles, suggestions from real catalog aggregates, Era & style, Artist DNA / my-voice switches) beside the workspace. **Create builds a Song Blueprint (AU-04)**, and the workspace switches between *Blueprint* and *My songs*. **Make the whole song** (AU-10) runs the one-click job with a Screen-3 stage list and opens the result in the Song studio. An *Influence* choice (all my songs / closest 5 / songs I pick) steers the DNA; in pick mode, clicking songs on the right picks them (AU-12). No audio is rendered yet, and the page says so |
 | `frontend/src/DemoPanel.jsx` | Create's *Demo* button (AU-13): record the idea with the mic (the My Voice recorder) or choose a memo; it becomes the chorus, a verse or the bridge; an optional BPM; *Build the song around it* opens the blueprint, badged "melody from your demo" |
+| `frontend/src/EnginesPanel.jsx` | Studio → *Advanced: engines and GPU* (Session 017): the engine per job with licence, VRAM, installed/loaded state and notes; the GPU sharing policy; free memory; *Free the GPU*. Only installed engines can be chosen. Not shown in Create |
 | `frontend/src/SongStudio.jsx` | Song studio (AU-10, roadmap Screen 4) on a project: the masters with players and downloads; stems with player, level (−12…+12 dB), mute and solo; *Remix and master*; *Edit blueprint* |
 | `frontend/src/BlueprintView.jsx` + `Blueprint.css` | The editable blueprint (AU-04): title, tempo, key (24 keys), meter and length, groove, an energy-curve chart, and one card per section. Each card has type, bars, move/copy/remove, chord chips with Roman numerals, a Roman-numeral text field, harmony options, "New" chords, chords per bar, energy, arrangement role levels and the vocal register. Below: vocal constraints, arrangement palette, originality checks. "Why?" on every decision; save to an open or new project. Every edit calls `/composer/blueprint/revise`. A *Render instrumental* panel (AU-05) renders the blueprint, shows progress, plays the master, stems and melody guide, downloads WAV/MIDI, offers *New take* (next seed), warns when the blueprint changed since the render, and saves the render to a project |
 | `frontend/src/DnaPage.jsx` | "Artist DNA" page (AU-03): a card per trait with its headline, confidence, a small visual (tempo bands, key families, loops, forms, writing range drawn inside the trained voice range), a note, and playable evidence songs; the weighting rules in plain words |
@@ -501,7 +540,7 @@ Every decision writes a sentence to `why` (per field) or to the section's `why`,
 
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). After AU-09, **180** (200). After Session 013, **190** (210). After AU-13, **198** (218). The run with the local
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). After AU-09, **180** (200). After Session 013, **190** (210). After AU-13, **198** (218). After Session 016, 199. After Session 017, **225** (245). The run with the local
 uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
@@ -513,7 +552,8 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
 | `tests/test_composer.py` (30, AU-04) | Brief words and explicit overrides. Lyrics headers (a lyric line starting with "hook" is not a header). 11 Roman-numeral realisations; key parsing. **Gate:** a complete blueprint: tempo, key, 4/4, intro to outro, chords filling every bar, arrangement roles, energy curve, vocal registers inside the voice, chorus above verse, a reason for every decision. No melody keys anywhere. DNA loops re-voiced and used once; chorus differs from verse. Key fits the voice and DNA; a narrow voice gets an honest stretch. An era without the DNA's mode follows the era. Tempo from DNA, half-time, prompt. Form from lyrics and length. Works with no DNA and no voice. Catalog twin flagged. Edits to key, tempo, sections and chords re-derive everything; invalid edits reported; regenerate changes one section type only. Save with revisions and lyrics, survives a new store, refused when closed. API: create, revise, 422, regenerate, save, read |
-| `tests/test_demo.py` (8, AU-13) | **Gate (ground truth):** four synthetic voice memos (no click, hiss added): a D-major hook at 100 BPM, the same hook in F at 88, an A-minor hook at 76, an eighth-note line at 92. Each gives the tempo within 1 BPM, the right key, every pitch kept and every onset on its 16th. The blueprint keeps the demo as every chorus (arranged melody = demo), chords written under it hold ≥70% of the notes, and the rest of the song exists. Harmonizer and key helpers; a clear error when there is no melody; API upload and a 422 for an invalid role |
+| `tests/test_models.py` (16, Session 017) | Balanced loads then releases; switching models unloads the other first; keep-warm idle release and policy change; one job at a time across threads and models; re-entrant for the same model but not a different one; the memory gate (refuse, allow, low-memory strictness, unknown memory, env override, reclaimable memory); not-installed refused; a real subprocess worker loads, answers, errors cleanly and is gone after unload; a failing worker reports its stderr; the ACE-Step adapter drives a stand-in worker through the manager; registry defaults, fallback, persistence and status; the Seed-VC adapter uses the shared provider; render sends only marked sections to a section generator, places them, and releases it; the sing pipeline uses the registry's guide singer; the engines API |
+| `tests/test_demo.py` (15, AU-13 + Session 017) | **Gate (ground truth):** four synthetic voice memos (no click, hiss added): a D-major hook at 100 BPM, the same hook in F at 88, an A-minor hook at 76, an eighth-note line at 92. Each gives the tempo within 1 BPM, the right key, every pitch kept and every onset on its 16th. The blueprint keeps the demo as every chorus (arranged melody = demo), chords written under it hold ≥70% of the notes, and the rest of the song exists. Harmonizer and key helpers; a clear error when there is no melody; API upload and a 422 for an invalid role |
 | `tests/test_song_assembly.py` (3, AU-10) | A song saved to a project with the blueprint and mix-role-tagged stems (individual backing parts not double-remixed), deep-verified. Remix with mute, level and solo; all-muted is refused; it works from a new store instance. **Gate (API):** one request → project with a downloadable finished WAV and editable stems → remix job → blueprint readable |
 | `tests/test_similarity.py` (7, AU-12) | Roman reduction and longest run. Retrieval ranks by closeness, counts double time, ignores switched-off songs, puts picks first. Focused DNA uses only its songs. **Gate:** a chord-for-chord copy is flagged (also inside the blueprint's own checks) while an unrelated song passes; a transposed 40-note melody copy is flagged while a different melody passes; step-only runs at chance level and repeated notes are never flagged |
 | `tests/test_vocal_production.py` (7, AU-09) | Parts follow the sections' backing-vocals levels and the production cap (lead = none, doubles = doubles only). Harmonies are 3–9 semitones from the lead, chord tones, in key and in range; doubles are the lead a few ms apart; ad-libs sit only in rests at the end. Pack/unpack restores exact positions and splits long calls. **Gate:** each rendered part is on its written pitch (≥90%, octave-strict, two keys); a song produces the lead, two doubles (panned left/right), two harmonies, ad-libs and the bus as separate files from one conversion call; "lead" production gives no backing |
@@ -569,7 +609,8 @@ Rules carried forward:
 - ~~Song blueprint~~, done in AU-04. Still missing: lyric writing, per-line syllable fitting, meters other than 4/4, and a prompt reader beyond keywords.
 - ~~Composer, MIDI rendering~~, done in AU-05 (the local synth is a sketch-quality provider). ~~Atmosphere~~, done in AU-06. Still missing: sample-based instruments, generative-audio providers (AU-11).
 - My Voice redesign: V1–V4 and microphone capture built (Sessions 009, 015, 016). Still planned: V5 (full-song vocal separation; needs a model, see `docs/MODEL_OPTIONS.md`).
-- Model-dependent phases (AU-11 generative audio, V5 separation, a lyric-capable guide singer): researched in `docs/MODEL_OPTIONS.md` (licences, hardware); nothing is installed. See `docs/VOICE_STUDIO_PLAN.md` §7.
+- Model-dependent phases (AU-11 generative audio, V5 separation, a lyric-capable guide singer): researched in `docs/MODEL_OPTIONS.md` (licences, hardware). **The Auralis side is ready** (`auralis/models/`, `docs/MODEL_INTEGRATION.md`); nothing is installed.
+- Demo limits: melody extraction from singing mixed with a loud instrument is best-effort (needs separation, V5). Chords are read as triads, not sevenths. See `docs/VOICE_STUDIO_PLAN.md` §7.
 - ~~Vocal harmony/doubles generator, full-song voice orchestration~~, done in AU-08/09. Guide singer: V1 (no intelligible words; needs a lyric-capable provider).
 - A generic provider interface/registry and a GPU/model scheduler. The audit hit exactly the memory contention this is meant to prevent (see below).
 - Diff-MST "Path B" mixer (comment-only placeholder).

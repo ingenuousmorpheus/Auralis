@@ -16,7 +16,7 @@ from .synth import SynthRenderer
 PROVIDERS: dict[str, RenderProvider] = {"synth": SynthRenderer()}
 # Stem → mixer role, so the pipeline never has to guess (no detection needed).
 MIX_ROLES = {"drums": "drums", "bass": "bass", "keys": "harmonic", "pad": "harmonic", "fx": "other",
-             "atmosphere": "other"}
+             "atmosphere": "other", "generated": "harmonic"}
 # Stems that should sit below their role target (dB): the atmosphere is a bed.
 MIX_OFFSETS = {"atmosphere": -6.0, "fx": -2.0}
 
@@ -32,7 +32,7 @@ def list_providers() -> list[dict]:
 
 
 def render_instrumental(blueprint: dict, out_dir: str, seed: int = 0, provider: str = "synth",
-                        master: bool = True, progress=None) -> dict:
+                        master: bool = True, progress=None, section_generator="registry") -> dict:
     """Render a blueprint to stems, a MIDI file and (when ``master``) a mixed and
     mastered instrumental. Returns paths and a summary."""
     from ..composer.arrange import arrange
@@ -65,11 +65,12 @@ def render_instrumental(blueprint: dict, out_dir: str, seed: int = 0, provider: 
     result: RenderResult = renderer.render(
         arrangement, os.path.join(out_dir, "stems"), seed=seed,
         progress=lambda stage, pct: report(stage, 8 + pct * 0.42))
+    generated = _generate_sections(blueprint, out_dir, seed, section_generator, result, report)
 
     out = {
         "provider": result.provider, "seed": seed, "tempo": arrangement["tempo"], "key": arrangement["key"],
         "duration_seconds": result.duration_seconds, "note_counts": arrangement["counts"],
-        "stems": result.stems, "melody_guide_path": result.extras.get("melody"),
+        "stems": result.stems, "melody_guide_path": result.extras.get("melody"), "generated_sections": generated,
         "atmosphere": {"counts": atmos_plan["counts"], "levels": atmos_plan["levels"],
                        "layers": [{k: l[k] for k in ("kind", "section", "why")} for l in atmos_plan["layers"]]},
         "midi_path": midi_path, "blueprint_path": bp_path, "blueprint_id": blueprint.get("id"),
@@ -94,6 +95,60 @@ def render_instrumental(blueprint: dict, out_dir: str, seed: int = 0, provider: 
         json.dump({k: v for k, v in out.items()}, f, indent=2)
     report("done", 100)
     return out
+
+
+def _generate_sections(blueprint, out_dir, seed, section_generator, result, report) -> list:
+    """Sections marked ``renderer: <generator id>`` are rendered by a section generator
+    (e.g. ACE-Step, when installed and chosen) into a ``generated`` stem placed at each
+    section's start; everything else stays with the synth. The generator runs inside the
+    model manager: loaded for these sections, released afterwards."""
+    import numpy as np
+    import soundfile as sf
+
+    marked = [s for s in blueprint["sections"] if s.get("renderer") not in (None, "", "synth")]
+    if not marked:
+        return []
+    if section_generator == "registry":
+        from ..models import REGISTRY
+
+        section_generator = REGISTRY.section_generator()
+    if section_generator is None:
+        return [{"section": s["label"], "rendered_by": "synth",
+                 "why": f"{s['renderer']} isn't installed or chosen; the synth rendered it"} for s in marked]
+    from ..models import MODELS, SectionRequest, section_prompt
+
+    spb = 60.0 / float(blueprint["tempo"])
+    length = int((blueprint["total_bars"] * 4 * spb + 6.0) * result.sample_rate)
+    stem = np.zeros((length, 2), np.float32)
+    done = []
+    report(f"generating sections with {section_generator.spec.name}", 48)
+    with MODELS.use(section_generator.spec.id, label="generate sections"):
+        for s in marked:
+            if s.get("renderer") != section_generator.spec.id:
+                done.append({"section": s["label"], "rendered_by": "synth",
+                             "why": f"{s['renderer']} isn't the chosen section generator"})
+                continue
+            req = SectionRequest(blueprint=blueprint, section_id=s["id"], start_seconds=s["start_seconds"],
+                                 seconds=s["bars"] * 4 * spb, tempo=float(blueprint["tempo"]), key=blueprint["key"],
+                                 prompt=section_prompt(blueprint, s), out_dir=os.path.join(out_dir, "generated"),
+                                 seed=seed)
+            os.makedirs(req.out_dir, exist_ok=True)
+            got = section_generator.generate(req)
+            audio, sr = sf.read(got.paths["mix"], always_2d=True, dtype="float32")
+            if sr != result.sample_rate:
+                from scipy.signal import resample_poly
+                audio = resample_poly(audio, result.sample_rate, sr, axis=0).astype(np.float32)
+            if audio.shape[1] == 1:
+                audio = np.repeat(audio, 2, axis=1)
+            a = int(s["start_seconds"] * result.sample_rate)
+            n = min(len(audio), int(req.seconds * result.sample_rate), length - a)
+            stem[a:a + n] += audio[:n, :2]
+            done.append({"section": s["label"], "rendered_by": got.provider, "why": "marked for it"})
+    if any(d["rendered_by"] == section_generator.spec.id for d in done):
+        path = os.path.join(out_dir, "stems", "generated.wav")
+        sf.write(path, stem, result.sample_rate, subtype="PCM_24")
+        result.stems["generated"] = path
+    return done
 
 
 def _atmosphere_notes(plan: dict) -> list:

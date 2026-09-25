@@ -54,7 +54,7 @@ function EnergyCurve({ bp }) {
   </div>;
 }
 
-function Section({ s, index, count, options, busy, onChange, onMove, onRemove, onDuplicate, onRegenerate }) {
+function Section({ s, index, count, options, busy, onChange, onMove, onRemove, onDuplicate, onRegenerate, generators = [] }) {
   const [draft, setDraft] = useState(s.progression.roman.join(" "));
   useEffect(() => setDraft(s.progression.roman.join(" ")), [s.progression.roman.join(" ")]);
   const commitChords = () => { if (draft.trim() !== s.progression.roman.join(" ")) onChange({ progression: draft }); };
@@ -126,6 +126,12 @@ function Section({ s, index, count, options, busy, onChange, onMove, onRemove, o
           onKeyUp={e => onChange({ energy: +e.currentTarget.value })} />
         <span className="au-mono">{Math.round(s.energy * 100)}</span>
       </label>
+      {generators.length > 0 && <label className="bp-row">Render with
+        <select className="au-input" style={{ height: 30 }} value={s.renderer || "synth"} disabled={busy}
+          onChange={e => onChange({ renderer: e.target.value })} aria-label={`${s.label} renderer`}>
+          <option value="synth">Auralis synth</option>
+          {generators.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select></label>}
       {v && <span>Vocal <b style={{ color: "var(--ivory)" }}>{v.low}–{v.high}</b>, peak <b style={{ color: "var(--gold-light)" }}>{v.peak}</b>
         {v.pattern && <> · {v.pattern}</>}{v.lines > 0 && <> · {v.lines} lyric lines</>}</span>}
     </div>
@@ -435,6 +441,12 @@ function OriginalityCheck({ API, bp, seed }) {
 
 export default function BlueprintView({ API, blueprint, setBlueprint }) {
   const bp = blueprint;
+  // installed section generators (none until one is installed; then a per-section choice appears)
+  const [generators, setGenerators] = useState([]);
+  useEffect(() => {
+    apiJson(`${API}/models`).then(st => setGenerators(st.models.filter(m => m.kind === "section_generator" && m.installed)))
+      .catch(() => setGenerators([]));
+  }, [API]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -524,7 +536,7 @@ export default function BlueprintView({ API, blueprint, setBlueprint }) {
 
     <div className="au-caption">Sections</div>
     {bp.sections.map((s, i) => <Section key={s.id} s={s} index={i} count={bp.sections.length} busy={busy}
-      options={bp.harmony_options?.[s.type] || []}
+      options={bp.harmony_options?.[s.type] || []} generators={generators}
       onChange={patch => editSection(i, patch)} onMove={d => moveSection(i, d)}
       onRemove={() => removeSection(i)} onDuplicate={() => duplicateSection(i)}
       onRegenerate={() => post("regenerate", { blueprint: bp, section_id: s.id })} />)}

@@ -53,14 +53,13 @@ def plan_chunks(spans: list[tuple[float, float]], total: float) -> list[tuple[fl
 def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, quality: str = "studio",
               seed: int = 0, pitch_style: str = "natural", finish_preset: str = "smooth-rnb",
               master: bool = True, production: str = "full", backing_levels: dict | None = None,
-              backing_db: float = 4.0, progress=None) -> dict:
+              backing_db: float = 4.0, singer=None, progress=None) -> dict:
     """Run the full chain. ``render`` is an instrumental-render result (AU-05/06);
     ``convert(source, output, quality)`` converts one file into ``profile``'s voice."""
     from ..composer.arrange import arrange
     from .finish import finish_vocal
     from .guide import build_score, phrases
     from .pitch import pitch_polish
-    from .singing_provider import get_singer
 
     def report(stage, pct):
         if progress:
@@ -75,9 +74,17 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
         raise ValueError("This blueprint has no sung sections (every lead vocal is off).")
     total = float(render.get("duration_seconds") or blueprint["duration_seconds"] + 6) if render else \
         blueprint["duration_seconds"] + 6
-    singer = get_singer("vocalise")
+    from ..models import MODELS, REGISTRY
+
+    singer = singer or REGISTRY.guide_singer()            # vocalise today; a lyric singer when installed
+
+    def sing(notes, seed_):
+        if singer.spec.heavy:                             # a resident singer takes the GPU slot
+            with MODELS.use(singer.spec.id, label="guide vocal"):
+                return singer.sing(notes, total, seed=seed_)
+        return singer.sing(notes, total, seed=seed_)
     report("singing the guide", 6)
-    guide = singer.sing(score, total, seed=seed)
+    guide = sing(score, seed)
     guide_path = os.path.join(out_dir, "01_guide_vocal.wav")
     sf.write(guide_path, guide, 44100, subtype="PCM_24")
     with open(os.path.join(out_dir, "guide_score.json"), "w", encoding="utf-8") as f:
@@ -93,7 +100,7 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
     for k, (part, notes) in enumerate(plan["parts"].items()):
         if notes:
             report(f"singing the {part.replace('_', ' ')} guide", 7 + k)
-            guides[part] = singer.sing(notes, total, seed=seed + 101 * (k + 1))   # a separate performance
+            guides[part] = sing(notes, seed + 101 * (k + 1))                      # a separate performance
             part_scores[part] = notes
 
     # ── into the chosen voice: every part packed into as few calls as possible ──
@@ -138,7 +145,7 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
         "notes_corrected": pitch_result.get("notes_corrected"), "key": blueprint["key"],
         "pitch_tracking_hz": track_sr or 44100,
         "song_mix_path": None, "song_master_path": None,
-        "guide_sings_words": singer.sings_words,
+        "guide_sings_words": singer.sings_words, "guide_singer": singer.spec.id,
         "production": production, "parts": plan["counts"], "parts_why": plan["why"],
         "conversion_calls": calls, "backing_stems": {}, "backing_path": None,
     }

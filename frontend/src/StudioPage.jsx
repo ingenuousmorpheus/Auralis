@@ -1,10 +1,11 @@
 import React from "react";
+import EnginesPanel from "./EnginesPanel.jsx";
 import { Icon } from "./ui.jsx";
 
 /* Studio hub: the finishing tools that already run locally. A per-song stem
    studio (lanes, section regenerate) arrives with generated songs. */
 
-export default function StudioPage({ go, tools }) {
+export default function StudioPage({ API, go, tools }) {
   const blurbs = {
     master: "Upload a stereo mix. Match a reference if you like, hit a loudness target with a true-peak ceiling.",
     mix: "Drop every stem. Auralis labels roles, balances and carves the mix, then masters it.",
@@ -32,5 +33,9 @@ export default function StudioPage({ go, tools }) {
         <span style={{ fontSize: 13, color: "var(--steel)", lineHeight: 1.55 }}>Convert a guide vocal into your trained voice, then pitch-polish and finish it inside the beat.</span>
       </button>
     </div>
+    {API && <details style={{ marginTop: 22 }}>
+      <summary style={{ cursor: "pointer", fontWeight: 700 }}>Advanced: engines and GPU</summary>
+      <EnginesPanel API={API} />
+    </details>}
   </div>;
 }

@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 
 # asset "part" → mixer role; the backing bus and atmosphere/FX keep their offsets
-MIX_ROLE = {"drums": "drums", "bass": "bass", "keys": "harmonic", "pad": "harmonic", "fx": "other",
+MIX_ROLE = {"drums": "drums", "bass": "bass", "keys": "harmonic", "pad": "harmonic", "fx": "other", "generated": "harmonic",
             "atmosphere": "other", "lead_vocal": "vocal", "backing_vocals": "other"}
 DEFAULT_OFFSET = {"atmosphere": -6.0, "fx": -2.0, "backing_vocals": 4.0}
 

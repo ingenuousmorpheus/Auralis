@@ -298,24 +298,16 @@ def _run_sing(job_id: str, req: SingRequest, render: dict | None):
     import os
 
     from ..voice.full_song import sing_song
-    from .main import JOBS, VOICE_PROVIDER, VOICE_STORE
-    from .voices import ENGINE_LOCK
+    from .main import JOBS, VOICE_STORE
+    from .voices import convert_with_voice
 
     job = JOBS[job_id]
     try:
         profile = VOICE_STORE.get(req.profile_id)
 
         def convert(src, dst, quality):
-            job.update(stage=f"waiting for the voice engine ({profile.name})")
-            with ENGINE_LOCK:
-                job.update(stage=f"converting to {profile.name} (voice engine running; a full song takes minutes)")
-                result = VOICE_PROVIDER.convert(
-                    source_path=src, reference_path=profile.reference_path, output_path=dst,
-                    semitone_shift=0, quality=quality, checkpoint_path=profile.checkpoint_path,
-                    config_path=profile.config_path)
-            if result.get("output_path") and result["output_path"] != dst and os.path.isfile(result["output_path"]):
-                import shutil
-                shutil.copyfile(result["output_path"], dst)
+            convert_with_voice(profile, src, dst, quality=quality, label="sing a song",
+                               on_stage=lambda st: job.update(stage=st))
 
         result = sing_song(req.blueprint, render, profile, os.path.join(job["work"], "song"), convert,
                            quality=req.quality, master=req.master, production=req.production,
@@ -400,9 +392,9 @@ def _run_song(job_id: str, req: SongRequest):
     from ..composer.assemble import save_song_to_project
     from ..generation import render_instrumental
     from ..voice.full_song import sing_song
-    from .main import JOBS, VOICE_PROVIDER, VOICE_STORE
+    from .main import JOBS, VOICE_STORE
     from .projects import PROJECT_STORE
-    from .voices import ENGINE_LOCK
+    from .voices import convert_with_voice
 
     job = JOBS[job_id]
     step = lambda lo, hi: (lambda stage, pct: job.update(stage=stage, pct=lo + (hi - lo) * pct / 100.0))
@@ -421,12 +413,8 @@ def _run_song(job_id: str, req: SongRequest):
         has_lead = any(s.get("vocal") for s in blueprint["sections"])
         if profile is not None and has_lead:
             def convert(src, dst, quality):
-                job.update(stage=f"waiting for the voice engine ({profile.name})")
-                with ENGINE_LOCK:
-                    job.update(stage=f"converting to {profile.name} (voice engine running)")
-                    VOICE_PROVIDER.convert(source_path=src, reference_path=profile.reference_path, output_path=dst,
-                                           semitone_shift=0, quality=quality, checkpoint_path=profile.checkpoint_path,
-                                           config_path=profile.config_path)
+                convert_with_voice(profile, src, dst, quality=quality, label="make a song",
+                                   on_stage=lambda st: job.update(stage=st))
             song = sing_song(blueprint, render, profile, os.path.join(work, "vocals"), convert,
                              quality=req.quality, production=req.production, progress=step(45, 94))
         job.update(stage="saving the song into a new project", pct=95.0)
