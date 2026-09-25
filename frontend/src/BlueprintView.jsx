@@ -269,6 +269,7 @@ function RenderPanel({ API, bp }) {
           </div>
         </div>
       </details>
+      <OriginalityCheck API={API} bp={bp} seed={done.seed} />
       <SaveToProject API={API} jobId={job} label="Save render to project" />
       {renderedRev === bp.revision && <SingPanel API={API} bp={bp} renderJob={job} />}
     </>}
@@ -377,6 +378,44 @@ function SingPanel({ API, bp, renderJob }) {
   </div>;
 }
 
+/* AU-12: compare the rendered take with your own songs (chords with every song,
+   melody with your closest lead vocals). */
+function OriginalityCheck({ API, bp, seed }) {
+  const [job, setJob] = useState(null);
+  const [status, setStatus] = useState(null);
+  useEffect(() => { setJob(null); setStatus(null); }, [bp.revision, seed]);
+  useEffect(() => {
+    if (!job) return;
+    let stop = false;
+    const tick = async () => {
+      const st = await apiJson(`${API}/jobs/${job}`).catch(e => ({ stage: "error", error: e.message }));
+      if (stop) return;
+      setStatus(st);
+      if (st.stage !== "done" && st.stage !== "error") setTimeout(tick, 900);
+    };
+    tick();
+    return () => { stop = true; };
+  }, [job]);
+  const run = async () => {
+    const r = await apiJson(`${API}/composer/similarity`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blueprint: bp, seed }) }).catch(e => ({ error: e.message }));
+    if (r.job_id) setJob(r.job_id); else setStatus({ stage: "error", error: r.error });
+  };
+  const running = status && status.stage !== "done" && status.stage !== "error";
+  return <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <button className="au-btn" onClick={run} disabled={running}>{running ? "Checking…" : "Check originality"}</button>
+      <span style={{ fontSize: 12, color: "var(--steel)" }}>{running ? status.stage : "Compares chords with all your songs and the melody with your closest lead vocals."}</span>
+    </div>
+    {status?.stage === "error" && <div role="alert" className="bp-alert warn">{status.error}</div>}
+    {status?.stage === "done" && status.result.checks.map(c => <div key={c.id} className="bp-check">
+      <i style={{ color: c.status === "flag" ? "var(--warn)" : c.status === "pass" ? "var(--signal)" : "var(--gold-light)" }}>
+        {c.status === "flag" ? "!" : c.status === "pass" ? "✓" : "i"}</i>
+      <span><b>{c.label}</b><br /><span style={{ color: "var(--steel)", fontSize: 12 }}>{c.detail}</span></span>
+    </div>)}
+  </div>;
+}
+
 export default function BlueprintView({ API, blueprint, setBlueprint }) {
   const bp = blueprint;
   const [busy, setBusy] = useState(false);
@@ -463,7 +502,7 @@ export default function BlueprintView({ API, blueprint, setBlueprint }) {
     <RenderPanel API={API} bp={bp} />
 
     <EnergyCurve bp={bp} />
-    <Why lines={[...(bp.why.era || []), ...(bp.why.energy || []), ...(bp.why.harmony || [])]} />
+    <Why lines={[...(bp.why.influence || []), ...(bp.why.era || []), ...(bp.why.energy || []), ...(bp.why.harmony || [])]} />
 
     <div className="au-caption">Sections</div>
     {bp.sections.map((s, i) => <Section key={s.id} s={s} index={i} count={bp.sections.length} busy={busy}

@@ -29,9 +29,9 @@ def get_candidates(era: str, section: str | None = None, harmony: str | None = N
     """
     voice_range, families = None, None
     if use_voice:
-        from ..voice import VoiceProfileStore
+        from .main import VOICE_STORE
 
-        profiles = VoiceProfileStore().list()
+        profiles = VOICE_STORE.list()
         voice = next((p for p in profiles if p.training_status == "trained"), None) or \
             (profiles[0] if profiles else None)
         if voice and voice.pitch_low_midi is not None and voice.pitch_high_midi is not None:

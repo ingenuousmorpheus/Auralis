@@ -2671,3 +2671,62 @@ The user said "continue" (no install choice for a lyric singer), so I took the n
 
 ### Next Action
 AU-10 Automatic Song Assembly: one prompt → blueprint → instrumental → vocals → finished WAV, with editable stems kept.
+
+## Session 013 — 2026-09-24 — AU-10 Automatic Song Assembly + AU-12 Retrieval & Similarity Guard
+
+### Goal
+Continue the user's "next phases" request, doing the local phases first. AU-10 is one prompt → finished song with editable stems. AU-12 is catalog retrieval plus an originality guard. AU-11 (generative-audio model) and V5 (vocal separation) need model downloads and wait for the user's go-ahead; AU-13 and V4 are next.
+
+### Starting State
+- `main` at `9462f5b` (AU-09), equal to `origin/main`.
+- The user's Harmonic Reference work was untouched.
+- RAM was about 1 GB free (LM Studio resident), which made test runs slow (the staged AU-09 run took 16 min).
+
+### Changed
+- **AU-10:**
+  - new `auralis/composer/assemble.py` (`save_song_to_project`, `remix_stems`, `remix_project`)
+  - `POST /composer/song`, `GET /projects/{pid}/stems`, `POST /projects/{pid}/remix`
+  - new `frontend/src/SongStudio.jsx`
+  - `CreatePage.jsx`: *Make the whole song* button, Screen-3 stage list, Song tab
+- **AU-12:**
+  - new `auralis/artist/retrieval.py` and `auralis/artist/similarity.py`
+  - `analyze.py`: `melody_notes` factored out of `_melody` (same behaviour)
+  - blueprint originality checks include the catalog chord comparison; `_catalog()` carries `roman_per_bar`
+  - `POST /artist/retrieve`, `POST /composer/similarity`, blueprint `influence` / `influence_song_ids`
+  - UI: Influence choice with song picking; *Check originality* on renders
+- **Fix:** `artist_dna`, `/theory/candidates` and the composer's voice lookup use the shared `VOICE_STORE`. Separate store instances broke the API test's isolation; normal use pointed at the same folder.
+- **Tests:** new `tests/test_song_assembly.py` (3) and `tests/test_similarity.py` (7); architecture doc updated.
+
+### Verification
+- `tests/test_similarity.py` 7 passed. `tests/test_song_assembly.py` passes, including the API gate with a fake voice engine. `test_composer` passes with the new originality check.
+- **Real catalog, AU-12:**
+  - "dark late-night R&B, big chorus" with Influence *closest* built in 0.3 s. The chord check against all switched-on songs passed with no 8-bar run.
+  - After the fallback fix, the five retrieved songs match on tempo 93–98, minor key, groove and chorus lift; the focused DNA centres on 94 BPM, 100% minor.
+  - The originality job read 6 lead-vocal stems from the catalog drive (read-only; about 100 s each the first time, then cached) in 596 s.
+- **The first melody flag was a false positive.** It flagged 11 notes as matching one song. A shuffled baseline over those same six melodies showed chance runs of 6–11 intervals, and the flagged run was only steps and repeated notes (0, ±2). After the fix, three different takes of that song pass against the six melodies, and the synthetic copies in the tests are still flagged.
+- **Browser pane, AU-10** (restarted with the launcher scripts):
+  - "short uptempo 2000s R&B", *Closest 5*, voice switched off → *Make the whole song*.
+  - The stage list advanced through blueprint, harmony, atmosphere, rendering, mix/master and saving, then opened the Song studio: a master at −14.3 LUFS and 6 stems.
+  - Mute FX + drums −3 dB → *Remix and master* gave "✓ Saved remix_01.wav (5 stems, −14.1 LUFS)", listed next to the original master.
+  - This left a real project named "short uptempo 2000s R&B" in the user's Projects.
+- The sung path of `/composer/song` was verified through the API gate with a fake engine. The live singing chain is the one verified in Sessions 011–012.
+
+### Result
+- **AU-10 COMPLETE** against its gate: one prompt travels from blueprint to a downloadable finished WAV, and the editable stems are kept in a project and can be remixed.
+- **AU-12 COMPLETE** against its gate: "Continue my sound" retrieves useful characteristics from the catalog, and melodic and chord similarity to prior songs is flagged, with a chance baseline. Audio-fingerprint similarity is not implemented, and the check says so.
+
+### Findings
+- **Melody similarity needs a chance baseline.** R&B lead lines use a small interval alphabet (mostly steps and repeats), so long shared step runs are normal between unrelated melodies. A fixed length threshold is misleading.
+- **Retrieval from sparse prompts** must fall back to the artist's overall centre, or "closest" collapses to mode alone.
+- **Reading a stem set from the network drive costs about 100 s per song** (memory-starved host). Catalog melodies are cached after the first check.
+
+### Gate/Blocker
+- AU-11 and V5: need model downloads and licence checks. Ask the user.
+- Words for the guide singer: still the user's choice.
+
+### Do Not Redo
+- Keep the chance baseline in the melody check; never flag on length alone.
+- Remixes go through the project's stems (`remix_project`); don't re-render to change a balance.
+
+### Next Action
+AU-13 Demo-to-Song, then My Voice V4 (a My Music lead-vocal stem as the guide). Then ask about AU-11 and V5 models.

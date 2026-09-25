@@ -762,9 +762,14 @@ def _originality(bp, catalog, first):
                            "label": "Tempo, key and form differ from each of your songs",
                            "detail": (f"{len(hits)} of your songs share this tempo and key, but not the form."
                                       if hits else "No song of yours shares this tempo and key.")})
+    if catalog and any(c.get("roman_per_bar") for c in catalog):
+        from ..artist.similarity import harmony_check
+
+        h = harmony_check(bp, [c for c in catalog if c.get("roman_per_bar")])
+        checks.append({k: h[k] for k in ("id", "label", "status", "detail")})
     return {"checks": checks,
-            "note": "Checks compare the plan with your catalog. Melody and audio similarity are checked "
-                    "once they exist (AU-12)."}
+            "note": "Chords are compared with every song you've switched on. The melody is compared with "
+                    "your lead vocals after rendering (Check originality); audio is not compared."}
 
 
 _SHORT = {"intro": "Intro", "verse": "V", "pre-chorus": "PC", "chorus": "C", "bridge": "B",

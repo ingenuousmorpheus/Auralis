@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import AtlasPanel from "./AtlasPanel.jsx";
 import BlueprintView from "./BlueprintView.jsx";
+import SongStudio from "./SongStudio.jsx";
 import { Cover, Icon, apiJson, catalogStats, fmtTime } from "./ui.jsx";
 
 /* Create: the prompt / lyrics panel beside the workspace.
@@ -12,10 +13,40 @@ import { Cover, Icon, apiJson, catalogStats, fmtTime } from "./ui.jsx";
 
 const FILTERS = ["All", "Stem sets", "Full mixes", "With vocal"];
 
+/* Roadmap Screen 3: the visible stages of making a song. */
+const STAGES = [
+  ["writing the blueprint", "Writing song blueprint"], ["arranging", "Composing harmony, bass and drums"],
+  ["planning atmosphere", "Creating atmosphere"], ["rendering", "Rendering instrumental"],
+  ["mix and master", "Mixing and mastering the instrumental"], ["guide", "Creating guide vocals"],
+  ["convert", "Rendering your voice"], ["pitch polish", "Pitch polish"], ["vocal finish", "Producing vocals"],
+  ["song mix", "Mixing and mastering the song"], ["saving", "Saving to a new project"],
+];
+
+function MakingSong({ status, sung }) {
+  const stage = (status?.stage || "").toLowerCase();
+  const list = sung ? STAGES : STAGES.filter(([k]) => !["guide", "convert", "pitch polish", "vocal finish", "song mix"].includes(k));
+  const current = list.reduce((found, [k], i) => (stage.includes(k.split(" ")[0]) ? i : found), 0);
+  return <div style={{ padding: "0 28px 24px" }}>
+    <div className="bp-panel" role="status">
+      <div className="au-caption">Making your song · {Math.round(status?.pct || 0)}%</div>
+      <div style={{ height: 6, borderRadius: 3, background: "var(--edge)", overflow: "hidden", margin: "10px 0" }}>
+        <div style={{ width: `${status?.pct || 0}%`, height: "100%", background: "var(--gold)", transition: "width 0.4s" }} /></div>
+      <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 6 }}>
+        {list.map(([k, label], i) => <li key={k} style={{ fontSize: 13, color: i < current ? "var(--signal)" : i === current ? "var(--ivory)" : "var(--steel-dim)" }}>
+          {i < current ? "✓" : i === current ? "▸" : "·"} {label}</li>)}
+      </ol>
+      <div style={{ fontSize: 12, color: "var(--steel)", marginTop: 10 }}>{status?.stage}</div>
+      {sung && <div style={{ fontSize: 12, color: "var(--steel)", marginTop: 4 }}>Singing takes several minutes; close big apps so the voice engine has memory.</div>}
+    </div>
+  </div>;
+}
+
 export default function CreatePage({ API, go, play, nowPlayingId }) {
   const [mode, setMode] = useState("advanced");
   const [useDna, setUseDna] = useState(true);
   const [useVoice, setUseVoice] = useState(true);
+  const [influence, setInfluence] = useState("all");      // all | closest | picked (AU-12)
+  const [picked, setPicked] = useState([]);
   const [idea, setIdea] = useState("");
   const [lyrics, setLyrics] = useState("");
   const [styles, setStyles] = useState("");
@@ -28,6 +59,9 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
   const [blueprint, setBlueprint] = useState(null);
   const [view, setView] = useState("songs");
   const [creating, setCreating] = useState(false);
+  const [songJob, setSongJob] = useState(null);
+  const [songStatus, setSongStatus] = useState(null);
+  const [projectId, setProjectId] = useState(null);
 
   useEffect(() => {
     apiJson(`${API}/artist/library`).then(d => setSongs(d.songs)).catch(() => setSongs([]));
@@ -52,15 +86,49 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
   });
 
   const addTag = tag => setStyles(prev => (prev.trim() ? `${prev.trim().replace(/,$/, "")}, ${tag}` : tag));
+  const requestBody = () => ({
+    prompt: mode === "simple" ? idea : [styles, idea].filter(s => s.trim()).join(", "),
+    lyrics: mode === "advanced" ? lyrics : "", use_dna: useDna, use_voice: useVoice,
+    influence: useDna ? (influence === "picked" && !picked.length ? "all" : influence) : "all", influence_song_ids: picked,
+    ...(mode === "advanced" && Object.fromEntries(Object.entries(style).filter(([, v]) => v))),
+  });
+  useEffect(() => {
+    if (!songJob) return;
+    let stop = false;
+    const tick = async () => {
+      const st = await apiJson(`${API}/jobs/${songJob}`).catch(e => ({ stage: "error", error: e.message }));
+      if (stop) return;
+      setSongStatus(st);
+      if (st.stage === "done") { setProjectId(st.result.project_id); setView("studio"); setCreating(false); }
+      else if (st.stage === "error") { setNotice(`The song could not be made: ${st.error}`); setCreating(false); }
+      else setTimeout(tick, 1200);
+    };
+    tick();
+    return () => { stop = true; };
+  }, [songJob]);
+  const makeSong = async () => {
+    setCreating("song"); setNotice(""); setSongStatus(null); setProjectId(null);
+    try {
+      const r = await apiJson(`${API}/composer/song`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...requestBody(), profile_id: useVoice && voice ? voice.id : null, production: "full", quality: "studio" }) });
+      setSongJob(r.job_id);
+      setView("making");
+    } catch (e) { setNotice(`Could not start the song: ${e.message}`); setCreating(false); }
+  };
+  const editProjectBlueprint = async () => {
+    try { setBlueprint(await apiJson(`${API}/projects/${projectId}/blueprint`)); setView("blueprint"); }
+    catch (e) { setNotice(e.message); }
+  };
   const create = async () => {
     const prompt = mode === "simple" ? idea : [styles, idea].filter(s => s.trim()).join(", ");
-    setCreating(true);
+    setCreating("blueprint");
     setNotice("");
     try {
       const bp = await apiJson(`${API}/composer/blueprint`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt, lyrics: mode === "advanced" ? lyrics : "", use_dna: useDna, use_voice: useVoice,
+          influence: useDna ? (influence === "picked" && !picked.length ? "all" : influence) : "all", influence_song_ids: picked,
           ...(mode === "advanced" && Object.fromEntries(Object.entries(style).filter(([, v]) => v))),
           seed: blueprint ? (blueprint.inputs.seed || 0) + 1 : 0,
         }),
@@ -132,6 +200,15 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
                 <div style={{ fontSize: 12, color: "var(--steel)" }}>{stats ? `Tempo, keys, form and groove from ${stats.analysed} analysed songs` : "Add your songs in My Music first"}</div></div>
               <button role="switch" className="au-switch" aria-checked={useDna} aria-label="Use my Artist DNA" onClick={() => setUseDna(v => !v)} />
             </div>
+            {useDna && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderBottom: "1px solid var(--hairline)", flexWrap: "wrap" }}>
+              <span className="au-caption">Influence</span>
+              <div className="au-segment" role="tablist" aria-label="Influence from my songs">
+                {[["all", "All my songs"], ["closest", "Closest 5"], ["picked", "Songs I pick"]].map(([k, l]) =>
+                  <button key={k} role="tab" aria-selected={influence === k} onClick={() => { setInfluence(k); if (k === "picked") setView("songs"); }}>{l}</button>)}
+              </div>
+              {influence === "picked" && <span style={{ fontSize: 12, color: "var(--steel)" }}>
+                {picked.length ? `${picked.length} picked` : "click songs on the right to pick them"}</span>}
+            </div>}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: "1px solid var(--hairline)", gap: 12 }}>
               <div><div className="au-label">Sing it in my voice</div>
                 <div style={{ fontSize: 12, color: "var(--steel)" }}>{voice ? `Guide singer → ${voice.name} → pitch + vocal finish` : "Create a voice profile in My Voice"}</div></div>
@@ -149,8 +226,13 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
       </div>
 
       <div style={{ padding: "14px 20px 18px", borderTop: "1px solid var(--hairline)" }}>
-        <button className="au-btn gold big" style={{ width: "100%" }} onClick={create} disabled={creating}>
-          <Icon name="create" size={18} width={2.4} />{creating ? "Writing blueprint…" : blueprint ? "Create another" : "Create"}</button>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+          <button className="au-btn gold big" onClick={create} disabled={creating} title="Write an editable blueprint first">
+            <Icon name="create" size={18} width={2.4} />{creating === "blueprint" ? "Writing…" : blueprint ? "New blueprint" : "Create"}</button>
+          <button className="au-btn big" onClick={makeSong} disabled={creating}
+            title={useVoice && voice ? `Blueprint, instrumental and vocals in ${voice.name}, saved to a new project` : "Blueprint and instrumental, saved to a new project"}>
+            {creating === "song" ? "Making the song…" : "Make the whole song"}</button>
+        </div>
       </div>
     </section>
 
@@ -158,8 +240,9 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 28px 12px", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <h1 className="au-title au-shine" style={{ fontSize: 22 }}>{view === "blueprint" && blueprint ? "Song blueprint" : "My workspace"}</h1>
-          {blueprint && <div className="au-segment" role="tablist" aria-label="Workspace view">
-            <button role="tab" aria-selected={view === "blueprint"} onClick={() => setView("blueprint")}>Blueprint</button>
+          {(blueprint || songJob) && <div className="au-segment" role="tablist" aria-label="Workspace view">
+            {blueprint && <button role="tab" aria-selected={view === "blueprint"} onClick={() => setView("blueprint")}>Blueprint</button>}
+            {songJob && <button role="tab" aria-selected={view === "making" || view === "studio"} onClick={() => setView(projectId ? "studio" : "making")}>Song</button>}
             <button role="tab" aria-selected={view === "songs"} onClick={() => setView("songs")}>My songs</button>
           </div>}
         </div>
@@ -169,6 +252,10 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
             style={{ background: "transparent", border: "none", outline: "none", color: "var(--ivory)", fontFamily: "inherit", fontSize: 14, width: "100%" }} />
         </label>}
       </div>
+      {view === "making" && <MakingSong status={songStatus} sung={useVoice && !!voice} />}
+      {view === "studio" && projectId && <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto" }}>
+        <SongStudio API={API} projectId={projectId} onEditBlueprint={editProjectBlueprint} />
+      </div>}
       {view === "blueprint" && blueprint && <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto" }}>
         <BlueprintView API={API} blueprint={blueprint} setBlueprint={setBlueprint} />
       </div>}
@@ -182,7 +269,12 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
         {visible.map(s => {
           const sm = s.summary || {};
           const active = s.id === nowPlayingId;
-          return <button key={s.id} onClick={() => play(s)} aria-label={`Play ${s.title}`} style={{
+          const picking = influence === "picked" && useDna;
+          const isPicked = picked.includes(s.id);
+          return <button key={s.id} aria-pressed={picking ? isPicked : undefined}
+            onClick={() => picking ? setPicked(p => isPicked ? p.filter(x => x !== s.id) : [...p, s.id].slice(0, 8)) : play(s)}
+            aria-label={picking ? `${isPicked ? "Unpick" : "Pick"} ${s.title} as an influence` : `Play ${s.title}`} style={{
+            outline: isPicked && picking ? "1px solid var(--gold)" : "none",
             width: "100%", display: "flex", alignItems: "center", gap: 16, padding: "10px 12px", borderRadius: 16,
             border: "none", cursor: "pointer", fontFamily: "inherit", color: "inherit", textAlign: "left",
             background: active ? "var(--panel-raised)" : "transparent",
@@ -194,6 +286,7 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
                 <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", color: s.kind === "stem-set" ? "var(--signal)" : "var(--steel)", flexShrink: 0 }}>
                   {s.kind === "stem-set" ? "STEMS" : "MIX"}</span>
                 {s.variants.map(v => <span key={v} className="au-chip" style={{ flexShrink: 0 }}>{v}</span>)}
+                {influence === "picked" && useDna && isPicked && <span className="au-chip holo" style={{ flexShrink: 0 }}>✓ influence</span>}
               </div>
               <div style={{ fontSize: 13, color: "var(--steel)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {[sm.key, sm.roles_form, sm.vocal_range && `voice ${sm.vocal_range}`].filter(Boolean).join(" · ") || s.analysis_status}

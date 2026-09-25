@@ -122,13 +122,13 @@ def artist_dna(voice_profile_id: str | None = None):
     """Artist DNA from the songs currently switched on. Computed live, so it
     always reflects the latest include/exclude choices and analyses."""
     from ..artist.dna import build_dna
-    from ..voice import VoiceProfileStore
+    from .main import VOICE_STORE
 
     songs = LIBRARY.songs()
     analyses = {s.id: LIBRARY.analysis(s.id) for s in songs if s.analysis_status == "done"}
     voice = None
     try:
-        store = VoiceProfileStore()
+        store = VOICE_STORE                  # the app's shared store
         if voice_profile_id:
             voice = store.get(voice_profile_id)
         else:

@@ -663,7 +663,9 @@ def _rhythm(audio, beats, from_stem: bool) -> dict:
 
 # ── Melody (lead vocal stem) ───────────────────────────────────────────────
 
-def _melody(vocal: np.ndarray, bpm: float) -> dict | None:
+def melody_notes(vocal: np.ndarray):
+    """Lead-vocal notes from a 16 kHz mono vocal: (notes [(start_frame, end_frame, midi)], good, midi, frame_s).
+    Returns None when there is no usable melody. Shared by ``_melody`` and the similarity guard."""
     sr = 16000
     if np.max(np.abs(vocal)) < 1e-3:
         return None
@@ -676,8 +678,6 @@ def _melody(vocal: np.ndarray, bpm: float) -> dict | None:
     # A few voiced frames are separation bleed, not a melody worth describing.
     if good.sum() < 50 or good.mean() < MIN_VOICED_SHARE:
         return None
-    frame_s = hop / sr
-    values = midi[good]
     # Notes: runs of stable pitch.
     notes = []
     start = None
@@ -689,6 +689,15 @@ def _melody(vocal: np.ndarray, bpm: float) -> dict | None:
             if i - start >= 4:
                 notes.append((start, i, float(np.nanmedian(midi[start:i]))))
             start = i if good[i] else None
+    return notes, good, midi, hop / sr
+
+
+def _melody(vocal: np.ndarray, bpm: float) -> dict | None:
+    got = melody_notes(vocal)
+    if got is None:
+        return None
+    notes, good, midi, frame_s = got
+    values = midi[good]
     intervals = np.diff([round(n[2]) for n in notes]) if len(notes) > 1 else np.array([])
     intervals = intervals[np.abs(intervals) <= 12]
     # Phrases: voiced runs separated by >= 350 ms of silence.
