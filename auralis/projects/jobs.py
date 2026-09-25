@@ -109,6 +109,9 @@ def job_outputs(job: dict) -> list[JobOutput]:
         add(result.get("finished_path"), "vocal", "finished lead vocal", "lead_vocal.wav")
         add(result.get("polished_path"), "vocal", "pitch-polished lead vocal", "lead_vocal_pitch.wav")
         add(result.get("converted_path"), "vocal", "converted lead vocal", "lead_vocal_raw.wav")
+        add(result.get("backing_path"), "vocal", "backing vocals (bus)", "backing_vocals.wav")
+        for part, path in (result.get("backing_stems") or {}).items():
+            add(path, "vocal", f"backing vocal: {part.replace('_', ' ')}", f"bv_{part}.wav")
         add(result.get("guide_path"), "generated", "guide vocal", "guide_vocal.wav")
         add(result.get("report_path"), "report", "song mix report", "song_mix_report.md")
     else:

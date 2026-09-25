@@ -2622,3 +2622,52 @@ The user said "continue" without choosing between the two AU-07 options, so I to
 ### Next Action
 - Ask the user whether to add a lyric-capable singer (DiffSinger) for real words.
 - Otherwise AU-09 Vocal Production: doubles and harmonies from the lead line, converted through the same voice.
+
+## Session 012 — 2026-09-24 — AU-09 Vocal Production (doubles, harmonies, ad-libs)
+
+### Goal
+The user said "continue" (no install choice for a lyric singer), so I took the next roadmap phase, AU-09. Mid-session the user asked to "continue next 20 phases". The roadmap defines four phases after AU-09 (AU-10 to AU-13), plus My Voice V4/V5 from the plan. I told the user that and will work through them in order, proposing new phases afterwards rather than inventing twenty.
+
+### Starting State
+- `main` at `11523b5` (Session 011), equal to `origin/main`.
+- The user's uncommitted Harmonic Reference work was untouched. The new modules are named `composer/vocal_parts.py` and `voice/vocal_production.py`, not `harmony.py`, to avoid a clash with the user's `engine/harmony.py` (flagged in AU-00).
+- Host memory: 9.8–10.5 GB commit free, about 1 GB RAM free (LM Studio resident).
+
+### Changed
+- **New `auralis/composer/vocal_parts.py`:** `plan_parts`, producing doubles L/R, a high harmony, a low harmony and ad-libs from the lead score. Each section's amount follows its `backing_vocals` level, capped by the production setting (lead / doubles / harmony / full).
+- **New `auralis/voice/vocal_production.py`:** `pack`, `convert_parts` (all parts in as few Seed-VC calls as possible) and `backing_bus` (high-pass, levels, constant-power pan, a room; per-part stems plus a stereo bus).
+- **`auralis/voice/full_song.py`:** parts are rendered by the guide singer with separate seeds and converted together with the lead. The backing bus goes into the song mix as `other` +4 dB. New `production` parameter.
+- **`auralis/voice/singing_provider.py`:** a little of the pure fundamental is kept under every vowel. Some vowels boosted the 2nd harmonic above it, so pitch trackers read the note an octave up; Seed-VC's own pitch extraction faces the same risk.
+- **API and projects:**
+  - `POST /composer/sing` takes `production`
+  - backing stems are served by `/composer/sing/{job}/file/{part}` and saved into projects
+- **UI:** a Vocals choice (Lead only / Lead + doubles / Lead + harmony / Full production), a player per backing stem, the parts' reasons and the engine-run count.
+- **Tests and docs:** new `tests/test_vocal_production.py` (7); architecture doc updated.
+- The staged tree alone gives 180 passed, and the frontend builds.
+
+### Verification
+- `tests/test_vocal_production.py` + `tests/test_full_song.py`: 15 passed. The two failures on the way were in my test data: unscaled noise clipping in a 16-bit WAV, and wrong gap arithmetic in an expectation. Fixed in the tests, not the code.
+- **Before the singer fix:** with a stand-in engine, the low harmony was 8/11 on pitch, and all three misses were exact octave errors. After the fix the gate test passes octave-strict in two keys.
+- **Live with the trained voice** (12-bar song, full production, Studio quality):
+  - all six vocal parts went through **one** Seed-VC call: 117 s for 103 s of singing
+  - total run 206 s; song −14.0 LUFS
+  - every backing part is on its written pitch in the user's voice: high harmony 10/10, low harmony 10/10, double L 20/20, double R 20/20, ad-libs 10/10
+- A one-off 3-key × full-length pitch sweep ran over 20 minutes on the RAM-starved host and was stopped. The pytest gate covers the same check on short songs in two keys.
+
+### Result
+**AU-09 COMPLETE** against its gate: *one generated song can produce lead, doubles and harmonies as separate stems.* Verified live, with ad-libs as well. Like the lead, the backing parts carry melody and vowels, not intelligible words.
+
+### Findings
+- **Packing all parts into one call is the big win.** Model loading dominates short conversions, and full production cost one Seed-VC run instead of six.
+- **The backing mix is heuristic.** Levels and pans are fixed producer defaults, and the mixer then treats the bus as `other`. It is worth user-adjustable levels later.
+
+### Gate/Blocker
+- None for AU-09.
+- Words still need a lyric-capable singer (the user's choice).
+
+### Do Not Redo
+- Convert vocal parts through `convert_parts`, packed, never one call per part.
+- Keep backing parts under the lead via the bus (`other` + offset). Don't give them the `vocal` role, which would centre them and push them to lead level.
+
+### Next Action
+AU-10 Automatic Song Assembly: one prompt → blueprint → instrumental → vocals → finished WAV, with editable stems kept.

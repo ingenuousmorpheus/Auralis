@@ -247,11 +247,13 @@ class SingRequest(BaseModel):
     profile_id: str
     quality: str = "studio"
     master: bool = True
+    production: str = "full"            # lead | doubles | harmony | full (capped per section by the blueprint)
 
 
 SING_FILES = {"song": "song_master_path", "song_mix": "song_mix_path", "vocal": "finished_path",
               "polished": "polished_path", "converted": "converted_path", "guide": "guide_path",
-              "preview": "preview_path", "report": "report_path"}
+              "preview": "preview_path", "report": "report_path", "backing": "backing_path"}
+BACKING_PARTS = ("double_l", "double_r", "harmony_high", "harmony_low", "adlibs")
 
 
 def _run_sing(job_id: str, req: SingRequest, render: dict | None):
@@ -278,7 +280,7 @@ def _run_sing(job_id: str, req: SingRequest, render: dict | None):
                 shutil.copyfile(result["output_path"], dst)
 
         result = sing_song(req.blueprint, render, profile, os.path.join(job["work"], "song"), convert,
-                           quality=req.quality, master=req.master,
+                           quality=req.quality, master=req.master, production=req.production,
                            progress=lambda stage, pct: job.update(stage=stage, pct=pct))
         job["result"] = result
         job.update(stage="done", pct=100.0)
@@ -300,6 +302,8 @@ async def sing(req: SingRequest):
 
     if req.quality not in ("fast", "studio", "ultra"):
         raise HTTPException(422, "Quality must be fast, studio or ultra.")
+    if req.production not in ("lead", "doubles", "harmony", "full"):
+        raise HTTPException(422, "Production must be lead, doubles, harmony or full.")
     if not validate_blueprint(req.blueprint)["ok"]:
         raise HTTPException(422, "Fix the blueprint's errors first.")
     try:
@@ -333,7 +337,8 @@ def sing_file(job_id: str, name: str):
     job = JOBS.get(job_id)
     if not job or job.get("kind") != "song-vocal" or not job.get("result"):
         raise HTTPException(404, "No finished song with that id.")
-    path = job["result"].get(SING_FILES.get(name, ""))
+    result = job["result"]
+    path = result["backing_stems"].get(name) if name in BACKING_PARTS else result.get(SING_FILES.get(name, ""))
     if not path or not os.path.isfile(path):
         raise HTTPException(404, f"No '{name}' in this song.")
     media = "text/markdown" if path.endswith(".md") else "audio/wav"

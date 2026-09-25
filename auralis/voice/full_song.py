@@ -52,7 +52,7 @@ def plan_chunks(spans: list[tuple[float, float]], total: float) -> list[tuple[fl
 
 def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, quality: str = "studio",
               seed: int = 0, pitch_style: str = "natural", finish_preset: str = "smooth-rnb",
-              master: bool = True, progress=None) -> dict:
+              master: bool = True, production: str = "full", progress=None) -> dict:
     """Run the full chain. ``render`` is an instrumental-render result (AU-05/06);
     ``convert(source, output, quality)`` converts one file into ``profile``'s voice."""
     from ..composer.arrange import arrange
@@ -82,29 +82,29 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
     with open(os.path.join(out_dir, "guide_score.json"), "w", encoding="utf-8") as f:
         json.dump([n.to_dict() for n in score], f, indent=1)
 
-    # ── into the chosen voice ───────────────────────────────────────────
-    spans = phrases(score)
-    chunks = plan_chunks(spans, total)
-    converted = np.zeros(len(guide), np.float32)
-    for i, (a, b) in enumerate(chunks):
-        report(f"converting to {profile.name} ({i + 1}/{len(chunks)})", 10 + 50 * i / len(chunks))
-        s0, s1 = int(a * 44100), int(b * 44100)
-        src = os.path.join(out_dir, f"chunk_{i:02d}_guide.wav")
-        dst = os.path.join(out_dir, f"chunk_{i:02d}_voice.wav")
-        sf.write(src, guide[s0:s1], 44100, subtype="PCM_16")
-        convert(src, dst, quality)
-        y, sr = sf.read(dst, always_2d=True, dtype="float32")
-        y = y.mean(axis=1)
-        if sr != 44100:
-            from scipy.signal import resample_poly
-            y = resample_poly(y, 44100, sr).astype(np.float32)
-        n = min(len(y), s1 - s0, len(converted) - s0)
-        converted[s0:s0 + n] = y[:n]
-        for p in (src, dst):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
+    # ── backing parts (AU-09) ───────────────────────────────────────────
+    from ..composer.vocal_parts import plan_parts
+    from .vocal_production import backing_bus, convert_parts
+
+    plan = plan_parts(blueprint, score, production)
+    guides = {"lead": guide}
+    part_scores = {"lead": score}
+    for k, (part, notes) in enumerate(plan["parts"].items()):
+        if notes:
+            report(f"singing the {part.replace('_', ' ')} guide", 7 + k)
+            guides[part] = singer.sing(notes, total, seed=seed + 101 * (k + 1))   # a separate performance
+            part_scores[part] = notes
+
+    # ── into the chosen voice: every part packed into as few calls as possible ──
+    spans = {part: plan_chunks(phrases(notes), total) if part == "lead" else
+             [(max(0.0, a - 0.3), min(total, b + 0.4)) for a, b in phrases(notes)]
+             for part, notes in part_scores.items()}
+    converted_parts, calls = convert_parts(
+        guides, spans, convert, out_dir, quality, MAX_SINGLE_CALL,
+        progress=lambda i, n, secs: report(f"converting to {profile.name} ({i + 1}/{n}, {secs:.0f} s of singing)",
+                                           12 + 48 * i / max(1, n)))
+    converted = converted_parts["lead"]
+    chunks = spans["lead"]
     converted_path = os.path.join(out_dir, "02_my_voice.wav")
     sf.write(converted_path, converted, 44100, subtype="PCM_24")
 
@@ -133,7 +133,11 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
         "notes_corrected": pitch_result.get("notes_corrected"), "key": blueprint["key"],
         "song_mix_path": None, "song_master_path": None,
         "guide_sings_words": singer.sings_words,
+        "production": production, "parts": plan["counts"], "parts_why": plan["why"],
+        "conversion_calls": calls, "backing_stems": {}, "backing_path": None,
     }
+    backing = backing_bus({k: v for k, v in converted_parts.items() if k != "lead"}, out_dir)
+    out["backing_stems"], out["backing_path"] = backing["stems"], backing["bus_path"]
 
     # ── the song: instrumental stems + the finished vocal ───────────────
     stems = (render or {}).get("stems") or {}
@@ -146,6 +150,11 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
         roles = {p: MIX_ROLES.get(k, "other") for k, p in stems.items()}
         roles[finished_path] = "vocal"
         offsets = {p: MIX_OFFSETS[k] for k, p in stems.items() if k in MIX_OFFSETS}
+        if out["backing_path"]:
+            # the backing stack sits under the lead: role "other" (dipped in the vocal band), lifted a little
+            paths.append(out["backing_path"])
+            roles[out["backing_path"]] = "other"
+            offsets[out["backing_path"]] = 4.0
         profile_id = (blueprint.get("arrangement") or {}).get("mix_profile") or "vocal-forward-rnb"
         mixed = run_pipeline(paths, os.path.join(out_dir, "song_master.wav"), profile_id=profile_id,
                              role_overrides=roles, gain_offsets=offsets,

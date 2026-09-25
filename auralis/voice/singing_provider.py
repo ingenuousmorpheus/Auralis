@@ -121,6 +121,9 @@ class VocaliseSinger(SingingProvider):
                     w[:ramp] = np.linspace(0, 1, ramp)
                     w[-ramp:] = np.linspace(1, 0, ramp)
                 voiced[a:b] += shaped * w
+            # keep the fundamental present under every vowel, so pitch trackers (and Seed-VC's own
+            # f0 extraction) never mistake a formant-boosted 2nd harmonic for the note
+            voiced += 0.175 * (np.abs(voiced).max() or 1.0) * np.sin(phase)
             # loudness: note velocities, soft attack, release at the phrase end
             env = np.convolve(amp, np.ones(882) / 882, "same")
             env *= np.clip(t / 0.03, 0, 1) * np.clip((t[-1] - t) / 0.08, 0, 1)

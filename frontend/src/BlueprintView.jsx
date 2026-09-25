@@ -281,6 +281,7 @@ function SingPanel({ API, bp, renderJob }) {
   const [voices, setVoices] = useState([]);
   const [voice, setVoice] = useState("");
   const [quality, setQuality] = useState("studio");
+  const [production, setProduction] = useState("full");
   const [job, setJob] = useState(null);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
@@ -312,7 +313,7 @@ function SingPanel({ API, bp, renderJob }) {
     setError(""); setStatus(null);
     try {
       const r = await apiJson(`${API}/composer/sing`, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blueprint: bp, render_job_id: renderJob, profile_id: voice, quality }) });
+        body: JSON.stringify({ blueprint: bp, render_job_id: renderJob, profile_id: voice, quality, production }) });
       setJob(r.job_id);
     } catch (e) { setError(e.message); }
   };
@@ -333,6 +334,14 @@ function SingPanel({ API, bp, renderJob }) {
       </div>
       <button className="au-btn gold" onClick={start} disabled={running || !voice}>{running ? "Singing…" : done ? "Sing again" : "Sing it"}</button>
     </div>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <span className="au-caption">Vocals</span>
+      <div className="au-segment" role="tablist" aria-label="Vocal production">
+        {[["lead", "Lead only"], ["doubles", "Lead + doubles"], ["harmony", "Lead + harmony"], ["full", "Full production"]].map(([p, l]) =>
+          <button key={p} role="tab" aria-selected={production === p} onClick={() => setProduction(p)}>{l}</button>)}
+      </div>
+      <span style={{ fontSize: 11, color: "var(--steel)" }}>each section's BGVs level sets how much it gets</span>
+    </div>
     <div style={{ fontSize: 12, color: "var(--steel)" }}>
       The built-in guide singer performs the melody{sungLines ? ", the rhythm of your lyrics and their vowels" : ""}; your voice model supplies the timbre.
       {sungLines && " It doesn't pronounce clear words yet: that needs a lyric-capable singing engine (planned)."} Close big apps first: the voice engine needs memory.</div>
@@ -343,13 +352,18 @@ function SingPanel({ API, bp, renderJob }) {
         <div style={{ width: `${status.pct}%`, height: "100%", background: "var(--holo)", transition: "width 0.3s" }} /></div>
     </div>}
     {done && <>
+      {done.parts_why?.length > 0 && <Why lines={done.parts_why} />}
       <div style={{ fontSize: 12, color: "var(--steel)" }}>{done.profile_name} · {done.notes_sung} notes · {done.notes_corrected ?? 0} tuned
+        {Object.keys(done.backing_stems || {}).length > 0 && <> · {Object.keys(done.backing_stems).length} backing parts · {done.conversion_calls} engine {done.conversion_calls === 1 ? "run" : "runs"}</>}
         {done.after_lufs != null && <> · song {done.after_lufs} LUFS</>}</div>
       {done.song_master_path && <audio controls preload="none" src={file("song")} style={{ width: "100%" }} aria-label="The finished song" />}
       <details>
         <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Vocal stages</summary>
         <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-          {[["vocal", "Finished vocal"], ["converted", `${done.profile_name} (raw)`], ["guide", "Guide singer"]].map(([k, l]) =>
+          {[["vocal", "Lead vocal"], ...(done.backing_path ? [["backing", "Backing stack"]] : []),
+            ...Object.keys(done.backing_stems || {}).map(k => [k, { double_l: "Double (left)", double_r: "Double (right)",
+              harmony_high: "Harmony (high)", harmony_low: "Harmony (low)", adlibs: "Ad-libs" }[k] || k]),
+            ["converted", `${done.profile_name} (raw lead)`], ["guide", "Guide singer"]].map(([k, l]) =>
             <label key={k} style={{ display: "grid", gridTemplateColumns: "120px minmax(0, 1fr)", alignItems: "center", gap: 8, fontSize: 12 }}>
               <span>{l}</span><audio controls preload="none" src={file(k)} style={{ width: "100%", height: 32 }} /></label>)}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

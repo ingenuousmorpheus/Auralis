@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** AU-07 Guide Singer V1 + AU-08 full-song voice pipeline (Session 011), 2026-09-24
+**Last updated:** AU-09 Vocal Production (Session 012), 2026-09-24
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -174,6 +174,20 @@ Privacy properties the code enforces:
   - Vocals up to 6 minutes are converted in one Seed-VC call. Longer ones are cut in the middle of rests into pieces of about 4 minutes (`plan_chunks`).
 - **`SeedVCProvider.convert`** now decodes the subprocess output as UTF-8 with replacement. Seed-VC's progress bars used to crash the output reader under the Windows code page, which is why failures surfaced as "Unknown Seed-VC error" (gap 2, now fixed).
 
+### Vocal production (AU-09, Session 012)
+
+- **`composer/vocal_parts.plan_parts(blueprint, lead_score, production)`** writes the backing parts as guide scores:
+  - two doubles (the lead +12 ms and −8 ms, sung as separate performances)
+  - a high harmony (nearest chord tone 3–9 semitones above, else a diatonic third)
+  - a low harmony (nearest chord tone 3–9 below)
+  - ad-libs (a five-note falling run into rests of at least 1.5 beats after phrases, in the last chorus and the outro)
+  Each section's tier comes from its `backing_vocals` level (light = doubles, medium = + high harmony, full = + low harmony and ad-libs), capped by `production`. Harmony notes always stay in the key and inside the voice range (a semitone under the top). Reasons go to `parts_why`.
+- **`voice/vocal_production`:**
+  - `convert_parts` **packs** the sung spans of every part (lead included) back to back with 1.5 s gaps into as few Seed-VC calls as possible (≤ 6 min each), then unpacks them to their positions. A short song converts in one model load.
+  - `backing_bus` high-passes each backing part at 180 Hz, sets its level (doubles −5, harmonies −7/−8, ad-libs −6 dB) and constant-power pan (doubles ±0.75, harmonies ±0.35, ad-libs +0.2), adds a short room, and writes each part plus the summed stereo `backing_vocals` bus.
+- **In `sing_song`:** each part is rendered by the guide singer with its own seed, converted with the lead, and the bus joins the song mix as role `other` (so the mixer dips it in the vocal band) with a +4 dB offset.
+- **Guide singer change:** the fundamental is kept at 17.5% under every vowel. Without it, some vowel/pitch pairs had a formant-boosted 2nd harmonic that pitch trackers read an octave up; Seed-VC's own f0 extraction faces the same risk.
+
 ### Microphone voices and history (Session 009)
 
 - **`voice/capture.analyse_take`** checks a take in 50 ms frames:
@@ -232,8 +246,8 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | | `POST /composer/blueprint/regenerate` | `{blueprint, section_id}` → new chords for that section type (all of its sections); nothing else changes |
 | Instrumental (AU-05) | `GET /composer/providers` | Render providers (today: `synth`, local numpy instruments) |
 | | `POST /composer/render` | `{blueprint, seed, provider, master}` → background job `instrumental-render` (one at a time): arrange → MIDI → stems → mix + master. Progress via `/jobs/{id}` |
-| Sing (AU-07/08) | `POST /composer/sing` | `{blueprint, render_job_id, profile_id, quality}` → background job `song-vocal` (one at a time): guide score → guide singer → Seed-VC (under the engine lock) → Pitch Polish (blueprint key) → Vocal Finish (`smooth-rnb`, against the instrumental) → song mix and master with the render's stems. 409 when the render came from another blueprint |
-| | `GET /composer/sing/{job}/file/{name}` | `song`, `song_mix`, `vocal` (finished), `polished`, `converted`, `guide`, `preview`, `report`. Saving uses `/projects/{pid}/import-job` |
+| Sing (AU-07/08/09) | `POST /composer/sing` | `{blueprint, render_job_id, profile_id, quality, production}` (production: lead / doubles / harmony / full) → background job `song-vocal` (one at a time): guide score → guide singer → Seed-VC (under the engine lock) → Pitch Polish (blueprint key) → Vocal Finish (`smooth-rnb`, against the instrumental) → song mix and master with the render's stems. 409 when the render came from another blueprint |
+| | `GET /composer/sing/{job}/file/{name}` | `song`, `song_mix`, `vocal` (finished lead), `backing` (stereo bus), `double_l`, `double_r`, `harmony_high`, `harmony_low`, `adlibs`, `polished`, `converted`, `guide`, `preview`, `report`. Saving uses `/projects/{pid}/import-job` |
 | | `GET /composer/render/{job}/file/{name}` | `master`, `mix`, `midi`, `melody_guide`, `report`, or a stem (`drums`, `bass`, `keys`, `pad`, `fx`). Saving uses `/projects/{pid}/import-job` |
 | | `PUT/GET /projects/{pid}/blueprint`, `GET /projects/{pid}/blueprint/revisions` | Save (open projects and valid blueprints only) / read the current blueprint / list saved revisions |
 | | `GET /artist/library/songs/{song}/preview` | Player audio: a full mix streams from its folder; a stem set is summed once into a cached 16-bit mixdown under `artist\previews\` (never in the catalog) |
@@ -447,7 +461,7 @@ Every decision writes a sentence to `why` (per field) or to the section's `why`,
 
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). The run with the local
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). After AU-09, **180** (200). The run with the local
 uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
@@ -459,6 +473,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
 | `tests/test_composer.py` (30, AU-04) | Brief words and explicit overrides. Lyrics headers (a lyric line starting with "hook" is not a header). 11 Roman-numeral realisations; key parsing. **Gate:** a complete blueprint: tempo, key, 4/4, intro to outro, chords filling every bar, arrangement roles, energy curve, vocal registers inside the voice, chorus above verse, a reason for every decision. No melody keys anywhere. DNA loops re-voiced and used once; chorus differs from verse. Key fits the voice and DNA; a narrow voice gets an honest stretch. An era without the DNA's mode follows the era. Tempo from DNA, half-time, prompt. Form from lyrics and length. Works with no DNA and no voice. Catalog twin flagged. Edits to key, tempo, sections and chords re-derive everything; invalid edits reported; regenerate changes one section type only. Save with revisions and lyrics, survives a new store, refused when closed. API: create, revise, 422, regenerate, save, read |
+| `tests/test_vocal_production.py` (7, AU-09) | Parts follow the sections' backing-vocals levels and the production cap (lead = none, doubles = doubles only). Harmonies are 3–9 semitones from the lead, chord tones, in key and in range; doubles are the lead a few ms apart; ad-libs sit only in rests at the end. Pack/unpack restores exact positions and splits long calls. **Gate:** each rendered part is on its written pitch (≥90%, octave-strict, two keys); a song produces the lead, two doubles (panned left/right), two harmonies, ad-libs and the bus as separate files from one conversion call; "lead" production gives no backing |
 | `tests/test_full_song.py` (7, AU-07/08) | Syllables, vowels and onsets ("you" is soft, not an i-vowel). The score lines lyric syllables up with melody notes; no lyrics gives vocalise. **Gate (AU-07, ground truth):** the rendered guide is dry mono at about −20 dBFS, ≥90% of notes within 50 cents of the written pitch (pYIN), phrase onsets within a 60 ms median. Chunk planning (whole when short; long vocals cut only inside rests). Key spelling for Pitch Polish (G♯ minor, D♭ major…). End-to-end `sing_song` with a stand-in voice: every stage file, a stereo song at the render's length, ≤ −0.9 dBTP. API: 404 unknown voice/render, 422 bad quality, 409 render from another blueprint, full job with a fake engine, file downloads, save to project |
 | `tests/test_atmosphere.py` (9, AU-06) | Blueprint atmosphere levels follow era taste and carry a palette and reasons. Every pad / shimmer / choir / sparkle pitch is a tone of the chord sounding at that moment; drones are tonic and fifth. Swells end exactly on the downbeat of a chorus or an energy lift. Setting a section's Atmos to off empties it (bed and swells aside); old blueprints get era defaults. Era palettes differ (neo-soul has no choir; vinyl vs air beds). **Gate (ground truth, two eras):** rendered atmosphere is >85% in-key by chroma, section loudness follows planned energy (Spearman ≥ 0.8 across verse/pre-chorus/chorus/bridge; chorus above verse and pre-chorus), and the sparkle's onsets sit within 25 ms of the eighth-note grid. Mixer `gain_offsets` are opt-in. A render includes the atmosphere stem, its reasons and an Atmosphere MIDI track |
 | `tests/test_voice_library.py` (11, Session 009) | A synthetic singer (harmonic tones, vibrato, breaths). A clean take is usable with a 6–20 s sung reference; clipped, noisy, short and quiet takes each explain what to fix. A voice saved from a take has the singer, consent time, spoken-consent clip (not in the dataset), take file, dataset clips and the sung range; a second take grows it; rename. Consent and quality are required. Old profiles still load. History survives a new store instance (input kept, peaks, rating, delete). API: take check → save from take → sample → rename → 422 without consent → conversion (fake provider) lands in history → audio / input / peaks / rating / to-project / delete. **Three simultaneous conversions never run at once** (max concurrency 1) |
@@ -511,7 +526,7 @@ Rules carried forward:
 - ~~Song blueprint~~, done in AU-04. Still missing: lyric writing, per-line syllable fitting, meters other than 4/4, and a prompt reader beyond keywords.
 - ~~Composer, MIDI rendering~~, done in AU-05 (the local synth is a sketch-quality provider). ~~Atmosphere~~, done in AU-06. Still missing: sample-based instruments, generative-audio providers (AU-11).
 - My Voice redesign: V1–V3 and microphone capture built (Session 009). Still planned: V4 (a My Music lead-vocal stem as the guide) and V5 (full-song vocal separation), plus cancelling a queued conversion. See `docs/VOICE_STUDIO_PLAN.md` §7.
-- Guide singer, vocal harmony/doubles generator, full-song voice orchestration.
+- ~~Vocal harmony/doubles generator, full-song voice orchestration~~, done in AU-08/09. Guide singer: V1 (no intelligible words; needs a lyric-capable provider).
 - A generic provider interface/registry and a GPU/model scheduler. The audit hit exactly the memory contention this is meant to prevent (see below).
 - Diff-MST "Path B" mixer (comment-only placeholder).
 - Windows one-file packaging (documented sketch only).
