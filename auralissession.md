@@ -2813,3 +2813,40 @@ AU-11 and V5 need model downloads. Ask the user:
   - planted copies caught 30/30 over random melodies
   - 10 takes against the real catalog's six cached lead vocals raise no false flags
   - `tests/test_similarity.py` passed 8 runs in a row
+
+## Session 016 — 2026-09-25 — Model research, faster whole-song pitch polish, queue cancel
+
+### Goal
+The user said "Continue" without choosing among the model-dependent items (AU-11 generative audio, V5 separation, words for the guide singer). Those need downloads and the user's go-ahead, so this session:
+- researched them (licences, hardware) for a one-step decision
+- did local backlog items: whole-song pitch polish speed, cancelling queued conversions
+
+### Changed
+- **New `docs/MODEL_OPTIONS.md`:**
+  - **ACE-Step:** Apache-2.0 code and weights; commercial use OK; about 8–12 GB VRAM, which competes with Seed-VC on the 12 GB card.
+  - **MusicGen:** weights CC-BY-NC, non-commercial.
+  - **Stable Audio Open:** community licence, free under US$1M revenue.
+  - **Demucs:** MIT code, but its weights are for scientific use only.
+  - **DiffSinger:** Apache-2.0, but the English voicebanks found are non-commercial unless licensed.
+  - Recommendation: words first (with a commercially licensed voicebank); ACE-Step after a model scheduler; V5 deferred until a commercially clean separation model is found.
+- **`auralis/voice/pitch.py`:** optional `track_sr` (default unchanged).
+- **`auralis/voice/full_song.py`:** 22.05 kHz tracking when the lead sings for more than 2 minutes; `pitch_tracking_hz` in the result.
+- **`frontend/src/VoicePage.jsx`:** ✕ to cancel a waiting item in the Convert queue.
+- **Docs:** `docs/VOICE_STUDIO_PLAN.md` (V3 now complete) and the architecture doc.
+
+### Verification
+- **Pitch polish on the Session 012 converted vocal (known score):**
+  - full rate 74.2 s vs 22.05 kHz 30.7 s (2.4×)
+  - notes detected 64 vs 55
+  - accuracy after polish: 96% vs 94% of notes within 25 cents, median 10 cents for both (raw vocal: 93%)
+  - **The first claim that it would find "the same notes" was wrong** (the frame-based thresholds change with the hop), so it is only used automatically for long vocals, with the measured trade-off documented.
+- **Queue cancel in the real page, with the engine calls stubbed in the browser:**
+  - three files queued, the third cancelled while the first was converting
+  - only a.wav and b.wav were sent; c.wav shows "cancelled"
+  - a first attempt with instantly finishing stubs raced past the click; retested with 1.5 s jobs
+- The test suite run is recorded in the commit.
+
+### Next Action
+Waiting for the user's choice in `docs/MODEL_OPTIONS.md`. Otherwise, local improvements:
+- demos: chords from a played instrument, and pickup notes
+- a model scheduler (roadmap §16), the prerequisite for ACE-Step

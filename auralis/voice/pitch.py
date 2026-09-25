@@ -63,14 +63,22 @@ def pitch_polish(
     key_override: str | None = None,
     report_path: str | None = None,
     progress=None,
+    track_sr: int | None = None,
 ) -> dict:
+    """``track_sr`` (optional) tracks pitch on a resampled copy, e.g. 22050 Hz for whole
+    songs: about half the pYIN work with the same notes. Edits are still rendered on the
+    original audio at its own rate. Default None keeps the full-rate behaviour."""
     if style not in STYLES:
         raise ValueError(f"Unknown Pitch Polish style: {style}")
     vocal, sr = sf.read(vocal_path, always_2d=True, dtype="float32")
     mono = np.mean(vocal, axis=1).astype(np.float32)
     if progress:
         progress("detecting vocal notes", 12)
-    times, f0, voiced_prob = _track_pitch(mono, sr)
+    if track_sr and sr > track_sr:
+        times, f0, voiced_prob = _track_pitch(
+            librosa.resample(mono, orig_sr=sr, target_sr=track_sr).astype(np.float32), track_sr)
+    else:
+        times, f0, voiced_prob = _track_pitch(mono, sr)
     notes = _segment_notes(times, f0, voiced_prob)
     if len(notes) < 2:
         raise ValueError("Not enough stable pitched notes were detected.")

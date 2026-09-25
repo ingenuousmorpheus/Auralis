@@ -155,6 +155,7 @@ function Convert({ API, voice, engine, onEngine }) {
   const [guides, setGuides] = useState(null);
   const [guide, setGuide] = useState("");
   const input = useRef(null);
+  const cancelled = useRef(new Set());
   useEffect(() => {
     if (source === "library" && guides == null)
       apiJson(`${API}/voice/library-guides`).then(g => { setGuides(g); if (g[0]) setGuide(g[0].song_id); }).catch(() => setGuides([]));
@@ -175,7 +176,9 @@ function Convert({ API, voice, engine, onEngine }) {
     const batch = files;
     setFiles([]);
     setQueue(batch.map(f => ({ name: f.name, state: "queued", pct: 0 })));
+    cancelled.current = new Set();
     for (let i = 0; i < batch.length; i++) {          // one at a time: the engine never runs twice
+      if (cancelled.current.has(i)) continue;          // removed from the queue before its turn
       try {
         const form = new FormData();
         form.append("profile_id", voice.id);
@@ -256,7 +259,12 @@ function Convert({ API, voice, engine, onEngine }) {
           : `Convert ${files.length} ${files.length === 1 ? "file" : "files"} to ${voice?.name || "a voice"}`}</button>
       {queue.length > 0 && <ul className="vp-queue" aria-label="Conversion queue">{queue.map((q, i) =>
         <li key={i} data-state={q.state}><span>{q.name}</span>
-          <small>{q.state === "queued" ? "waiting" : q.state === "running" ? `${q.stage || "working"} · ${Math.round(q.pct || 0)}%` : q.state === "done" ? "done" : q.error}</small></li>)}</ul>}
+          <small style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {q.state === "queued" ? "waiting" : q.state === "running" ? `${q.stage || "working"} · ${Math.round(q.pct || 0)}%`
+              : q.state === "done" ? "done" : q.state === "cancelled" ? "cancelled" : q.error}
+            {q.state === "queued" && <button className="bp-icon" style={{ height: 24, minWidth: 24 }} aria-label={`Cancel ${q.name}`}
+              onClick={() => { cancelled.current.add(i); setQueue(list => list.map((x, k) => k === i ? { ...x, state: "cancelled" } : x)); }}>✕</button>}
+          </small></li>)}</ul>}
     </section>
     <section className="vp-panel">
       <h2 className="vp-h2">Output</h2>

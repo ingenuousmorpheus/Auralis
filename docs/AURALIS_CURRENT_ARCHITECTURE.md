@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** AU-13 Demo-to-Song (Session 014), 2026-09-25
+**Last updated:** Session 016 (pitch polish speed, queue cancel, model options), 2026-09-25
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -169,6 +169,7 @@ Privacy properties the code enforces:
   - hiss and stop onsets, and a breath before each phrase
   - the output is dry mono at 44.1 kHz, about −20 dBFS RMS with peaks below −3 dBFS
   It sings the melody and the lyrics' rhythm and vowels, **not intelligible words** (`sings_words = False`). A lyric-capable engine (e.g. DiffSinger, isolated like Seed-VC) plugs in behind the same interface.
+- **Pitch polish speed (Session 016).** `pitch_polish(..., track_sr=)` optionally tracks pitch on a resampled copy and still renders the edits on the original audio. `sing_song` uses 22.05 kHz when the lead sings for more than 2 minutes. Measured on a converted vocal with a known score: 2.4× faster, 94% vs 96% of notes within 25 cents after polish, the same 10-cent median. The default elsewhere is unchanged.
 - **`voice/full_song.sing_song`** runs the chain: guide score, guide vocal, the chosen voice through an injected `convert`, `pitch_polish` (`natural`, key from the blueprint via `_pitch_key`), `finish_vocal` (`smooth-rnb`, 0.7, against the render's pre-master), then `engine.pipeline.run` over the render's stems plus the vocal (role `vocal`, the atmosphere and FX offsets kept).
   - It arranges with the render's seed, so the vocal melody is the same one the instrumental was built around.
   - Vocals up to 6 minutes are converted in one Seed-VC call. Longer ones are cut in the middle of rests into pieces of about 4 minutes (`plan_chunks`).
@@ -567,7 +568,8 @@ Rules carried forward:
 - ~~Retrieval, similarity guard~~, done in AU-12 (audio fingerprinting not done).
 - ~~Song blueprint~~, done in AU-04. Still missing: lyric writing, per-line syllable fitting, meters other than 4/4, and a prompt reader beyond keywords.
 - ~~Composer, MIDI rendering~~, done in AU-05 (the local synth is a sketch-quality provider). ~~Atmosphere~~, done in AU-06. Still missing: sample-based instruments, generative-audio providers (AU-11).
-- My Voice redesign: V1–V4 and microphone capture built (Sessions 009, 015). Still planned: V5 (full-song vocal separation; needs a model) and cancelling a queued conversion. See `docs/VOICE_STUDIO_PLAN.md` §7.
+- My Voice redesign: V1–V4 and microphone capture built (Sessions 009, 015, 016). Still planned: V5 (full-song vocal separation; needs a model, see `docs/MODEL_OPTIONS.md`).
+- Model-dependent phases (AU-11 generative audio, V5 separation, a lyric-capable guide singer): researched in `docs/MODEL_OPTIONS.md` (licences, hardware); nothing is installed. See `docs/VOICE_STUDIO_PLAN.md` §7.
 - ~~Vocal harmony/doubles generator, full-song voice orchestration~~, done in AU-08/09. Guide singer: V1 (no intelligible words; needs a lyric-capable provider).
 - A generic provider interface/registry and a GPU/model scheduler. The audit hit exactly the memory contention this is meant to prevent (see below).
 - Diff-MST "Path B" mixer (comment-only placeholder).
