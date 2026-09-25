@@ -121,8 +121,10 @@ def melody_check(melody_notes: list, catalog_melodies: list[dict]) -> dict:
             continue
         chance = chance_run(ours, theirs)
         shaped = _has_shape(ours[i:i + run])
-        # a copy = clearly longer than chance AND a real melodic shape
-        level = "flag" if shaped and run >= max(MELODY_FLAG_INTERVALS, chance + 3) else             "info" if shaped and run > chance else None
+        # a copy = clearly longer than chance with a real melodic shape, or so far beyond
+        # chance (twice as long, 16+ intervals) that even a plain stepwise line counts
+        long_copy = run >= max(16, 2 * chance + 2)
+        level = "flag" if long_copy or (shaped and run >= max(MELODY_FLAG_INTERVALS, chance + 3)) else             "info" if shaped and run > chance else None
         if level:
             hits.append({"song_id": song["song_id"], "title": song.get("title"), "intervals": run,
                          "chance": chance, "level": level})

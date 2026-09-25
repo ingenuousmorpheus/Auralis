@@ -2805,3 +2805,11 @@ AU-11 and V5 need model downloads. Ask the user:
 - **AU-11:** a local generative-audio model for textures/sections behind the render-provider boundary, or keep the synth.
 - **V5:** a local vocal-separation model so full mixes can be guides.
 - **Words for the guide singer:** DiffSinger or similar, still open.
+
+### Session 015 addendum — similarity guard fix found by the full test run
+- **What failed:** a full run on the pushed code (`d508c9d`) gave 198 passed, 1 failed: `test_gate_melody_copy_is_flagged_original_passes`. The test plants a 40-note copy of a randomly generated melody. When the copied stretch had no leap, Session 013's "must have melodic shape" rule let a plain stepwise copy pass unflagged. It happened intermittently, because each run generates a different melody.
+- **Fix:** a run far beyond chance (at least 16 intervals, and twice chance + 2) is flagged whatever its shape. Shorter runs still need both shape and a margin above chance.
+- **Checked:**
+  - planted copies caught 30/30 over random melodies
+  - 10 takes against the real catalog's six cached lead vocals raise no false flags
+  - `tests/test_similarity.py` passed 8 runs in a row

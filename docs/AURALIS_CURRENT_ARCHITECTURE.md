@@ -200,7 +200,7 @@ Privacy properties the code enforces:
 - **`artist/similarity.py`:**
   - `harmony_check`: the blueprint's chord per bar, reduced to Roman triads, against every song's `roman_per_bar`, as the longest identical run. 8+ bars is *info*, 16+ is a *flag*. It runs inside the blueprint's originality checks on every build and edit, via `_catalog()`.
   - `melody_check`: interval sequences (transposition-free) of the take's melody guide against catalog lead vocals, which `catalog_melody` extracts with the library's own `analyze.melody_notes` and caches in `artist/melodies/<song>.json`.
-  - **A flag needs a run clearly above chance** (`chance_run`: the 95th percentile over deterministic shuffles, plus 3) **and a real melodic shape** (3+ different intervals, a skip of 3+ semitones, not mostly repeats). On the real catalog, shuffled melodies share step runs of 6–11 intervals by chance, so a fixed threshold gave a false positive.
+  - **A flag needs a run clearly above chance** (`chance_run`: the 95th percentile over deterministic shuffles, plus 3) **and a real melodic shape** (3+ different intervals, a skip of 3+ semitones, not mostly repeats). **Or** a run so far beyond chance (at least 16 intervals, and twice chance + 2) that even a plain stepwise copy counts (Session 015 fix). On the real catalog, shuffled melodies share step runs of 6–11 intervals by chance, so a fixed threshold gave a false positive.
   - Audio is not compared, and the check says so.
 - **API stores:** `artist_dna`, `/theory/candidates` and the composer's voice lookup now use the app's shared `VOICE_STORE` instead of new store instances.
 
