@@ -153,13 +153,13 @@ _SHAPES = (("maj", "", (0, 4, 7)), ("min", "", (0, 3, 7)),
            ("maj", "maj7", (0, 4, 7, 11)), ("maj", "7", (0, 4, 7, 10)), ("min", "7", (0, 3, 7, 10)))
 
 
-def _triad_templates(sevenths: bool = False):
+def _chord_templates():
     names, vecs = [], []
     for root in range(12):
-        for quality, ext, shape in _SHAPES if sevenths else _SHAPES[:2]:
+        for quality, ext, shape in _SHAPES:
             v = np.zeros(12)
             v[[(root + i) % 12 for i in shape]] = [1.0, 0.8, 0.9, 0.8][:len(shape)]
-            names.append((root, quality, ext) if sevenths else (root, quality))
+            names.append((root, quality, ext))
             vecs.append(v / np.linalg.norm(v))
     return names, np.array(vecs)
 
@@ -167,7 +167,7 @@ def _triad_templates(sevenths: bool = False):
 def played_chords(acc: dict, bar_starts: list[float], bar_seconds: float, tonic: int) -> list[dict]:
     """Chord per bar from the masked accompaniment: [{roman, root, quality, strength}] (roman None if unclear).
     A seventh (``maj7``, ``7``, minor ``7``) is named only when it beats the plain triad clearly."""
-    names, templates = _triad_templates(sevenths=True)
+    names, templates = _chord_templates()
     out = []
     energy = acc["chroma"].sum(axis=0)
     floor = 0.05 * (energy.max() or 1.0)
