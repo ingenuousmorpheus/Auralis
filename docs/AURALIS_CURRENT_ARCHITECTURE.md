@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** AU-06 Atmosphere Engine (Session 010), 2026-09-24
+**Last updated:** AU-07 Guide Singer V1 + AU-08 full-song voice pipeline (Session 011), 2026-09-24
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -100,11 +100,11 @@ deterministic, and none uses a model.
 | 4 | Reference matching | IMPLEMENTED | `test_reference_mode`. Live `/upload-reference` + `use_reference:true` gave `mode: reference`, −14.0 LUFS. Matchering rejects a reference identical to the target (error is surfaced correctly) |
 | 5 | Loudness / true-peak | IMPLEMENTED | `test_normalize_hits_target`, `test_ceiling_respected`, `test_limiter_hits_loudness_and_true_peak`. Live mix hit −14.0 / −1.0 dBTP |
 | 6 | Voice profile creation | IMPLEMENTED | `test_voice_profile_is_private_and_reusable`, `test_voice_profile_requires_consent`, `test_reference_rejects_clipping`. Live `GET /voice/profiles` shows no private paths |
-| 7 | Seed-VC provider | IMPLEMENTED, **but live conversion is blocked on this host** | `GET /voice/provider` → installed. Provider venv: torch 2.4.0+cu121, CUDA available (RTX 4070). The audit conversion failed with Windows `os error 1455` (paging file too small) while loading Whisper, because host commit charge was nearly exhausted by other processes. Not a code defect. See Gaps |
+| 7 | Seed-VC provider | IMPLEMENTED. **Live conversion verified in Session 011** once commit memory allowed (about 14 GB free; a conversion takes about 9 GB). Earlier: blocked | `GET /voice/provider` → installed. Provider venv: torch 2.4.0+cu121, CUDA available (RTX 4070). The audit conversion failed with Windows `os error 1455` (paging file too small) while loading Whisper, because host commit charge was nearly exhausted by other processes. Not a code defect. See Gaps |
 | 8 | Studio Voice dataset handling | IMPLEMENTED | `test_studio_dataset_is_segmented_and_scored`. Live profile: 16.1 min, 137 clips, readiness 72 |
 | 9 | Voice training | IMPLEMENTED (not re-run in audit) | `test_mark_studio_training` covers state only. The existing live profile is `studio-trained`, 1000 steps, with `model/ft_model.pth` present. Training was not re-run: it is GPU-hours of work and needs no re-verification for a baseline |
 | 10 | Paired calibration | IMPLEMENTED (ingest). Training on pairs is DOCUMENTED-ONLY | `test_paired_calibration_*` (accept/reject). Singer clips are fed into the normal dataset. `docs/PAIRED_CALIBRATION.md` "Future training work" is not in code. The live profile dir contains `model_paired_*`/`paired_training_holdout_*` artifacts that **no current repo code creates** (out-of-repo experiment) |
-| 11 | Guide-vocal conversion | IMPLEMENTED (code), unverified live this session | `POST /voice/convert` → `SeedVCProvider.convert` (fast/studio/ultra = 12/35/50 diffusion steps, ±12 st, uses the trained checkpoint when present). Blocked by item 7's host memory issue |
+| 11 | Guide-vocal conversion | IMPLEMENTED, **verified live in Session 011**: the AU-07 guide converted into the trained voice, 53/53 notes still on the written pitch | `POST /voice/convert` → `SeedVCProvider.convert` (fast/studio/ultra = 12/35/50 diffusion steps, ±12 st, uses the trained checkpoint when present). Blocked by item 7's host memory issue |
 | 12 | Pitch polish | IMPLEMENTED | `test_parse_key_and_detect_c_major`, `test_pitch_polish_corrects_note_centers_and_writes_report`. Live `/voice/pitch`: 8 notes detected, 7 corrected. Download and report returned 200 |
 | 13 | Vocal Finish | IMPLEMENTED | 4 tests in `test_vocal_finish.py`. Live `/voice/finish` in rack upload mode: download, preview, report and source all returned 200. `/voice/auto-polish` (pitch→finish) download and preview returned 200 |
 | 14 | Instrumental-aware vocal placement | IMPLEMENTED | `finish.analyze_vocal` measures vocal-to-instrument dB and a masking score against an optional instrumental. `_context_mix` renders a placed preview. Pitch Polish uses the instrumental for key detection |
@@ -159,6 +159,20 @@ Privacy properties the code enforces:
 - Profile ids must match `[a-f0-9]{12}`, which blocks path traversal.
 - `VoiceProfile.public_dict()` strips `reference_path`, `checkpoint_path` and `config_path`. The live check found no private paths in the API response.
 - `/voice/provider` does return the provider install path, which includes the Windows username. It only goes to localhost.
+
+### Guide singer and full-song vocal (AU-07/08, Session 011)
+
+- **`voice/guide.py`** builds the guide score. It takes the AU-05 melody guide notes and lines the section lyrics up with them: phrases are split at rests of at least half a beat, and each phrase gets one lyric line and one syllable per note. `syllabify` splits at vowel groups and keeps silent final e's. Each note records its syllable, a vowel (a e i o u uh) and an onset class (hiss / stop / soft; a word-initial y is a consonant). `phrases()` gives the sung spans.
+- **`voice/singing_provider.py`** is the provider boundary (`SingingProvider`, `get_singer`). **`VocaliseSinger`** is built in and needs no install. It is a formant singer:
+  - a band-limited glottal-style source with 40 ms portamento, vibrato after 150 ms on held notes, jitter and breathiness
+  - three vowel formants per note, crossfaded over 30 ms
+  - hiss and stop onsets, and a breath before each phrase
+  - the output is dry mono at 44.1 kHz, about −20 dBFS RMS with peaks below −3 dBFS
+  It sings the melody and the lyrics' rhythm and vowels, **not intelligible words** (`sings_words = False`). A lyric-capable engine (e.g. DiffSinger, isolated like Seed-VC) plugs in behind the same interface.
+- **`voice/full_song.sing_song`** runs the chain: guide score, guide vocal, the chosen voice through an injected `convert`, `pitch_polish` (`natural`, key from the blueprint via `_pitch_key`), `finish_vocal` (`smooth-rnb`, 0.7, against the render's pre-master), then `engine.pipeline.run` over the render's stems plus the vocal (role `vocal`, the atmosphere and FX offsets kept).
+  - It arranges with the render's seed, so the vocal melody is the same one the instrumental was built around.
+  - Vocals up to 6 minutes are converted in one Seed-VC call. Longer ones are cut in the middle of rests into pieces of about 4 minutes (`plan_chunks`).
+- **`SeedVCProvider.convert`** now decodes the subprocess output as UTF-8 with replacement. Seed-VC's progress bars used to crash the output reader under the Windows code page, which is why failures surfaced as "Unknown Seed-VC error" (gap 2, now fixed).
 
 ### Microphone voices and history (Session 009)
 
@@ -218,6 +232,8 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | | `POST /composer/blueprint/regenerate` | `{blueprint, section_id}` → new chords for that section type (all of its sections); nothing else changes |
 | Instrumental (AU-05) | `GET /composer/providers` | Render providers (today: `synth`, local numpy instruments) |
 | | `POST /composer/render` | `{blueprint, seed, provider, master}` → background job `instrumental-render` (one at a time): arrange → MIDI → stems → mix + master. Progress via `/jobs/{id}` |
+| Sing (AU-07/08) | `POST /composer/sing` | `{blueprint, render_job_id, profile_id, quality}` → background job `song-vocal` (one at a time): guide score → guide singer → Seed-VC (under the engine lock) → Pitch Polish (blueprint key) → Vocal Finish (`smooth-rnb`, against the instrumental) → song mix and master with the render's stems. 409 when the render came from another blueprint |
+| | `GET /composer/sing/{job}/file/{name}` | `song`, `song_mix`, `vocal` (finished), `polished`, `converted`, `guide`, `preview`, `report`. Saving uses `/projects/{pid}/import-job` |
 | | `GET /composer/render/{job}/file/{name}` | `master`, `mix`, `midi`, `melody_guide`, `report`, or a stem (`drums`, `bass`, `keys`, `pad`, `fx`). Saving uses `/projects/{pid}/import-job` |
 | | `PUT/GET /projects/{pid}/blueprint`, `GET /projects/{pid}/blueprint/revisions` | Save (open projects and valid blueprints only) / read the current blueprint / list saved revisions |
 | | `GET /artist/library/songs/{song}/preview` | Player audio: a full mix streams from its folder; a stem set is summed once into a cached 16-bit mixdown under `artist\previews\` (never in the catalog) |
@@ -431,7 +447,7 @@ Every decision writes a sentence to `why` (per field) or to the section's `why`,
 
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). The run with the local
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). The run with the local
 uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
@@ -443,6 +459,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
 | `tests/test_composer.py` (30, AU-04) | Brief words and explicit overrides. Lyrics headers (a lyric line starting with "hook" is not a header). 11 Roman-numeral realisations; key parsing. **Gate:** a complete blueprint: tempo, key, 4/4, intro to outro, chords filling every bar, arrangement roles, energy curve, vocal registers inside the voice, chorus above verse, a reason for every decision. No melody keys anywhere. DNA loops re-voiced and used once; chorus differs from verse. Key fits the voice and DNA; a narrow voice gets an honest stretch. An era without the DNA's mode follows the era. Tempo from DNA, half-time, prompt. Form from lyrics and length. Works with no DNA and no voice. Catalog twin flagged. Edits to key, tempo, sections and chords re-derive everything; invalid edits reported; regenerate changes one section type only. Save with revisions and lyrics, survives a new store, refused when closed. API: create, revise, 422, regenerate, save, read |
+| `tests/test_full_song.py` (7, AU-07/08) | Syllables, vowels and onsets ("you" is soft, not an i-vowel). The score lines lyric syllables up with melody notes; no lyrics gives vocalise. **Gate (AU-07, ground truth):** the rendered guide is dry mono at about −20 dBFS, ≥90% of notes within 50 cents of the written pitch (pYIN), phrase onsets within a 60 ms median. Chunk planning (whole when short; long vocals cut only inside rests). Key spelling for Pitch Polish (G♯ minor, D♭ major…). End-to-end `sing_song` with a stand-in voice: every stage file, a stereo song at the render's length, ≤ −0.9 dBTP. API: 404 unknown voice/render, 422 bad quality, 409 render from another blueprint, full job with a fake engine, file downloads, save to project |
 | `tests/test_atmosphere.py` (9, AU-06) | Blueprint atmosphere levels follow era taste and carry a palette and reasons. Every pad / shimmer / choir / sparkle pitch is a tone of the chord sounding at that moment; drones are tonic and fifth. Swells end exactly on the downbeat of a chorus or an energy lift. Setting a section's Atmos to off empties it (bed and swells aside); old blueprints get era defaults. Era palettes differ (neo-soul has no choir; vinyl vs air beds). **Gate (ground truth, two eras):** rendered atmosphere is >85% in-key by chroma, section loudness follows planned energy (Spearman ≥ 0.8 across verse/pre-chorus/chorus/bridge; chorus above verse and pre-chorus), and the sparkle's onsets sit within 25 ms of the eighth-note grid. Mixer `gain_offsets` are opt-in. A render includes the atmosphere stem, its reasons and an Atmosphere MIDI track |
 | `tests/test_voice_library.py` (11, Session 009) | A synthetic singer (harmonic tones, vibrato, breaths). A clean take is usable with a 6–20 s sung reference; clipped, noisy, short and quiet takes each explain what to fix. A voice saved from a take has the singer, consent time, spoken-consent clip (not in the dataset), take file, dataset clips and the sung range; a second take grows it; rename. Consent and quality are required. Old profiles still load. History survives a new store instance (input kept, peaks, rating, delete). API: take check → save from take → sample → rename → 422 without consent → conversion (fake provider) lands in history → audio / input / peaks / rating / to-project / delete. **Three simultaneous conversions never run at once** (max concurrency 1) |
 | `tests/test_generation.py` (13, AU-05) | Chord tones (6 cases, slash bass). Keys notes are always tones of the sounding chord; no drums where the arrangement has them off; crashes on chorus arrivals. Voice leading moves about a step per voice. The melody guide stays inside each section's register and scale, is deterministic per seed and varies with it. MIDI round trip (tempo, track names, note counts, timing). **Gate (ground truth):** render a 12-bar blueprint, then analyse the audio: tempo within ±3 BPM from the drums stem, the key family (key, relative or fifth-neighbour) from keys + bass, the keys stem's loudest pitch classes are chord tones in ≥90% of chord windows, a mastered stereo WAV of the right length at ≤ −0.9 dBTP, and the melody guide kept out of the stems. Render job → project assets. API: providers, 422 on a bad blueprint, render job, stem and MIDI downloads, 404 for unknown files, save to project |
@@ -501,8 +518,8 @@ Rules carried forward:
 
 **Defects and drift found (not fixed in AU-00, which is documentation only):**
 
-1. **Host memory blocks live Seed-VC conversion.** Windows `os error 1455` (paging file too small) happened while loading Whisper weights. Commit charge was 5.6 GB free of a 63.7 GB limit, with LM Studio resident. Free memory or enlarge the page file before voice work.
-2. **Seed-VC failure diagnostics can be empty.** Through `SeedVCProvider.convert` the same failure surfaced as `Voice conversion failed: Unknown Seed-VC error`, with both stdout and stderr empty. Running the command directly showed the real traceback. Consider logging the full subprocess output to the job dir.
+1. ~~**Host memory blocks live Seed-VC conversion.**~~ Resolved in Session 011 when commit memory allowed (a conversion peaks at about 9 GB of commit). With LM Studio resident, RAM is still the bottleneck: Pitch Polish's full-rate pYIN over a whole song pages heavily. Windows `os error 1455` (paging file too small) happened while loading Whisper weights. Commit charge was 5.6 GB free of a 63.7 GB limit, with LM Studio resident. Free memory or enlarge the page file before voice work.
+2. ~~**Seed-VC failure diagnostics can be empty.**~~ Fixed in Session 011 (UTF-8 decoding of the provider output). Through `SeedVCProvider.convert` the same failure surfaced as `Voice conversion failed: Unknown Seed-VC error`, with both stdout and stderr empty. Running the command directly showed the real traceback. Consider logging the full subprocess output to the job dir.
 3. **Job directories are never cleaned up.** `%TEMP%\auralis_jobs` grows forever, and `upload_reference`'s docstring promises a cleanup that does not exist.
 4. **Port drift.** `auralis/run.py` (the `auralis` console script) and `docs/DESIGN.md` use 8000. The launcher, README and frontend use 8001, so the `auralis` command does not work with the frontend's default.
 5. **Stale text.**

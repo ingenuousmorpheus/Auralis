@@ -2566,3 +2566,59 @@ The user said "Continue", so I took the next roadmap phase, AU-06. Its gate: *a 
 **AU-07 Guide Singer:** lyrics + the AU-05 melody guide → a synthetic dry guide vocal, correctly timed and pitched, which the saved voices (Session 009) can then convert.
 - It needs a local singing-synthesis provider, isolated like Seed-VC.
 - Check the options and their licences and memory needs first, then ask the user before installing anything large.
+
+## Session 011 — 2026-09-24 — AU-07 Guide Singer V1 + AU-08 full-song pipeline (first live Seed-VC)
+
+### Goal
+The user said "continue" without choosing between the two AU-07 options, so I took the recommended one that needs no install: a built-in guide singer. Then I wired AU-08 (guide → saved voice → Pitch Polish → Vocal Finish → song) and verified it live.
+
+### Starting State
+- `main` at `33092e3` (AU-06), equal to `origin/main`.
+- The user's uncommitted Harmonic Reference work was still in the tree; `main.py` is untouched this session.
+- Host commit memory had **14.0 GB free** (5.6 GB at the Session 001 failure). LM Studio was still resident (13 GB) and RAM had about 1.4 GB free.
+
+### Changed
+- **New `auralis/voice/guide.py`:** guide score (melody notes + lyric syllables, vowels, onsets, phrases).
+- **New `auralis/voice/singing_provider.py`:** provider boundary and the built-in `VocaliseSinger` formant singer.
+- **New `auralis/voice/full_song.py`:** `sing_song`, `plan_chunks`, `_pitch_key`.
+- **`auralis/api/composer.py`:** `POST /composer/sing` (job `song-vocal`, under the engine lock) and `GET /composer/sing/{job}/file/{name}`.
+- **`auralis/projects/jobs.py`:** `song-vocal` jobs save the song, vocals, guide and report into a project.
+- **`auralis/voice/seed_vc.py`:** the conversion subprocess output is decoded as UTF-8 with replacement.
+- **`frontend/src/BlueprintView.jsx`:** "Sing it in a saved voice" panel under a finished render (voice, quality, progress, song, vocal stages, downloads, save).
+- **Tests and docs:** new `tests/test_full_song.py` (7); architecture doc updated.
+
+### Verification
+- **AU-07 ground truth.** A 3-minute guide renders in about 2 s. pYIN on the guide gives **90/90** notes within 50 cents of the score, and phrase starts a median 34 ms (max 58 ms) after the score. 138 lyric syllables were mapped to vowels and onsets.
+- **First live Seed-VC conversion on this host** (closing AU-00's open check): 12 s of the guide into the trained studio voice through the app's `/voice/convert`.
+  - Same length; a median pitch difference of 10 cents from the guide, with 95.7% of frames within 50 cents.
+  - It went to the voice's history automatically: one take, "guide_singer_test.wav", which the user can delete.
+- **AU-08 live, short song:** a 12-bar song with lyrics.
+  - The chain ran in 76 s: one conversion call, 8 notes tuned, song at −13.9 LUFS / −1.0 dBTP.
+  - The converted vocal is on the written pitch for **53/53** notes.
+- **AU-08 live, full song in the app** (browser pane, restarted with the launcher scripts):
+  - Create with 19 lines of original lyrics ("romantic 90s R&B slow jam, big chorus") → Render instrumental (3:06, B♭ minor, 80 BPM) → **Sing it** with the trained voice at Studio quality.
+  - Result: 219 notes, 30 tuned, song master −13.9 LUFS / −1.0 dBTP, vocal 3.9 dB over the music. `/composer/sing/{job}/file/song` returned 200 (49.5 MB).
+  - The 2.6-minute vocal went through one Seed-VC call. In the first 60 s, **110/110** notes are within 50 cents of the score in both the converted and the finished vocal.
+- **Memory during the run:** Seed-VC took about 9 GB of commit (5 GB still free). The whole run took roughly 12 minutes, most of it Pitch Polish's pYIN paging, with 1 GB of RAM free while LM Studio was resident.
+
+### Result
+- **AU-07 PARTIAL against its gate** (*given lyrics and the blueprint melody, render a correctly timed/pitched dry guide vocal*). Timing and pitch pass on ground truth, and the lyrics drive the rhythm (one note per syllable) and the vowels. **The built-in singer does not pronounce intelligible words.** That needs a lyric-capable engine (DiffSinger or similar), which the user has not yet chosen to install.
+- **AU-08 COMPLETE against its gate** (*an entire lead vocal for an original generated song in the user's trained voice, without the user singing the guide*). Verified live on a full-length song, with the same caveat about words.
+
+### Findings
+- **AU-00 open item closed.** Live Seed-VC works whenever commit memory allows; the earlier failure was environmental, as diagnosed.
+- **AU-00 gap 2 found and fixed.** Seed-VC prints progress bars; decoding them with the Windows code page crashed Python's output reader thread, which is why failures surfaced as "Unknown Seed-VC error" with empty output. The conversion now decodes as UTF-8 with replacement, as training already did.
+- **Pitch Polish is slow on whole songs under memory pressure** (full-rate pYIN). It would be faster tracking at 22.05 kHz; not changed yet, because it alters an existing module's behaviour.
+- **Guide bug caught by a test:** "you" was read as an i-vowel (the y counted as a vowel). A word-initial y before a vowel is now a consonant.
+
+### Gate/Blocker
+- AU-07 words: needs the user's choice of a singing engine. The DiffSinger code is Apache-2.0, but each English voicebank has its own licence, and it needs GPU memory.
+- Still open: the user's My Music spot-check and switch-off cleanup.
+
+### Do Not Redo
+- Seed-VC live conversion is verified. Don't re-diagnose memory unless a conversion fails (the error now shows the real message).
+- `sing_song` reuses Seed-VC, Pitch Polish, Vocal Finish and the pipeline unchanged; extend it rather than fork them.
+
+### Next Action
+- Ask the user whether to add a lyric-capable singer (DiffSinger) for real words.
+- Otherwise AU-09 Vocal Production: doubles and harmonies from the lead line, converted through the same voice.

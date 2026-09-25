@@ -270,6 +270,95 @@ function RenderPanel({ API, bp }) {
         </div>
       </details>
       <SaveToProject API={API} jobId={job} label="Save render to project" />
+      {renderedRev === bp.revision && <SingPanel API={API} bp={bp} renderJob={job} />}
+    </>}
+  </div>;
+}
+
+/* AU-07/08: the guide singer sings the blueprint melody, a saved voice takes it
+   over (Seed-VC), then Pitch Polish, Vocal Finish and a full song mix. */
+function SingPanel({ API, bp, renderJob }) {
+  const [voices, setVoices] = useState([]);
+  const [voice, setVoice] = useState("");
+  const [quality, setQuality] = useState("studio");
+  const [job, setJob] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    apiJson(`${API}/voice/profiles`).then(list => {
+      setVoices(list);
+      let saved = "";
+      try { saved = localStorage.getItem("auralis.voice") || ""; } catch { /* private mode */ }
+      const pick = list.find(v => v.id === saved) || list.find(v => v.training_status === "trained") || list[0];
+      if (pick) setVoice(pick.id);
+    }).catch(() => {});
+  }, [API]);
+  useEffect(() => {
+    if (!job) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const st = await apiJson(`${API}/jobs/${job}`);
+        if (stop) return;
+        setStatus(st);
+        if (st.stage === "error") setError(st.error || "Singing failed.");
+        if (st.stage !== "done" && st.stage !== "error") setTimeout(tick, 1000);
+      } catch (e) { if (!stop) setError(e.message); }
+    };
+    tick();
+    return () => { stop = true; };
+  }, [job]);
+  const start = async () => {
+    setError(""); setStatus(null);
+    try {
+      const r = await apiJson(`${API}/composer/sing`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blueprint: bp, render_job_id: renderJob, profile_id: voice, quality }) });
+      setJob(r.job_id);
+    } catch (e) { setError(e.message); }
+  };
+  const running = status && status.stage !== "done" && status.stage !== "error";
+  const done = status?.stage === "done" ? status.result : null;
+  const file = name => `${API}/composer/sing/${job}/file/${name}`;
+  const sungLines = bp.sections.some(s => s.lyrics?.length);
+  if (!voices.length) return <div className="bp-alert note">Save a voice in My Voice to hear this song sung.</div>;
+  return <div className="bp-panel" style={{ display: "flex", flexDirection: "column", gap: 10, borderColor: "rgba(127,230,255,0.35)" }}>
+    <div className="au-caption">Sing it in a saved voice</div>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <select className="au-input" value={voice} onChange={e => setVoice(e.target.value)} aria-label="Voice" style={{ height: 38 }}>
+        {voices.map(v => <option key={v.id} value={v.id}>{v.name} · {v.training_status === "trained" ? "studio trained" : "instant"}</option>)}
+      </select>
+      <div className="au-segment" role="tablist" aria-label="Voice quality">
+        {[["fast", "Fast"], ["studio", "Studio"], ["ultra", "Ultra"]].map(([q, l]) =>
+          <button key={q} role="tab" aria-selected={quality === q} onClick={() => setQuality(q)}>{l}</button>)}
+      </div>
+      <button className="au-btn gold" onClick={start} disabled={running || !voice}>{running ? "Singing…" : done ? "Sing again" : "Sing it"}</button>
+    </div>
+    <div style={{ fontSize: 12, color: "var(--steel)" }}>
+      The built-in guide singer performs the melody{sungLines ? ", the rhythm of your lyrics and their vowels" : ""}; your voice model supplies the timbre.
+      {sungLines && " It doesn't pronounce clear words yet: that needs a lyric-capable singing engine (planned)."} Close big apps first: the voice engine needs memory.</div>
+    {error && <div role="alert" className="bp-alert warn">{error}</div>}
+    {running && <div role="status">
+      <div style={{ fontSize: 12, color: "var(--steel)", marginBottom: 6 }}>{status.stage} · {Math.round(status.pct)}%</div>
+      <div style={{ height: 6, borderRadius: 3, background: "var(--edge)", overflow: "hidden" }}>
+        <div style={{ width: `${status.pct}%`, height: "100%", background: "var(--holo)", transition: "width 0.3s" }} /></div>
+    </div>}
+    {done && <>
+      <div style={{ fontSize: 12, color: "var(--steel)" }}>{done.profile_name} · {done.notes_sung} notes · {done.notes_corrected ?? 0} tuned
+        {done.after_lufs != null && <> · song {done.after_lufs} LUFS</>}</div>
+      {done.song_master_path && <audio controls preload="none" src={file("song")} style={{ width: "100%" }} aria-label="The finished song" />}
+      <details>
+        <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Vocal stages</summary>
+        <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+          {[["vocal", "Finished vocal"], ["converted", `${done.profile_name} (raw)`], ["guide", "Guide singer"]].map(([k, l]) =>
+            <label key={k} style={{ display: "grid", gridTemplateColumns: "120px minmax(0, 1fr)", alignItems: "center", gap: 8, fontSize: 12 }}>
+              <span>{l}</span><audio controls preload="none" src={file(k)} style={{ width: "100%", height: 32 }} /></label>)}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {done.song_master_path && <a className="au-btn" href={file("song")} download>Download song</a>}
+            <a className="au-btn" href={file("vocal")} download>Download vocal</a>
+          </div>
+        </div>
+      </details>
+      <SaveToProject API={API} jobId={job} label="Save song to project" />
     </>}
   </div>;
 }

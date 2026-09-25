@@ -103,6 +103,14 @@ def job_outputs(job: dict) -> list[JobOutput]:
         add(result.get("midi_path"), "generated", "arrangement MIDI", "arrangement.mid")
         add(result.get("blueprint_path"), "generated", "blueprint used", "blueprint_rendered.json")
         add(result.get("report_path"), "report", "mix report", "mix_report.md")
+    elif kind == "song-vocal":
+        add(result.get("song_master_path"), "master", "song master", "song.wav")
+        add(result.get("song_mix_path"), "mix", "song pre-master", "song_pre_master.wav")
+        add(result.get("finished_path"), "vocal", "finished lead vocal", "lead_vocal.wav")
+        add(result.get("polished_path"), "vocal", "pitch-polished lead vocal", "lead_vocal_pitch.wav")
+        add(result.get("converted_path"), "vocal", "converted lead vocal", "lead_vocal_raw.wav")
+        add(result.get("guide_path"), "generated", "guide vocal", "guide_vocal.wav")
+        add(result.get("report_path"), "report", "song mix report", "song_mix_report.md")
     else:
         raise ValueError(f"Jobs of kind '{kind}' have nothing to save to a project.")
 

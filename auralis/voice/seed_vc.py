@@ -88,6 +88,10 @@ class SeedVCProvider:
             cwd=self.root,
             capture_output=True,
             text=True,
+            # Seed-VC prints progress bars; decoding them as the Windows code page crashed
+            # the output reader and hid real errors ("Unknown Seed-VC error", AU-00 gap 2).
+            encoding="utf-8",
+            errors="replace",
             timeout=60 * 30,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )

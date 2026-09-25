@@ -237,3 +237,104 @@ def render_file(job_id: str, name: str):
                                                                                    "application/octet-stream")
     filename = {"master": "instrumental.wav", "midi": "arrangement.mid"}.get(name, os.path.basename(path))
     return FileResponse(path, media_type=media, filename=filename)
+
+
+# ── AU-07/08: sing the song in a saved voice ───────────────────────────────
+
+class SingRequest(BaseModel):
+    blueprint: dict
+    render_job_id: str | None = None
+    profile_id: str
+    quality: str = "studio"
+    master: bool = True
+
+
+SING_FILES = {"song": "song_master_path", "song_mix": "song_mix_path", "vocal": "finished_path",
+              "polished": "polished_path", "converted": "converted_path", "guide": "guide_path",
+              "preview": "preview_path", "report": "report_path"}
+
+
+def _run_sing(job_id: str, req: SingRequest, render: dict | None):
+    import os
+
+    from ..voice.full_song import sing_song
+    from .main import JOBS, VOICE_PROVIDER, VOICE_STORE
+    from .voices import ENGINE_LOCK
+
+    job = JOBS[job_id]
+    try:
+        profile = VOICE_STORE.get(req.profile_id)
+
+        def convert(src, dst, quality):
+            job.update(stage=f"waiting for the voice engine ({profile.name})")
+            with ENGINE_LOCK:
+                job.update(stage=f"converting to {profile.name} (voice engine running; a full song takes minutes)")
+                result = VOICE_PROVIDER.convert(
+                    source_path=src, reference_path=profile.reference_path, output_path=dst,
+                    semitone_shift=0, quality=quality, checkpoint_path=profile.checkpoint_path,
+                    config_path=profile.config_path)
+            if result.get("output_path") and result["output_path"] != dst and os.path.isfile(result["output_path"]):
+                import shutil
+                shutil.copyfile(result["output_path"], dst)
+
+        result = sing_song(req.blueprint, render, profile, os.path.join(job["work"], "song"), convert,
+                           quality=req.quality, master=req.master,
+                           progress=lambda stage, pct: job.update(stage=stage, pct=pct))
+        job["result"] = result
+        job.update(stage="done", pct=100.0)
+    except Exception as exc:
+        message = str(exc)
+        if "1455" in message or "paging file" in message.lower():
+            message += " (Windows ran out of memory for the voice engine: close large apps and try again.)"
+        job.update(stage="error", error=message)
+
+
+@router.post("/composer/sing")
+async def sing(req: SingRequest):
+    """Guide singer → the chosen voice → Pitch Polish → Vocal Finish → song mix and master.
+    Uses the instrumental from ``render_job_id`` when given. One at a time."""
+    import asyncio
+
+    from ..composer.validation import validate_blueprint
+    from .main import JOBS, VOICE_STORE, _create_job
+
+    if req.quality not in ("fast", "studio", "ultra"):
+        raise HTTPException(422, "Quality must be fast, studio or ultra.")
+    if not validate_blueprint(req.blueprint)["ok"]:
+        raise HTTPException(422, "Fix the blueprint's errors first.")
+    try:
+        VOICE_STORE.get(req.profile_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    render = None
+    if req.render_job_id:
+        rj = JOBS.get(req.render_job_id)
+        if not rj or rj.get("kind") != "instrumental-render" or not rj.get("result"):
+            raise HTTPException(404, "Render the instrumental first (renders don't survive a restart).")
+        render = rj["result"]
+        if render.get("blueprint_id") != req.blueprint.get("id"):
+            raise HTTPException(409, "That instrumental was rendered from a different blueprint.")
+    if any(j.get("kind") == "song-vocal" and j.get("stage") not in ("done", "error") for j in JOBS.values()):
+        raise HTTPException(409, "A song is already being sung.")
+    job_id = _create_job()
+    JOBS[job_id].update(kind="song-vocal", stage="queued", pct=0.0)
+    asyncio.create_task(asyncio.to_thread(_run_sing, job_id, req, render))
+    return {"job_id": job_id, "status": "started"}
+
+
+@router.get("/composer/sing/{job_id}/file/{name}")
+def sing_file(job_id: str, name: str):
+    import os
+
+    from fastapi.responses import FileResponse
+
+    from .main import JOBS
+
+    job = JOBS.get(job_id)
+    if not job or job.get("kind") != "song-vocal" or not job.get("result"):
+        raise HTTPException(404, "No finished song with that id.")
+    path = job["result"].get(SING_FILES.get(name, ""))
+    if not path or not os.path.isfile(path):
+        raise HTTPException(404, f"No '{name}' in this song.")
+    media = "text/markdown" if path.endswith(".md") else "audio/wav"
+    return FileResponse(path, media_type=media, filename=f"{name}{os.path.splitext(path)[1]}")
