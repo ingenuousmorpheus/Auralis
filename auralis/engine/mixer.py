@@ -90,10 +90,19 @@ _MASKING_PAIRS: list[tuple[str, str, float, float, float]] = [
 
 # ── Public API ────────────────────────────────────────────────────────────
 
-def mix(analyses: list[StemAnalysis], profile_id: str = "neutral") -> list[MixParams]:
-    """Return per-stem MixParams for the given stems and style profile."""
+def mix(analyses: list[StemAnalysis], profile_id: str = "neutral",
+        gain_offsets: dict[str, float] | None = None) -> list[MixParams]:
+    """Return per-stem MixParams for the given stems and style profile.
+
+    ``gain_offsets`` ({stem path: dB}) shifts a stem after its role target, for
+    callers that know a stem's intended place (e.g. an atmosphere bed that
+    should sit under the harmonic parts). Without it the mix is unchanged.
+    """
     params = [_initial_params(a) for a in analyses]
     _apply_gain_targets(params, analyses, profile_id)
+    for p in params:
+        if gain_offsets and p.stem_path in gain_offsets:
+            p.gain_db = float(np.clip(p.gain_db + gain_offsets[p.stem_path], -30.0, 18.0))
     _apply_highpass(params)
     _apply_masking_eq(params, analyses)
     _apply_pan(params, analyses)

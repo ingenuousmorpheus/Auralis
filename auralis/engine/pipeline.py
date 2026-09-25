@@ -50,6 +50,7 @@ def run(
     role_overrides: dict[str, str] | None = None,   # {path: role}
     target_lufs: float | None = None,
     progress=None,
+    gain_offsets: dict[str, float] | None = None,     # {path: dB} after role targets
 ) -> MixPipelineResult:
     """Run the full mix + master pipeline.
 
@@ -80,7 +81,7 @@ def run(
     # ── 2. Mixing (heuristic, Path A) ──────────────────────────────────────
     report("computing mix parameters", 20)
     mode = "heuristic"
-    params: list[MixParams] = mix(analyses, profile_id=profile_id)
+    params: list[MixParams] = mix(analyses, profile_id=profile_id, gain_offsets=gain_offsets)
 
     # ── 3. DSP console ────────────────────────────────────────────────────
     mix_path = os.path.join(work, "pre_master.wav")

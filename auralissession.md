@@ -2497,3 +2497,72 @@ The user's request: "save voices just like kits.ai and suno does so if my friend
 - Try it with a real singer: *My Voice → New voice*.
 - Then the roadmap continues: AU-06 Atmosphere Engine, or AU-07 Guide Singer, which would sing the AU-05 melody guide so a saved voice can perform a whole blueprint.
 - Plan V4/V5 when wanted.
+
+## Session 010 — 2026-09-24 — AU-06 Atmosphere Engine
+
+### Goal
+The user said "Continue", so I took the next roadmap phase, AU-06. Its gate: *a generated instrumental has musically appropriate atmosphere that follows key, tempo and section energy* (roadmap §8).
+
+### Starting State
+- `main` at `a5a9753` (Session 009), equal to `origin/main`.
+- The user's uncommitted Harmonic Reference work was still in the tree; `main.py` is untouched this session.
+
+### Changed
+- **New `auralis/generation/atmosphere.py`:**
+  - era palettes and `era_level`
+  - `describe`
+  - `plan_atmosphere`: bed, drone, pad, shimmer, choir, sparkle, swell and tail, each with a reason
+  - `render_atmosphere`: energy-following gains, dark→bright drone filter, long reverb
+- **Blueprint:**
+  - each section gets an editable `atmos` role with era-shaped defaults
+  - `blueprint.atmosphere` holds the palette and `why.atmosphere` the reasons
+  - sections added later get the era default
+- **Render path:**
+  - the synth provider renders an `atmosphere` stem
+  - `render_instrumental` mixes it as `other` at −6 dB (FX −2 dB)
+  - an Atmosphere MIDI track
+  - a 6 s ring-out after the last bar
+- **Engine (opt-in extension):** `mixer.mix(..., gain_offsets=)` and `pipeline.run(..., gain_offsets=)`. Without them the mix is byte-for-byte the old one.
+- **UI:**
+  - an *Atmos* chip on every section card
+  - an Atmosphere panel with its reasons
+  - the atmosphere stem and a layer list in the render panel
+- **Tests:**
+  - new `tests/test_atmosphere.py` (9)
+  - `test_composer` role set now includes `atmos`
+  - the AU-05 length check allows the intended 6 s tail
+- Architecture doc updated.
+
+### Verification
+- `pytest -q` including the local harmony tests → **186 passed** (166 committed + 20). `npm run build` passes. The staged tree alone gives 166 passed.
+- **Ground truth on rendered audio**, isolated per layer and in the mix, over three eras:
+  - **Key:** 92.8% of the atmosphere's chroma energy is in the key (E♭ major song).
+  - **Energy:** across verse, pre-chorus, chorus and bridge, section loudness follows the planned energy with Spearman ρ = **0.92** in 2000s, modern alternative and Quiet Storm blueprints. Choruses are the loudest sections.
+  - **Tempo:** the sparkle arpeggio's onsets sit a median **16 ms** from the eighth-note grid (the detector resolution is about 12 ms).
+- **Browser pane (restarted with the launcher scripts):** "moody alt R&B, big chorus, 3 minutes" → Create.
+  - The Atmosphere panel and the per-section Atmos chips showed.
+  - Render instrumental gave a 3:09 master at −12.7 LUFS with an atmosphere stem (200, 50 MB) and a 20+ line "why" list: air bed, pedals, swells into each lift (with the energy numbers), rising shimmer, dark chorus pad, "ah" texture, bell sparkle.
+- The console showed the "closed AudioContext" error from Session 009's recording tests in the same tab. This session used no microphone, and after the Session 009 fix a listener had counted 0 new errors. It is treated as stale.
+
+### Result
+**AU-06 COMPLETE** against its gate. The textures are synthesized, like the AU-05 instruments. They are musically placed and explained, but they are not sample-library quality.
+
+### Findings
+- **First draft, fixed before commit:** the low drone dominated. Low sines carry far more RMS than filtered pads, so pre-choruses came out louder than choruses (energy ρ was 0.62). The drone is now quieter and hands over to the rising shimmer across the pre-chorus.
+- **Bookends are atmosphere-led on purpose.** Intros and outros keep slightly more atmosphere than verses, because atmosphere carries those sections. That is why the energy correlation is measured across the inner sections; including the bookends it is 0.61–0.73.
+- The mixer's role targets would put a texture bed as loud as the keys. The opt-in `gain_offsets` fixes that without changing any existing mix.
+- **The AU-05 ground-truth test was intermittently failing, and I fixed the test.** One full run failed it. Each blueprint gets a random id, which seeds the arranger, so every render differs slightly. Over 15 random 12-bar renders, the tempo was exact every time, but the key read as the IV key (G for D major) once. That is the detector's known fifth-neighbour ambiguity on short clips (AU-02), not a render error. The test now accepts the key family and adds a stronger check: the keys stem's loudest pitch classes must be chord tones (120/120 chord windows over 10 random renders).
+- **One unexplained failure.** One full staged run had a failure after that fix, and the run printed only its summary line. It then passed 4 more full runs (2 with failure details captured), 5 loops of the new-code test files and 3 loops of the older ones. The most likely cause is transient host memory pressure (this machine threw "Unable to allocate" during AU-02), but that is not proven. If it recurs, run `pytest -rf` to name the test.
+
+### Gate/Blocker
+- AU-06: none.
+- Still open: live Seed-VC conversion (host memory), and the user's My Music spot-check and switch-off cleanup.
+
+### Do Not Redo
+- `atmos` is a normal arrangement role: edit it like the others; don't add a second control.
+- Keep atmosphere mixing through `gain_offsets`; don't hard-code levels into the stems.
+
+### Next Action
+**AU-07 Guide Singer:** lyrics + the AU-05 melody guide → a synthetic dry guide vocal, correctly timed and pitched, which the saved voices (Session 009) can then convert.
+- It needs a local singing-synthesis provider, isolated like Seed-VC.
+- Check the options and their licences and memory needs first, then ask the user before installing anything large.

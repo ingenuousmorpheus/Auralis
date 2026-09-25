@@ -100,7 +100,7 @@ def test_gate_blueprint_is_complete_and_explained():
         assert s["bars"] > 0 and s["chords"] and s["why"]
         assert sum(c["beats"] for c in s["chords"]) == s["bars"] * 4
         assert all(c["chord"] != "?" for c in s["chords"])
-        assert set(s["arrangement"]) == {"drums", "bass", "keys", "pad", "lead_vocal", "backing_vocals", "fx"}
+        assert set(s["arrangement"]) == {"drums", "bass", "keys", "pad", "lead_vocal", "backing_vocals", "fx", "atmos"}
     assert len(bp["energy_curve"]) == bp["total_bars"]
     for field in ("era", "mode", "tempo", "key", "form", "energy", "groove", "arrangement"):
         assert bp["why"][field], field

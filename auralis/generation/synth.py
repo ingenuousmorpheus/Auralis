@@ -181,7 +181,7 @@ class SynthRenderer(RenderProvider):
         spb = 60.0 / tempo
         swing = float(arrangement.get("swing") or 0.5)
         offsets = arrangement.get("offsets_ms") or {}
-        total = arrangement["total_beats"] * spb + 3.0
+        total = arrangement["total_beats"] * spb + (6.0 if arrangement.get("atmosphere_plan") else 3.0)
         n_total = int(total * SR)
         inst = Instruments(seed)
         jitter = np.random.default_rng(seed + 1)
@@ -242,6 +242,19 @@ class SynthRenderer(RenderProvider):
             path = os.path.join(out_dir, f"{'melody_guide' if part == 'melody' else part}.wav")
             sf.write(path, buf, SR, subtype="PCM_24")
             (extras if part == "melody" else stems)[part] = path
+            del buf
+        plan = arrangement.get("atmosphere_plan")
+        if plan and plan.get("layers"):
+            from .atmosphere import render_atmosphere
+
+            if progress:
+                progress("rendering atmosphere", 95.0)
+            buf = render_atmosphere(plan, tempo, n_total, seed=seed)
+            peak = float(np.max(np.abs(buf))) or 1.0
+            buf *= 0.89 / peak
+            path = os.path.join(out_dir, "atmosphere.wav")
+            sf.write(path, buf, SR, subtype="PCM_24")
+            stems["atmosphere"] = path
             del buf
         return RenderResult(stems=stems, sample_rate=SR, duration_seconds=round(total, 2),
                             provider=self.id, extras=extras)

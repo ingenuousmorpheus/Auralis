@@ -17,6 +17,7 @@ PARTS = {
     "drums": (9, 0, "Drums"),
     "fx": (3, 99, "FX"),
     "melody": (4, 53, "Melody guide (not in the instrumental)"),
+    "atmosphere": (5, 91, "Atmosphere"),
 }
 
 

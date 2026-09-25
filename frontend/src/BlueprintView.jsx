@@ -14,7 +14,7 @@ const KEYS = [...MAJORS.map(k => `${k} major`), ...MINORS.map(k => `${k} minor`)
 const TYPES = [["intro", "Intro"], ["verse", "Verse"], ["pre-chorus", "Pre-chorus"], ["chorus", "Chorus"],
   ["bridge", "Bridge"], ["instrumental", "Interlude"], ["outro", "Outro"]];
 const ROLE_NAMES = { drums: "Drums", bass: "Bass", keys: "Keys", pad: "Pad", lead_vocal: "Lead vox",
-  backing_vocals: "BGVs", fx: "FX" };
+  backing_vocals: "BGVs", fx: "FX", atmos: "Atmos" };
 const LEVELS = ["off", "light", "medium", "full"];
 const RATES = [[0.5, "½ / bar"], [1, "1 / bar"], [2, "2 / bar"]];
 const TYPE_COLOR = { intro: "#3a4252", verse: "#7fe6ff", "pre-chorus": "#9fe8c9", chorus: "#d4af5f",
@@ -182,7 +182,7 @@ function SaveBox({ API, bp, onSaved }) {
   </div>;
 }
 
-const STEM_NAMES = { drums: "Drums", bass: "Bass", keys: "Keys", pad: "Pad", fx: "FX" };
+const STEM_NAMES = { drums: "Drums", bass: "Bass", keys: "Keys", pad: "Pad", fx: "FX", atmosphere: "Atmosphere" };
 
 /* AU-05: render the blueprint with the local instruments, then mix and master
    it with the existing engine. Progress comes from /jobs/{id}. */
@@ -247,6 +247,14 @@ function RenderPanel({ API, bp }) {
         {done.tempo} BPM · {done.key} · {fmtTime(done.duration_seconds)} · mastered with <span className="au-mono">{done.profile_id}</span>
         {done.after_lufs != null && <> · {done.after_lufs} LUFS</>} · take {done.seed + 1}</div>
       <audio controls preload="none" src={file("master")} style={{ width: "100%" }} aria-label="Mastered instrumental" />
+      {done.atmosphere && <details>
+        <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+          Atmosphere · {Object.entries(done.atmosphere.counts).map(([k, n]) => `${n} ${k}`).join(", ")}</summary>
+        <ul className="bp-why" style={{ maxHeight: 180, overflowY: "auto", paddingLeft: 16 }}>
+          {[...new Map(done.atmosphere.layers.map(l => [l.why.replace(/ on .*$/, ""), l])).values()]
+            .map((l, i) => <li key={i}>{l.why.replace(/ on .*$/, "")}</li>)}
+        </ul>
+      </details>}
       <details>
         <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Stems, melody guide and MIDI</summary>
         <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
@@ -382,6 +390,13 @@ export default function BlueprintView({ API, blueprint, setBlueprint }) {
         {(bp.arrangement.comments || []).map((n, i) => <div key={i} style={{ fontSize: 12, color: "var(--steel)", marginTop: 4 }}>{n}</div>)}
         <Why lines={bp.why.arrangement} />
       </div>
+      {bp.atmosphere && <div className="bp-panel">
+        <div className="au-caption">Atmosphere</div>
+        <div style={{ marginTop: 6 }}>{bp.atmosphere.layers.join(" · ")}</div>
+        <div style={{ fontSize: 12, color: "var(--steel)", marginTop: 4 }}>
+          {bp.atmosphere.status} · set each section's <b>Atmos</b> chip to shape it</div>
+        <Why lines={bp.why.atmosphere} />
+      </div>}
       <div className="bp-panel">
         <div className="au-caption">Originality</div>
         {checks.map(c => <div key={c.id} className="bp-check">

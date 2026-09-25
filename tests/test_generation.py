@@ -120,7 +120,8 @@ def test_gate_render_complete_instrumental_ground_truth(tmp_path):
     assert set(out["stems"]) >= {"drums", "bass", "keys"}
     master, sr = sf.read(out["master_path"])
     assert master.ndim == 2 and sr == 44100
-    assert abs(len(master) / sr - bp["duration_seconds"]) < 4
+    # the song plus up to 6 s for the last chord and the atmosphere tail to ring out
+    assert bp["duration_seconds"] <= len(master) / sr <= bp["duration_seconds"] + 7
     assert np.sqrt((master ** 2).mean()) > 0.01
     assert out["after_peak_db"] <= -0.9
     drums = sf.read(out["stems"]["drums"])[0].mean(1).astype(np.float32)
@@ -129,7 +130,26 @@ def test_gate_render_complete_instrumental_ground_truth(tmp_path):
     harm = (sf.read(out["stems"]["keys"])[0].mean(1) + sf.read(out["stems"]["bass"])[0].mean(1)).astype(np.float32)
     key = detect_key(harm, sr)
     tonic, mode = parse_key(bp["key"])
-    assert (key.tonic, key.mode) in ((tonic, mode), ((tonic + 9) % 12, "minor"))   # the key or its relative
+    # The detector is reliable for the key *family* on short clips (AU-02 finding): accept the key, its
+    # relative, or a fifth-neighbour (a IV-heavy 12-bar loop sometimes reads as the IV key).
+    family = {((tonic + d) % 12) for d in (0, 5, 7)}
+    major_of = key.tonic if key.mode == "major" else (key.tonic + 3) % 12
+    assert major_of in family
+    # the stronger check: in every chord window the keys stem's three loudest pitch classes are chord tones
+    keys = sf.read(out["stems"]["keys"])[0].mean(1).astype(np.float32)
+    spb = 60 / bp["tempo"]
+    hits = total = 0
+    for s in bp["sections"]:
+        for c in s["chords"]:
+            b0 = (s["start_bar"] - 1) * 4 + (c["bar"] - 1) * 4 + (c["beat"] - 1)
+            seg = keys[int(b0 * spb * sr):int((b0 + min(c["beats"], 2)) * spb * sr)]
+            if len(seg) < 4096 or np.abs(seg).max() < 1e-3:
+                continue
+            chroma = librosa.feature.chroma_cqt(y=seg, sr=sr).mean(1)
+            root, tones, _ = chord_tones(c["roman"], tonic, mode)
+            total += 1
+            hits += set(np.argsort(chroma)[-3:]) <= {(root + t) % 12 for t in tones}
+    assert total >= 4 and hits / total >= 0.9
     # the melody guide is rendered separately and never mixed into the instrumental
     assert out["melody_guide_path"] and "melody" not in out["stems"]
 

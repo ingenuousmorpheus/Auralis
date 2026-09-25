@@ -33,6 +33,8 @@ from datetime import datetime, timezone
 from ..theory import candidates as atlas_candidates
 from ..theory import key_fit, load_atlas, suggest_keys
 from ..theory.schema import is_roman
+from ..generation.atmosphere import describe as describe_atmosphere
+from ..generation.atmosphere import era_level
 from .brief import parse_brief
 from .chords import ChordError, key_name, note_name, parse_key, realise, split_progression
 from .validation import SECTION_TYPES, validate_blueprint
@@ -40,7 +42,7 @@ from .validation import SECTION_TYPES, validate_blueprint
 BLUEPRINT_VERSION = 1
 DEFAULT_LENGTH = 200                 # seconds, a typical R&B single
 DEFAULT_VOICE = (48.0, 72.0)         # C3–C5 when there is no voice profile or DNA melody
-ROLES = ["drums", "bass", "keys", "pad", "lead_vocal", "backing_vocals", "fx"]
+ROLES = ["drums", "bass", "keys", "pad", "lead_vocal", "backing_vocals", "fx", "atmos"]
 LABELS = {"intro": "Intro", "verse": "Verse", "pre-chorus": "Pre-chorus", "chorus": "Chorus",
           "bridge": "Bridge", "instrumental": "Interlude", "outro": "Outro"}
 BASE_ENERGY = {"intro": 0.3, "verse": 0.45, "pre-chorus": 0.6, "chorus": 0.8, "bridge": 0.55,
@@ -449,7 +451,7 @@ def build_blueprint(prompt: str = "", lyrics: str = "", *, dna: dict | None = No
             "bars": int(bars), "energy": energy, "chords_per_bar": rate,
             "progression": {k: opt.get(k) for k in ("roman", "name", "source", "status", "sources", "dna_loop")
                             if opt.get(k) is not None},
-            "arrangement": dict(ARRANGEMENT[t]),
+            "arrangement": dict(ARRANGEMENT[t], atmos=era_level(t, era)),
             "lyrics": lines,
             "why": [opt["why"], rate_why],
         })
@@ -499,6 +501,10 @@ def build_blueprint(prompt: str = "", lyrics: str = "", *, dna: dict | None = No
     if prod.get("stereo_width") is not None:
         arrangement["comments"].append(f"Your mixes are {'narrow' if prod['stereo_width'] < 0.3 else 'wide'} "
                                     f"(width {prod['stereo_width']:.2f}); open the stereo image in choruses.")
+    atmosphere = describe_atmosphere(era, dna)
+    why["atmosphere"] = atmosphere["why"] + [
+        "Each section's Atmos level (off / light / medium / full) sets how much texture it gets; "
+        "the layers follow its chords and the energy curve."]
     why["arrangement"] = [f"{_era_name(atlas, era)} palette; roles per section follow energy"
                           + (f" and the Atlas “{lift['name']}” lift ({', '.join(lift['changes'])})" if lift else "")
                           + ". Choruses bring in backing vocals, as your stem sets do."]
@@ -522,6 +528,7 @@ def build_blueprint(prompt: str = "", lyrics: str = "", *, dna: dict | None = No
         "sections": sections,
         "harmony_options": {t: o[:6] for t, o in options.items()},
         "arrangement": arrangement,
+        "atmosphere": atmosphere,
         "vocal": {"range_low_midi": vr[0], "range_high_midi": vr[1], "range_source": vsource,
                   "patterns": {p["section"]: {k: p[k] for k in ("id", "name", "contour", "start_degree",
                                                                  "end_degree", "peak_degree", "phrase_bars",
@@ -564,7 +571,8 @@ def revise(blueprint: dict, changes: dict, catalog: list[dict] | None = None) ->
             s = copy.deepcopy(prev) if prev else {
                 "id": uuid.uuid4().hex[:8], "type": raw.get("type", "verse"), "bars": 8,
                 "energy": BASE_ENERGY.get(raw.get("type", "verse"), 0.5), "chords_per_bar": 1.0,
-                "arrangement": dict(ARRANGEMENT.get(raw.get("type", "verse"), ARRANGEMENT["verse"])),
+                "arrangement": dict(ARRANGEMENT.get(raw.get("type", "verse"), ARRANGEMENT["verse"]),
+                                    atmos=era_level(raw.get("type", "verse"), (bp.get("era") or {}).get("id", ""))),
                 "lyrics": [], "why": ["You added this section."],
                 "progression": _default_progression(bp, raw.get("type", "verse")),
             }
