@@ -262,6 +262,7 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | Voice library (Session 009, `api/voices.py`) | `POST /voice/takes/check` | Analyse a take without saving: level, room noise, singing seconds, the chosen reference window, issues and tips |
 | | `POST /voice/profiles/from-take` | Name + singer + consent + take (+ optional spoken consent clip) → a saved voice and its take report. 422 without consent or when the take cannot make a good voice |
 | | `POST /voice/profiles/{id}/takes`, `PATCH /voice/profiles/{id}`, `GET /voice/profiles/{id}/reference` | Add a microphone take to a voice / rename / play the voice's sample |
+| | `GET /voice/library-guides`, `POST /voice/convert-from-library` | V4: catalog songs with a lead-vocal stem / convert that stem (read-only, summed into the job folder) through the normal conversion path, into history |
 | | `GET /voice/history?profile_id=`, `GET /voice/history/{pid}/{take}/audio?which=output\|input`, `…/peaks`, `PATCH`/`DELETE …`, `POST …/to-project` | Kept conversions (all voices without `profile_id`), audio, waveform, rating/note, delete, copy into a project |
 | Projects (AU-01) | `GET/POST /projects`, `GET/PATCH/DELETE /projects/{pid}` | List / create / read (with integrity) / rename or set voice profile / delete |
 | | `POST /projects/{pid}/open`, `POST /projects/{pid}/close`, `GET /projects/{pid}/verify?deep=` | Open/close state. Integrity check (existence + size, or SHA-256 when `deep`) |
@@ -566,7 +567,7 @@ Rules carried forward:
 - ~~Retrieval, similarity guard~~, done in AU-12 (audio fingerprinting not done).
 - ~~Song blueprint~~, done in AU-04. Still missing: lyric writing, per-line syllable fitting, meters other than 4/4, and a prompt reader beyond keywords.
 - ~~Composer, MIDI rendering~~, done in AU-05 (the local synth is a sketch-quality provider). ~~Atmosphere~~, done in AU-06. Still missing: sample-based instruments, generative-audio providers (AU-11).
-- My Voice redesign: V1–V3 and microphone capture built (Session 009). Still planned: V4 (a My Music lead-vocal stem as the guide) and V5 (full-song vocal separation), plus cancelling a queued conversion. See `docs/VOICE_STUDIO_PLAN.md` §7.
+- My Voice redesign: V1–V4 and microphone capture built (Sessions 009, 015). Still planned: V5 (full-song vocal separation; needs a model) and cancelling a queued conversion. See `docs/VOICE_STUDIO_PLAN.md` §7.
 - ~~Vocal harmony/doubles generator, full-song voice orchestration~~, done in AU-08/09. Guide singer: V1 (no intelligible words; needs a lyric-capable provider).
 - A generic provider interface/registry and a GPU/model scheduler. The audit hit exactly the memory contention this is meant to prevent (see below).
 - Diff-MST "Path B" mixer (comment-only placeholder).

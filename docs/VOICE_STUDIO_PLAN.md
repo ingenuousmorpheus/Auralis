@@ -1,7 +1,7 @@
 # My Voice redesign plan: Kits-style voice page in the Auralis console
 
 **Added:** 2026-09-24 (Session 007)
-**Status:** V1–V3 and microphone voice capture BUILT in Session 009 (see §7). V4 and V5 still planned.
+**Status:** V1–V4 and microphone voice capture BUILT (Sessions 009, 015; see §7). V5 still planned (needs a separation model).
 **Asked for by the user:** "make the voice creation page similar to kits.ai and have it working in the same gui structure".
 
 The user shared two screenshots: the current Auralis **My Voice Studio** page and the Kits.ai **Convert** page. This plan takes Kits' *workflow layout* and builds it inside the existing Auralis shell (gold console theme, `Sidebar`, `PlayerBar`, page routing in `App.jsx`). It reuses the voice engine that already works (profiles, Studio Voice dataset, paired calibration, Seed-VC training and conversion, Pitch Polish, Vocal Finish).
@@ -112,7 +112,7 @@ V1–V3 give the Kits-style experience. V4 is an Auralis-only advantage (the use
 | **V1 Layout** | BUILT | `VoicePage.jsx`: hero (tile, kind, range, readiness, singer, sample player, Switch voice, + New voice), tabs Convert / My voices / New voice / History / Harmonies (disabled, AU-09). Voice cards with Use, Record more, Train studio model (≥10 min), Rename, Delete (type the name to confirm). The classic `VoiceStudio.jsx` stays inside *My voices → Studio tools*, so dataset uploads, paired calibration, deep training and pitch polish are all still reachable |
 | **V2 History** | BUILT | `VoiceHistoryStore` keeps every conversion under the voice's folder, with waveform peaks, A/B against the original, download, 👍/👎, delete and save-to-project (works after restarts) |
 | **V3 Queue** | BUILT, except *cancel a queued item* | Up to 5 files per batch, converted one after another with per-item progress. The server also holds a lock around Seed-VC, so even separate requests never run two conversions at once (test with a fake provider: max concurrency 1) |
-| **V4 From My Music** | PLANNED | |
+| **V4 From My Music** | BUILT (Session 015) | *Convert → From My Music* lists catalog songs with a separated lead-vocal stem (15 in the user's library). The stem is summed into the job folder and converted through the normal path, into history. The catalog is only read (snapshot test) |
 | **V5 Song input** | PLANNED | |
 
 The §6 questions were not answered, so these defaults were used:

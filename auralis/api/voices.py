@@ -249,3 +249,71 @@ def take_to_project(profile_id: str, take_id: str, req: TakeToProject):
     except PermissionError as exc:
         raise HTTPException(409, str(exc)) from exc
     return asset.__dict__
+
+
+# ── V4: a My Music lead-vocal stem as the guide ────────────────────────────
+
+class LibraryConvert(BaseModel):
+    profile_id: str
+    song_id: str
+    quality: str = "studio"
+    semitone_shift: int = 0
+
+
+@router.get("/library-guides")
+def library_guides():
+    """Catalog songs that have a separated lead-vocal stem (usable as conversion guides)."""
+    from .artist import LIBRARY
+
+    out = []
+    for s in LIBRARY.songs():
+        if any(f.role == "lead_vocal" for f in s.files):
+            out.append({"song_id": s.id, "title": s.title, "kind": s.kind,
+                        "bpm": (s.summary or {}).get("bpm"), "key": (s.summary or {}).get("key"),
+                        "vocal_range": (s.summary or {}).get("vocal_range")})
+    return out
+
+
+@router.post("/convert-from-library")
+async def convert_from_library(req: LibraryConvert):
+    """Convert a My Music lead-vocal stem into a saved voice. The catalog is only read:
+    the stem is summed into the job folder, never written back."""
+    import asyncio
+
+    import soundfile as sf
+
+    from ..artist.library import SongAudio
+    from .artist import LIBRARY
+    from .main import JOBS, _create_job, _run_voice_conversion
+
+    if req.quality not in {"fast", "studio", "ultra"}:
+        raise HTTPException(422, "Quality must be fast, studio, or ultra.")
+    if not -12 <= req.semitone_shift <= 12:
+        raise HTTPException(422, "Semitone shift must be between -12 and +12.")
+    try:
+        _store().get(req.profile_id)
+        song = LIBRARY.song(req.song_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not any(f.role == "lead_vocal" for f in song.files):
+        raise HTTPException(422, "That song has no separated lead-vocal stem.")
+    job_id = _create_job(filename=f"{song.title} (lead vocal).wav")
+    job = JOBS[job_id]
+    job.update(kind="voice-conversion", stage="reading the lead vocal from My Music", pct=0.0, song_id=song.id)
+
+    def prepare_and_convert():
+        try:
+            _, sr, stems = SongAudio(song).load()
+            lead = stems.get("lead_vocal")
+            if lead is None or float(abs(lead).max()) < 1e-3:
+                raise ValueError("The lead-vocal stem is silent.")
+            path = os.path.join(job["work"], "guide.wav")
+            sf.write(path, lead, sr, subtype="PCM_24")
+            job["input"] = path
+        except Exception as exc:                  # noqa: BLE001 - reported on the job
+            job.update(stage="error", error=str(exc))
+            return
+        _run_voice_conversion(job_id, req.profile_id, req.semitone_shift, req.quality)
+
+    asyncio.create_task(asyncio.to_thread(prepare_and_convert))
+    return {"job_id": job_id, "status": "started"}

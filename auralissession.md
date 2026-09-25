@@ -2777,3 +2777,31 @@ Continuing the user's "next phases" request: AU-13. Its gate: *a phone-quality v
 
 ### Next Action
 My Voice V4 (a My Music lead-vocal stem as the conversion guide). Then ask the user about AU-11 and V5 models.
+
+## Session 015 — 2026-09-25 — My Voice V4: a My Music lead vocal as the guide
+
+### Goal
+The last local item from the plan, before the phases that need models (AU-11, V5).
+
+### Changed
+- **`auralis/api/voices.py`:**
+  - `GET /voice/library-guides`: catalog songs that have a lead-vocal stem.
+  - `POST /voice/convert-from-library`: reads the stem through `SongAudio`, writes it into the job folder only, then runs the unchanged `_run_voice_conversion` (engine lock and history included).
+- **`frontend/src/VoicePage.jsx`:** Convert gets an *Audio input | From My Music* switch.
+- **Tests and docs:**
+  - `tests/test_voice_library.py`: a V4 test (temporary stem folder, fake engine, catalog snapshot identical afterwards)
+  - `docs/VOICE_STUDIO_PLAN.md` §7 and the architecture doc
+
+### Verification
+- `tests/test_voice_library.py`: 12 passed.
+- **Real app:** From My Music lists **15** of the user's songs with separated lead vocals, and the Convert button names the selected voice.
+- **Not run live:** a real conversion of a full-length catalog stem, to spare memory. After the stem is read it takes the same path verified live in Sessions 011–012.
+
+### Result
+**V4 COMPLETE** against its gate (a catalog lead-vocal stem converts without writing anything into the catalog folder), verified with the snapshot test.
+
+### Next Action
+AU-11 and V5 need model downloads. Ask the user:
+- **AU-11:** a local generative-audio model for textures/sections behind the render-provider boundary, or keep the synth.
+- **V5:** a local vocal-separation model so full mixes can be guides.
+- **Words for the guide singer:** DiffSinger or similar, still open.

@@ -151,7 +151,14 @@ function Convert({ API, voice, engine, onEngine }) {
   const [refresh, setRefresh] = useState(0);
   const [drag, setDrag] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [source, setSource] = useState("files");          // files | library (V4)
+  const [guides, setGuides] = useState(null);
+  const [guide, setGuide] = useState("");
   const input = useRef(null);
+  useEffect(() => {
+    if (source === "library" && guides == null)
+      apiJson(`${API}/voice/library-guides`).then(g => { setGuides(g); if (g[0]) setGuide(g[0].song_id); }).catch(() => setGuides([]));
+  }, [source]);
   const running = queue.some(q => q.state === "queued" || q.state === "running");
 
   const add = list => setFiles(prev => [...prev, ...Array.from(list)].slice(0, MAX_FILES));
@@ -184,6 +191,18 @@ function Convert({ API, voice, engine, onEngine }) {
       }
     }
   };
+  const convertLibrary = async () => {
+    const g = guides.find(x => x.song_id === guide);
+    setQueue([{ name: `${g.title} (lead vocal)`, state: "queued", pct: 0 }]);
+    try {
+      const { job_id } = await apiJson(`${API}/voice/convert-from-library`, { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: voice.id, song_id: guide, quality, semitone_shift: shift }) });
+      await wait(job_id, 0);
+      setQueue(q => q.map(x => ({ ...x, state: "done", pct: 100 })));
+      setRefresh(r => r + 1);
+    } catch (e) { setQueue(q => q.map(x => ({ ...x, state: "error", error: e.message }))); }
+  };
   const install = async () => {
     setInstalling(true);
     try { await apiJson(`${API}/voice/provider/install`, { method: "POST" }); onEngine(); }
@@ -197,7 +216,18 @@ function Convert({ API, voice, engine, onEngine }) {
       {engine && !engine.installed && <div className="vp-alert note">
         The local voice engine (Seed-VC) isn't installed. It runs in its own folder and downloads about 3 GB once.
         <div><button className="au-btn" style={{ marginTop: 8 }} onClick={install} disabled={installing}>{installing ? "Installing… (this can take a long time)" : "Install voice engine"}</button></div></div>}
-      <div className={`vp-drop ${drag ? "drag" : ""}`} onClick={() => input.current?.click()} role="button" tabIndex={0}
+      <div className="au-segment" role="tablist" aria-label="Input" style={{ marginBottom: 12 }}>
+        <button role="tab" aria-selected={source === "files"} onClick={() => setSource("files")}>Audio input</button>
+        <button role="tab" aria-selected={source === "library"} onClick={() => setSource("library")}>From My Music</button>
+      </div>
+      {source === "library" && <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ fontSize: 12, color: "var(--steel)" }}>Songs in My Music with a separated lead-vocal stem. The stem is only read; your catalog is never changed.</div>
+        {guides == null ? <div className="vp-empty">Loading…</div> : !guides.length ? <div className="vp-empty">No song in My Music has a separated lead vocal.</div>
+          : <select className="au-input" value={guide} onChange={e => setGuide(e.target.value)} aria-label="Song">
+            {guides.map(g => <option key={g.song_id} value={g.song_id}>{g.title}{g.key ? ` · ${g.key}` : ""}{g.vocal_range ? ` · ${g.vocal_range}` : ""}</option>)}
+          </select>}
+      </div>}
+      {source === "files" && <><div className={`vp-drop ${drag ? "drag" : ""}`} onClick={() => input.current?.click()} role="button" tabIndex={0}
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") input.current?.click(); }}
         onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
         onDrop={e => { e.preventDefault(); setDrag(false); add(e.dataTransfer.files); }}
@@ -208,7 +238,7 @@ function Convert({ API, voice, engine, onEngine }) {
         <input ref={input} type="file" multiple accept=".wav,.flac,.mp3,.aif,.aiff,.ogg" hidden onChange={e => { add(e.target.files); e.target.value = ""; }} />
       </div>
       {files.length > 0 && <ul className="vp-files">{files.map((f, i) => <li key={i}>
-        <span>{f.name}</span><button className="bp-icon" onClick={() => setFiles(l => l.filter((_, k) => k !== i))} aria-label={`Remove ${f.name}`}>✕</button></li>)}</ul>}
+        <span>{f.name}</span><button className="bp-icon" onClick={() => setFiles(l => l.filter((_, k) => k !== i))} aria-label={`Remove ${f.name}`}>✕</button></li>)}</ul>}</>}
       <div className="au-caption" style={{ marginTop: 14 }}>Quality</div>
       <div className="au-segment" role="tablist" aria-label="Quality" style={{ marginTop: 6 }}>
         {[["fast", "Fast"], ["studio", "Studio"], ["ultra", "Ultra"]].map(([q, l]) =>
@@ -219,8 +249,10 @@ function Convert({ API, voice, engine, onEngine }) {
         <input type="range" min={-12} max={12} value={shift} onChange={e => setShift(+e.target.value)} style={{ accentColor: "var(--gold)" }} />
       </label>
       <button className="au-btn gold big" style={{ width: "100%", marginTop: 14 }}
-        disabled={!voice || !files.length || running || !engine?.installed} onClick={convert}>
-        {running ? "Converting…" : !files.length ? "Add vocals to convert"
+        disabled={!voice || running || !engine?.installed || (source === "files" ? !files.length : !guide)}
+        onClick={source === "files" ? convert : convertLibrary}>
+        {running ? "Converting…" : source === "library" ? `Convert this lead vocal to ${voice?.name || "a voice"}`
+          : !files.length ? "Add vocals to convert"
           : `Convert ${files.length} ${files.length === 1 ? "file" : "files"} to ${voice?.name || "a voice"}`}</button>
       {queue.length > 0 && <ul className="vp-queue" aria-label="Conversion queue">{queue.map((q, i) =>
         <li key={i} data-state={q.state}><span>{q.name}</span>

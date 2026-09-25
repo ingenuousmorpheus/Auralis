@@ -241,3 +241,37 @@ def test_conversions_never_run_two_at_once(client, tmp_path):
     assert all(_wait(client, j)["stage"] == "done" for j in jobs)
     assert client.fake.max_running == 1
     assert len(client.get("/voice/history", params={"profile_id": pid}).json()) == 3
+
+
+# ── V4: a My Music lead-vocal stem as the guide ────────────────────────────
+
+def test_library_lead_vocal_converts_without_touching_the_catalog(client, tmp_path, monkeypatch):
+    from auralis.api import artist
+    from auralis.artist.library import LibraryStore
+
+    root = tmp_path / "catalog" / "Test Song Stems"
+    root.mkdir(parents=True)
+    _write(root / "0 Lead Vocals.wav", _sing(6, seed=4))
+    _write(root / "1 Drums.wav", (0.1 * np.random.default_rng(2).standard_normal(SR * 6)).astype(np.float32))
+    snapshot = {str(p): (p.stat().st_size, p.stat().st_mtime_ns) for p in (tmp_path / "catalog").rglob("*")}
+    lib = LibraryStore(tmp_path / "artist")
+    lib.add_source(str(tmp_path / "catalog"))
+    lib.rescan()
+    monkeypatch.setattr(artist, "LIBRARY", lib)
+    take = _write(tmp_path / "take.wav", _sing(30))
+    with open(take, "rb") as f:
+        pid = client.post("/voice/profiles/from-take", data={"name": "Guide Voice", "consent_confirmed": "true"},
+                          files={"file": ("take.wav", f, "audio/wav")}).json()["profile"]["id"]
+    guides = client.get("/voice/library-guides").json()
+    assert len(guides) == 1 and guides[0]["title"]
+    r = client.post("/voice/convert-from-library", json={"profile_id": pid, "song_id": guides[0]["song_id"],
+                                                          "quality": "fast"})
+    assert r.status_code == 200, r.text
+    st = _wait(client, r.json()["job_id"])
+    assert st["stage"] == "done", st
+    items = client.get("/voice/history", params={"profile_id": pid}).json()
+    assert len(items) == 1 and "lead vocal" in items[0]["input_name"]
+    after = {str(p): (p.stat().st_size, p.stat().st_mtime_ns) for p in (tmp_path / "catalog").rglob("*")}
+    assert after == snapshot                                                      # read only
+    bad = client.post("/voice/convert-from-library", json={"profile_id": pid, "song_id": "0" * 12})
+    assert bad.status_code == 404
