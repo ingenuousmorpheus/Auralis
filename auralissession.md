@@ -2908,7 +2908,7 @@ The user chose "Neither yet": no purchase, no DiffSinger voicebank, no ACE-Step 
 
 ### What remains (engineering, no purchase needed)
 - ~~A live VRAM reading in the engines status~~, done in the follow-up commit: `nvidia-smi` (advisory warning, not a gate). On this host it showed the RTX 4070 with 5.4 of 12.0 GB VRAM free while LM Studio was resident, so Seed-VC (about 6 GB typical) now logs a warning; it has still converted successfully in earlier sessions.
-- Demos: seventh chords in played-chord reading; melody extraction from singing over a loud instrument needs separation (V5).
+- Demos: seventh chords played on an instrument are misread. Triads (I vi IV V, with or without a voice) read correctly, but a Dmaj7 Bm7 Gmaj7 A7 demo reads as another key's triads, because the overtones of the added sevenths outweigh the roots in chroma. Two fixes were tried in Session 017 and reverted, because neither fixed it and seventh templates made plain triads read as maj7: seventh templates, and a bass-note root preference (lowest strong note under MIDI 55). A real fix needs multi-pitch estimation (harmonic-sum / NMF note activations) before chord templating. Also melody extraction from singing over a loud instrument needs separation (V5).
 - Backing-vocal level presets per era; lyric phonemes (ARPAbet) for a future lyric singer, which would live in its worker.
 
 ### Future integration points (exact)
