@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import AtlasPanel from "./AtlasPanel.jsx";
 import BlueprintView from "./BlueprintView.jsx";
 import SongStudio from "./SongStudio.jsx";
+import DemoPanel from "./DemoPanel.jsx";
 import { Cover, Icon, apiJson, catalogStats, fmtTime } from "./ui.jsx";
 
 /* Create: the prompt / lyrics panel beside the workspace.
@@ -62,6 +63,7 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
   const [songJob, setSongJob] = useState(null);
   const [songStatus, setSongStatus] = useState(null);
   const [projectId, setProjectId] = useState(null);
+  const [showDemo, setShowDemo] = useState(false);
 
   useEffect(() => {
     apiJson(`${API}/artist/library`).then(d => setSongs(d.songs)).catch(() => setSongs([]));
@@ -156,13 +158,18 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
       <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto", padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
           <button className="au-btn" style={{ height: 48, borderRadius: 14 }}
-            onClick={() => setNotice("Turning a voice memo or rough demo into a full arrangement is a later build phase (Demo-to-Song).")}>
+            onClick={() => setShowDemo(v => !v)} aria-expanded={showDemo}>
             <Icon name="plus" size={16} width={2.4} />Demo</button>
           <button className="au-btn" style={{ height: 48, borderRadius: 14, background: "#0b1f27", borderColor: "#1d5566", color: "#aef0ff" }} onClick={() => go("voice")}>
             <Icon name="voice" size={16} />My Voice</button>
           <button className="au-btn" style={{ height: 48, borderRadius: 14 }} onClick={() => go("music")}><Icon name="plus" size={16} width={2.4} />My songs</button>
         </div>
 
+        {showDemo && <DemoPanel API={API} prompt={mode === "simple" ? idea : [styles, idea].filter(x => x.trim()).join(", ")}
+          lyrics={mode === "advanced" ? lyrics : ""} useDna={useDna} useVoice={useVoice} era={mode === "advanced" ? style.era : ""}
+          onClose={() => setShowDemo(false)}
+          onBlueprint={bp => { setBlueprint(bp); setView("blueprint"); setShowDemo(false);
+            setNotice(`Built around your demo: ${bp.demo.note_count} notes kept as the ${bp.demo.role} at ${bp.tempo} BPM in ${bp.key}.`); }} />}
         {mode === "simple" && <div className="au-card au-console" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <label htmlFor="idea" className="au-label">Song description</label>
           <textarea id="idea" rows={7} className="au-field" style={{ fontSize: 15 }} value={idea} onChange={e => setIdea(e.target.value)}

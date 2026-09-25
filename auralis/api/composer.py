@@ -5,7 +5,7 @@ Atlas and the trained voice range. Nothing is uploaded and no audio is made.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from ..composer import build_blueprint, regenerate, revise
@@ -591,3 +591,60 @@ async def similarity(req: SimilarityRequest):
     JOBS[job_id].update(kind="similarity-check", stage="queued", pct=0.0)
     asyncio.create_task(asyncio.to_thread(_run_similarity, job_id, req))
     return {"job_id": job_id, "status": "started"}
+
+
+# ── AU-13: demo → song ─────────────────────────────────────────────────────
+
+@router.post("/composer/demo")
+async def blueprint_from_demo(
+    file: UploadFile = File(...),
+    prompt: str = Form(""),
+    lyrics: str = Form(""),
+    role: str = Form("chorus"),
+    tempo: float | None = Form(None),
+    key: str | None = Form(None),
+    era: str | None = Form(None),
+    use_dna: bool = Form(True),
+    use_voice: bool = Form(True),
+):
+    """A voice memo or rough idea → a blueprint that keeps its melody (as the chorus or verse)."""
+    import asyncio
+    import os
+    import shutil
+    import tempfile
+
+    import soundfile as sf
+
+    from ..composer.demo import analyse_demo, build_from_demo
+    from .main import _safe_audio_name
+
+    if role not in ("chorus", "verse", "bridge"):
+        raise HTTPException(422, "The demo can become the chorus, a verse or the bridge.")
+    work = tempfile.mkdtemp(prefix="auralis_demo_")
+    try:
+        path = os.path.join(work, _safe_audio_name(file.filename, "demo.wav"))
+        with open(path, "wb") as out:
+            shutil.copyfileobj(file.file, out)
+        try:
+            audio, sr = sf.read(path, always_2d=True, dtype="float32")
+        except RuntimeError as exc:
+            raise HTTPException(415, "Auralis could not read that recording (use WAV, FLAC, OGG or MP3).") from exc
+        if len(audio) / sr > 180:
+            raise HTTPException(413, "Keep demos under 3 minutes: the idea, not the whole song.")
+        demo = await asyncio.to_thread(analyse_demo, audio, sr, tempo, key or None)
+        req = BlueprintRequest(prompt=prompt, lyrics=lyrics, use_dna=use_dna, use_voice=use_voice, era=era or None)
+        dna, voice = None, _voice(None) if use_voice else None
+        if use_dna:
+            from .artist import artist_dna
+
+            dna = artist_dna(None)
+        voice_range = (voice.pitch_low_midi, voice.pitch_high_midi) if voice else None
+        bp = await asyncio.to_thread(
+            build_from_demo, demo, prompt, lyrics, role, dna=dna, voice_range=voice_range,
+            voice_name=voice.name if voice else None, catalog=_catalog() if use_dna else None,
+            era=req.era)
+        return bp
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    finally:
+        shutil.rmtree(work, ignore_errors=True)

@@ -3,7 +3,7 @@
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
-**Last updated:** AU-10 Song Assembly + AU-12 Retrieval & Similarity Guard (Session 013), 2026-09-24
+**Last updated:** AU-13 Demo-to-Song (Session 014), 2026-09-25
 **Version in code:** `0.8.0` (`pyproject.toml`, `auralis/__init__.py`, `/health`, `frontend/package.json`)
 
 This document describes what the source code actually does, not what the README
@@ -174,6 +174,18 @@ Privacy properties the code enforces:
   - Vocals up to 6 minutes are converted in one Seed-VC call. Longer ones are cut in the middle of rests into pieces of about 4 minutes (`plan_chunks`).
 - **`SeedVCProvider.convert`** now decodes the subprocess output as UTF-8 with replacement. Seed-VC's progress bars used to crash the output reader under the Windows code page, which is why failures surfaced as "Unknown Seed-VC error" (gap 2, now fixed).
 
+### Demo-to-song (AU-13, Session 014)
+
+`composer/demo.py`:
+- **`analyse_demo`:**
+  - Melody notes come from the library's `analyze.melody_notes` (pYIN at 16 kHz).
+  - **Tempo from the sung notes** (`tempo_from_notes`: the densest inter-onset interval, folded into 65–145 BPM), then `fit_tempo` searches ±4% for the tempo that puts onsets on the eighth-note grid. The librosa beat tracker is only a fallback: on soft sung attacks it gave 3:2 and 4:3 readings.
+  - **Key from the notes** (`key_from_notes`: duration-weighted pitch classes against Krumhansl–Kessler profiles, the last note counted extra). Chroma of a sparse memo read D major as F♯ minor.
+  - A tempo or key the user sets wins.
+- **`melody_to_beats`** quantizes to a 16th grid, with the first note on the bar line.
+- **`harmonize`** gives one key triad per bar holding the most melody (by length, strong beats and root), starting and ending on the tonic and avoiding a third bar of the same chord; era colour comes from `blueprint._colour`.
+- **`build_from_demo`** builds the normal blueprint with the demo's tempo and key, sets every `role` section to the demo's length (4–16 bars) with those chords (`source: "demo"`), and stores the demo as `blueprint.demo.line` (the key is named `line` because the validator forbids `melody` and `notes` keys, which keep third-party material out). `arrange` puts that line into every `role` section and writes melodies only for the others.
+
 ### Song assembly (AU-10) and retrieval / originality (AU-12), Session 013
 
 - **`composer/assemble.py`:**
@@ -268,6 +280,7 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | | `GET /composer/sing/{job}/file/{name}` | `song`, `song_mix`, `vocal` (finished lead), `backing` (stereo bus), `double_l`, `double_r`, `harmony_high`, `harmony_low`, `adlibs`, `polished`, `converted`, `guide`, `preview`, `report`. Saving uses `/projects/{pid}/import-job` |
 | Song (AU-10) | `POST /composer/song` | Blueprint fields + `profile_id` (none = instrumental only), `production`, `quality`, `project_name` → background job `song-assembly`: blueprint → instrumental → vocals → master, all saved into a **new project** (stems tagged with their mix role, blueprint.json, lyrics.txt) |
 | | `GET /projects/{pid}/stems`, `POST /projects/{pid}/remix` | The project's mixable stems / rebuild the master from them with `{levels: {asset_id: {gain_db, mute, solo}}}` (job `project-remix`), saved as `remix_NN.wav` |
+| Demo (AU-13) | `POST /composer/demo` | Multipart demo (WAV/FLAC/OGG/MP3, ≤ 3 min) + `prompt`, `lyrics`, `role` (chorus / verse / bridge), optional `tempo`, `key`, `era`, `use_dna`, `use_voice` → a blueprint whose `role` sections keep the demo's melody and carry chords written under it |
 | Retrieval + originality (AU-12) | `POST /artist/retrieve` | `{bpm, mode, picked, n}` → the closest switched-on songs with reasons |
 | | `POST /composer/similarity` | `{blueprint, seed}` → job: chords vs every switched-on song, the take's melody guide vs the closest lead vocals (extracted once, cached), audio not compared |
 | | `POST /composer/blueprint` `influence` | `all` (whole-catalog DNA, default) / `closest` / `picked` + `influence_song_ids`: the DNA is focused on those songs, listed in `inputs.influences` and `why.influence` |
@@ -294,6 +307,7 @@ outputs become durable.
 | `frontend/src/App.jsx` | **Console shell (UI redesign, 2026-09-24):** `Sidebar` + page + `PlayerBar`. Pages: `create`, `music`, `studio`, `voice`, `projects`, and tools `master`, `mix`, `rack`, plus `harmony` only when `HarmonicReference.jsx` exists in the checkout (`import.meta.glob`, so the build never depends on it). `API = VITE_API ?? http://127.0.0.1:8001` |
 | `frontend/src/Shell.jsx` | `Sidebar`: 3D gold AURALIS wordmark that morphs on press, nav, tools, the trained voice card from `/voice/profiles`. `PlayerBar`: plays catalog songs through `/artist/library/songs/{id}/preview` |
 | `frontend/src/CreatePage.jsx` | Suno-style Simple/Advanced create panel (description or lyrics + styles, suggestions from real catalog aggregates, Era & style, Artist DNA / my-voice switches) beside the workspace. **Create builds a Song Blueprint (AU-04)**, and the workspace switches between *Blueprint* and *My songs*. **Make the whole song** (AU-10) runs the one-click job with a Screen-3 stage list and opens the result in the Song studio. An *Influence* choice (all my songs / closest 5 / songs I pick) steers the DNA; in pick mode, clicking songs on the right picks them (AU-12). No audio is rendered yet, and the page says so |
+| `frontend/src/DemoPanel.jsx` | Create's *Demo* button (AU-13): record the idea with the mic (the My Voice recorder) or choose a memo; it becomes the chorus, a verse or the bridge; an optional BPM; *Build the song around it* opens the blueprint, badged "melody from your demo" |
 | `frontend/src/SongStudio.jsx` | Song studio (AU-10, roadmap Screen 4) on a project: the masters with players and downloads; stems with player, level (−12…+12 dB), mute and solo; *Remix and master*; *Edit blueprint* |
 | `frontend/src/BlueprintView.jsx` + `Blueprint.css` | The editable blueprint (AU-04): title, tempo, key (24 keys), meter and length, groove, an energy-curve chart, and one card per section. Each card has type, bars, move/copy/remove, chord chips with Roman numerals, a Roman-numeral text field, harmony options, "New" chords, chords per bar, energy, arrangement role levels and the vocal register. Below: vocal constraints, arrangement palette, originality checks. "Why?" on every decision; save to an open or new project. Every edit calls `/composer/blueprint/revise`. A *Render instrumental* panel (AU-05) renders the blueprint, shows progress, plays the master, stems and melody guide, downloads WAV/MIDI, offers *New take* (next seed), warns when the blueprint changed since the render, and saves the render to a project |
 | `frontend/src/DnaPage.jsx` | "Artist DNA" page (AU-03): a card per trait with its headline, confidence, a small visual (tempo bands, key families, loops, forms, writing range drawn inside the trained voice range), a note, and playable evidence songs; the weighting rules in plain words |
@@ -485,7 +499,7 @@ Every decision writes a sentence to `why` (per field) or to the section's `why`,
 
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). After AU-09, **180** (200). After Session 013, **190** (210). The run with the local
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). After AU-09, **180** (200). After Session 013, **190** (210). After AU-13, **198** (218). The run with the local
 uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
@@ -497,6 +511,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
 | `tests/test_composer.py` (30, AU-04) | Brief words and explicit overrides. Lyrics headers (a lyric line starting with "hook" is not a header). 11 Roman-numeral realisations; key parsing. **Gate:** a complete blueprint: tempo, key, 4/4, intro to outro, chords filling every bar, arrangement roles, energy curve, vocal registers inside the voice, chorus above verse, a reason for every decision. No melody keys anywhere. DNA loops re-voiced and used once; chorus differs from verse. Key fits the voice and DNA; a narrow voice gets an honest stretch. An era without the DNA's mode follows the era. Tempo from DNA, half-time, prompt. Form from lyrics and length. Works with no DNA and no voice. Catalog twin flagged. Edits to key, tempo, sections and chords re-derive everything; invalid edits reported; regenerate changes one section type only. Save with revisions and lyrics, survives a new store, refused when closed. API: create, revise, 422, regenerate, save, read |
+| `tests/test_demo.py` (8, AU-13) | **Gate (ground truth):** four synthetic voice memos (no click, hiss added): a D-major hook at 100 BPM, the same hook in F at 88, an A-minor hook at 76, an eighth-note line at 92. Each gives the tempo within 1 BPM, the right key, every pitch kept and every onset on its 16th. The blueprint keeps the demo as every chorus (arranged melody = demo), chords written under it hold ≥70% of the notes, and the rest of the song exists. Harmonizer and key helpers; a clear error when there is no melody; API upload and a 422 for an invalid role |
 | `tests/test_song_assembly.py` (3, AU-10) | A song saved to a project with the blueprint and mix-role-tagged stems (individual backing parts not double-remixed), deep-verified. Remix with mute, level and solo; all-muted is refused; it works from a new store instance. **Gate (API):** one request → project with a downloadable finished WAV and editable stems → remix job → blueprint readable |
 | `tests/test_similarity.py` (7, AU-12) | Roman reduction and longest run. Retrieval ranks by closeness, counts double time, ignores switched-off songs, puts picks first. Focused DNA uses only its songs. **Gate:** a chord-for-chord copy is flagged (also inside the blueprint's own checks) while an unrelated song passes; a transposed 40-note melody copy is flagged while a different melody passes; step-only runs at chance level and repeated notes are never flagged |
 | `tests/test_vocal_production.py` (7, AU-09) | Parts follow the sections' backing-vocals levels and the production cap (lead = none, doubles = doubles only). Harmonies are 3–9 semitones from the lead, chord tones, in key and in range; doubles are the lead a few ms apart; ad-libs sit only in rests at the end. Pack/unpack restores exact positions and splits long calls. **Gate:** each rendered part is on its written pitch (≥90%, octave-strict, two keys); a song produces the lead, two doubles (panned left/right), two harmonies, ad-libs and the bus as separate files from one conversion call; "lead" production gives no backing |

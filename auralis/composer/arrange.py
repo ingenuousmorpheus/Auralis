@@ -226,6 +226,16 @@ def arrange(blueprint: dict, seed: int = 0) -> dict:
             tracks["fx"].append((start, 8.0, FX_DOWN, _vel("light", energy)))
 
     tracks["melody"] = _melody(blueprint, tonic, mode, rng)
+    demo = blueprint.get("demo")
+    if demo:                                            # AU-13: the demo's own melody, kept in its sections
+        keep = []
+        for s in sections:
+            start, end = (s["start_bar"] - 1) * 4.0, (s["start_bar"] - 1 + s["bars"]) * 4.0
+            if s["type"] == demo["role"]:
+                keep += [(start + b, l, p, v) for b, l, p, v in demo["line"] if b < s["bars"] * 4]
+            else:
+                keep += [n for n in tracks["melody"] if start <= n[0] < end]
+        tracks["melody"] = keep
     for k in tracks:
         tracks[k].sort()
     return {

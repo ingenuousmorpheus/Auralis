@@ -2730,3 +2730,50 @@ Continue the user's "next phases" request, doing the local phases first. AU-10 i
 
 ### Next Action
 AU-13 Demo-to-Song, then My Voice V4 (a My Music lead-vocal stem as the guide). Then ask about AU-11 and V5 models.
+
+## Session 014 — 2026-09-25 — AU-13 Demo-to-Song
+
+### Goal
+Continuing the user's "next phases" request: AU-13. Its gate: *a phone-quality voice memo or rough instrumental can become a structured Auralis project with an arrangement that preserves the requested musical idea.*
+
+### Starting State
+- `main` at `b4dcbc1` (AU-10 + AU-12), equal to `origin/main`.
+- The user's Harmonic Reference work was untouched.
+
+### Changed
+- **New `auralis/composer/demo.py`:**
+  - `analyse_demo`, `tempo_from_notes`, `fit_tempo`, `key_from_notes`
+  - `melody_to_beats`, `harmonize`, `build_from_demo`
+- **`auralis/composer/arrange.py`:** a blueprint's `demo.line` is sung in every section of its role.
+- **`POST /composer/demo`.**
+- **New `frontend/src/DemoPanel.jsx`:** Create's Demo button, which until now only said "later phase". The blueprint shows a "melody from your demo" badge and the demo's reasons.
+- **Tests and docs:** new `tests/test_demo.py` (8); architecture doc updated.
+
+### Verification
+- `tests/test_demo.py`: 8 passed.
+- **Ground truth:** four synthetic memos. Tempo within 0.1 BPM, key correct, all pitches kept, all onsets on their 16th. Covered: 100 BPM D major; 88 BPM F major; 76 BPM A minor; an eighth-note line at 92.
+- **Two first-draft failures, fixed before commit:**
+  - **Key:** chroma-based detection read the D-major hook as F♯ minor. It is now read from the sung notes against Krumhansl–Kessler profiles, with the final note weighted.
+  - **Tempo:** the onset-envelope beat tracker read 88 → 121 and 76 → 114 (4:3 and 3:2) on soft sung attacks, and a 1% error made late notes drift off their 16ths. Tempo now comes from the sung notes' inter-onset intervals, then a ±4% fit to the grid.
+- **Browser pane, real app** (restarted with the launcher scripts):
+  - A simulated microphone sang the D-major hook into the Demo panel for 21 s → *Build the song around it*.
+  - Result: "Built around your demo: 22 notes kept as the chorus at 100 BPM in D major".
+  - Chorus chords: Dmaj9 Bm9 Em9 F♯m9 Dmaj9 Bm9 F♯m9 Dmaj9; the badge "chorus melody from your demo" shows.
+
+### Result
+**AU-13 COMPLETE** against its gate, for sung or hummed demos: the idea's melody, tempo and key survive exactly into a full blueprint, and from there into the instrumental, vocals and project through AU-05 to AU-10.
+
+### Findings
+- **Rough instrumental demos:** chords are harmonized from the melody. Chords actually *played* in a demo are not detected yet, so a demo with its own chords gets a harmonization, not those chords.
+- **Timing:** the demo's first note is taken as the bar line. Pickups are quantized as if they started the bar.
+- **Sung memos need their own analysis tools:** the notes are a better clock and key source than onset envelopes or chroma.
+
+### Gate/Blocker
+- None for AU-13.
+- AU-11 (a generative-audio model) and My Voice V5 (vocal separation) need model downloads and licence checks, and wait for the user's go-ahead.
+
+### Do Not Redo
+- Demo tempo and key come from the sung notes; don't switch back to onset-envelope beat tracking or chroma for memos.
+
+### Next Action
+My Voice V4 (a My Music lead-vocal stem as the conversion guide). Then ask the user about AU-11 and V5 models.

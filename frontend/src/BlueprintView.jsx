@@ -458,6 +458,7 @@ export default function BlueprintView({ API, blueprint, setBlueprint }) {
           <span className="au-chip holo">{bp.era.name}</span>
           <span className="au-chip mono">revision {bp.revision}</span>
           {bp.inputs.used_dna && <span className="au-chip signal">Artist DNA · {bp.inputs.dna_songs} songs</span>}
+          {bp.demo && <span className="au-chip holo" title={(bp.why.demo || []).join(" ")}>{bp.demo.role} melody from your demo</span>}
           {bp.edited.length > 0 && <span className="au-chip">edited: {bp.edited.join(", ")}</span>}
           {busy && <span className="au-chip">updating…</span>}
         </div>
@@ -502,7 +503,7 @@ export default function BlueprintView({ API, blueprint, setBlueprint }) {
     <RenderPanel API={API} bp={bp} />
 
     <EnergyCurve bp={bp} />
-    <Why lines={[...(bp.why.influence || []), ...(bp.why.era || []), ...(bp.why.energy || []), ...(bp.why.harmony || [])]} />
+    <Why lines={[...(bp.why.demo || []), ...(bp.why.influence || []), ...(bp.why.era || []), ...(bp.why.energy || []), ...(bp.why.harmony || [])]} />
 
     <div className="au-caption">Sections</div>
     {bp.sections.map((s, i) => <Section key={s.id} s={s} index={i} count={bp.sections.length} busy={busy}
