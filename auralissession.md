@@ -2908,7 +2908,7 @@ The user chose "Neither yet": no purchase, no DiffSinger voicebank, no ACE-Step 
 
 ### What remains (engineering, no purchase needed)
 - ~~A live VRAM reading in the engines status~~, done in the follow-up commit: `nvidia-smi` (advisory warning, not a gate). On this host it showed the RTX 4070 with 5.4 of 12.0 GB VRAM free while LM Studio was resident, so Seed-VC (about 6 GB typical) now logs a warning; it has still converted successfully in earlier sessions.
-- Demos: seventh chords played on an instrument are misread. Triads (I vi IV V, with or without a voice) read correctly, but a Dmaj7 Bm7 Gmaj7 A7 demo reads as another key's triads, because the overtones of the added sevenths outweigh the roots in chroma. Two fixes were tried in Session 017 and reverted, because neither fixed it and seventh templates made plain triads read as maj7: seventh templates, and a bass-note root preference (lowest strong note under MIDI 55). A real fix needs multi-pitch estimation (harmonic-sum / NMF note activations) before chord templating. Also melody extraction from singing over a loud instrument needs separation (V5).
+- Demos: melody extraction from singing over a loud instrument needs separation (V5).
 - Lyric phonemes (ARPAbet) for a future lyric singer, which would live in its worker.
 
 ### Future integration points (exact)
@@ -2955,3 +2955,20 @@ The user chose "Neither yet": no purchase, no DiffSinger voicebank, no ACE-Step 
   - Triad demos are unchanged.
 
 **Tests:** `test_vocal_production`, `test_full_song` and `test_song_assembly` (21 passed); the frontend build is clean.
+
+### Session 017 (continued): seventh chords in demos, fixed
+
+**Completed:** played seventh chords are now read correctly.
+- **The actual cause:** neighbouring-semitone leakage in the 12-bins-per-octave CQT (D showed on C♯ and D♯), amplified by the log compression, plus third harmonics. These made plain triads look like maj7 and made seventh chords look like their upper triads. Overtones alone were not the problem.
+- **`demo.fundamentals`:** keeps pitch peaks only, then subtracts each lower note's harmonic series.
+- **`played_chords`:** matches triads and `maj7`, `7`, `m7` templates. A seventh has to beat the triad by 0.02.
+- **Change detection:** beat-level chord changes compare root and quality.
+- **Results:**
+  - Dmaj7 Bm7 Gmaj7 A7 now reads as D major, Imaj7 vi7 IVmaj7 V7, and the blueprint keeps it.
+  - Triads still read as I vi IV V with no sevenths.
+  - Singing over quiet triads now reads all 8 bars; it used to read 7, with a wrong minor v at the end.
+- **Tests:**
+  - New: `test_gate_seventh_chords_are_read_as_sevenths_and_triads_stay_triads`.
+  - Tightened: the voice-over-instrument test now requires at least 7 of 8 bars.
+  - `test_demo` 16 passed.
+- The earlier note under "What remains" (reverted attempts) is replaced by this entry.

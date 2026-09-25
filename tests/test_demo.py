@@ -144,7 +144,23 @@ def test_singing_over_a_quieter_instrument_reads_its_chords():
     demo = analyse_demo(_hiss(voice + _piano(D_PROG, 100, len(voice), level=0.08)), 44100)
     assert demo["has_instrument"] and demo["key"] == "D major" and abs(demo["tempo"] - 100) <= 1
     read = [c["roman"] for c in demo["played_chords"][:8]]
-    assert sum(a == b for a, b in zip(read, ["I", "vi", "IV", "V"] * 2)) >= 6
+    assert sum(a == b for a, b in zip(read, ["I", "vi", "IV", "V"] * 2)) >= 7
+
+
+SEVENTHS = [[50, 54, 57, 61], [47, 50, 54, 57], [43, 47, 50, 54], [45, 49, 52, 55]] * 2   # Dmaj7 Bm7 Gmaj7 A7
+
+
+def test_gate_seventh_chords_are_read_as_sevenths_and_triads_stay_triads():
+    demo = analyse_demo(_hiss(_piano(SEVENTHS, 100, int(44100 * 21))), 44100, tempo_hint=100)
+    assert demo["key"] == "D major"                              # not the upper triads' key (F♯ minor)
+    read = [c["roman"] for c in demo["played_chords"] if c["roman"]]
+    assert read == ["Imaj7", "vi7", "IVmaj7", "V7"] * 2
+    bp = build_from_demo(demo, "90s R&B", voice_range=(50.0, 72.0), era="90s_rnb")
+    chorus = next(s for s in bp["sections"] if s["type"] == "chorus")
+    assert chorus["progression"]["roman"] == ["Imaj7", "vi7", "IVmaj7", "V7"] * 2
+    assert "7" not in "".join(c["roman"] or "" for c in
+                              analyse_demo(_hiss(_piano(D_PROG, 100, int(44100 * 21))), 44100,
+                                           tempo_hint=100)["played_chords"])   # overtones aren't sevenths
 
 
 PICKUP = [(0, 0.5, 57), (0.5, 0.5, 59)] + [(b + 1, l, m) for b, l, m in HOOK]   # two eighths, then the hook

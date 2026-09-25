@@ -76,10 +76,33 @@ def fit_tempo(notes: list[dict], estimate: float) -> float:
 
 ROMAN = ["I", "♭II", "II", "♭III", "III", "IV", "♯IV", "V", "♭VI", "VI", "♭VII", "VII"]
 ACCOMP_RATIO = 0.25          # share of C2–C6 energy not explained by the melody → an instrument is playing
-CHORD_STRENGTH = 0.60        # triad-template similarity for a bar's chord to count as played (measured 0.65–0.72
-                             # for real played triads with overtones; the ratio gate guards voice-only memos)
+CHORD_STRENGTH = 0.60        # template similarity for a bar's chord to count as played (measured 0.97–1.0 for
+                             # played triads and sevenths once leakage and overtones are removed; 0.65–0.72
+                             # before that; the ratio and tonality gates guard voice-only memos)
 TONALITY = 15.0             # dB, strongest spectral bin over the median bin (played notes ≫ flat noise)
 CHORD_BINS = (36, 76)        # MIDI range used for chords: C2 up to E5 (bass and comping, not overtones)
+OVERTONE_DECAY = 0.6         # a played note's k-th harmonic is taken as about 0.6/k of it, and explained away
+SEVENTH_MARGIN = 0.02        # a seventh chord must beat its plain triad by this much template similarity
+
+
+def fundamentals(mag: np.ndarray) -> np.ndarray:
+    """Semitone CQT magnitudes with each note's overtones explained away, lowest note first.
+
+    A note also leaks into the neighbouring semitones (D shows on C♯ and D♯), and a
+    triad's third harmonics land on other pitch classes (F♯ in a D chord puts energy
+    on C♯); both read as sevenths. Keeping pitch peaks and subtracting the expected harmonic
+    series of every lower bin leaves roughly the notes actually played."""
+    # a note leaks into the semitones either side of it in a 12-per-octave CQT: keep pitch peaks only
+    up = np.vstack([mag[1:], np.zeros((1, mag.shape[1]))])
+    down = np.vstack([np.zeros((1, mag.shape[1])), mag[:-1]])
+    out = np.where((mag >= up) & (mag >= down), mag, 0.0)
+    for b in range(out.shape[0]):
+        for k in range(2, 9):
+            h = b + int(round(12 * np.log2(k)))
+            if h >= out.shape[0]:
+                break
+            out[h] = np.maximum(out[h] - OVERTONE_DECAY / k * out[b], 0.0)
+    return out
 
 
 def accompaniment(mono: np.ndarray, sr: int, notes: list[dict]) -> dict:
@@ -108,9 +131,10 @@ def accompaniment(mono: np.ndarray, sr: int, notes: list[dict]) -> dict:
     sounding = frame_total > 1e-3 * (frame_total.max() or 1.0)
     ratio = float((power * keep[band]).sum(axis=0)[sounding].sum() / max(frame_total[sounding].sum(), 1e-12))
     rest = mag * keep
+    played = fundamentals(rest)
     chroma = np.zeros((12, rest.shape[1]))
     for b in np.flatnonzero(band):
-        chroma[bins[b] % 12] += np.log1p(rest[b] * 50) * (1.5 if bins[b] < 55 else 1.0)   # bass counts more
+        chroma[bins[b] % 12] += np.log1p(played[b] * 50) * (1.5 if bins[b] < 55 else 1.0)   # bass counts more
     energy = chroma.sum(axis=0)
     loud = energy > 0.25 * (energy.max() or 1.0)
     # tonal = played notes stand far above the median bin; room noise and hiss are flat
@@ -125,20 +149,25 @@ def accompaniment(mono: np.ndarray, sr: int, notes: list[dict]) -> dict:
             "loud_start": float(times[np.argmax(loud)]) if loud.any() else 0.0}
 
 
-def _triad_templates():
+_SHAPES = (("maj", "", (0, 4, 7)), ("min", "", (0, 3, 7)),
+           ("maj", "maj7", (0, 4, 7, 11)), ("maj", "7", (0, 4, 7, 10)), ("min", "7", (0, 3, 7, 10)))
+
+
+def _triad_templates(sevenths: bool = False):
     names, vecs = [], []
     for root in range(12):
-        for quality, shape in (("maj", (0, 4, 7)), ("min", (0, 3, 7))):
+        for quality, ext, shape in _SHAPES if sevenths else _SHAPES[:2]:
             v = np.zeros(12)
-            v[[(root + i) % 12 for i in shape]] = [1.0, 0.8, 0.9]
-            names.append((root, quality))
+            v[[(root + i) % 12 for i in shape]] = [1.0, 0.8, 0.9, 0.8][:len(shape)]
+            names.append((root, quality, ext) if sevenths else (root, quality))
             vecs.append(v / np.linalg.norm(v))
     return names, np.array(vecs)
 
 
 def played_chords(acc: dict, bar_starts: list[float], bar_seconds: float, tonic: int) -> list[dict]:
-    """Chord per bar from the masked accompaniment: [{roman, root, quality, strength}] (roman None if unclear)."""
-    names, templates = _triad_templates()
+    """Chord per bar from the masked accompaniment: [{roman, root, quality, strength}] (roman None if unclear).
+    A seventh (``maj7``, ``7``, minor ``7``) is named only when it beats the plain triad clearly."""
+    names, templates = _triad_templates(sevenths=True)
     out = []
     energy = acc["chroma"].sum(axis=0)
     floor = 0.05 * (energy.max() or 1.0)
@@ -157,11 +186,15 @@ def played_chords(acc: dict, bar_starts: list[float], bar_seconds: float, tonic:
             out.append({"roman": None, "strength": 0.0})
             continue
         scores = templates @ (vec / norm)
-        best = int(np.argmax(scores))
-        root, quality = names[best]
+        triads = [i for i, n in enumerate(names) if not n[2]]
+        best = max(triads, key=lambda i: scores[i])
+        seventh = max((i for i, n in enumerate(names) if n[2]), key=lambda i: scores[i])
+        if scores[seventh] >= scores[best] + SEVENTH_MARGIN:
+            best = seventh
+        root, quality, ext = names[best]
         numeral = ROMAN[(root - tonic) % 12]
-        out.append({"roman": numeral.lower() if quality == "min" else numeral, "root": root, "quality": quality,
-                    "strength": round(float(scores[best]), 3)})
+        out.append({"roman": (numeral.lower() if quality == "min" else numeral) + ext, "root": root,
+                    "quality": quality, "seventh": ext or None, "strength": round(float(scores[best]), 3)})
     return out
 
 
@@ -273,7 +306,8 @@ def analyse_demo(audio: np.ndarray, sr: int, tempo_hint: float | None = None, ke
         grid0 = min(sound_start, first_note) if first_note is not None else sound_start
         rough = played_chords(acc, list(np.arange(grid0, duration, spb)), spb, tonic)       # per beat
         changes = [i for i in range(1, len(rough))
-                   if rough[i]["roman"] and rough[i - 1]["roman"] and rough[i]["roman"] != rough[i - 1]["roman"]]
+                   if rough[i]["roman"] and rough[i - 1]["roman"]
+                   and (rough[i]["root"], rough[i]["quality"]) != (rough[i - 1]["root"], rough[i - 1]["quality"])]
         phase = max(range(4), key=lambda ph: (sum(1 for i in changes if i % 4 == ph), -ph)) if changes else 0
         bar_line = grid0 + phase * spb
         pickup = 0.0
@@ -376,7 +410,7 @@ def build_from_demo(demo: dict, prompt: str = "", lyrics: str = "", role: str = 
     for i in range(min(bars, len(played))):
         c = played[i]
         if c.get("roman") and c.get("strength", 0) >= CHORD_STRENGTH:
-            roman[i] = c["roman"]                     # the chord you played, as played (triad)
+            roman[i] = c["roman"]                     # the chord you played, as played (seventh included)
             kept += 1
     if kept:
         why = [f"Chords: {kept} of {bars} bars keep the chord you played; "
