@@ -96,15 +96,18 @@ def _room(seed=11, seconds=0.9):
     return ir / np.sqrt((ir ** 2).sum(axis=0))
 
 
-def backing_bus(converted: dict[str, np.ndarray], out_dir: str) -> dict:
-    """Shape and pan the backing parts; write each stem and the summed bus."""
+def backing_bus(converted: dict[str, np.ndarray], out_dir: str, levels: dict | None = None) -> dict:
+    """Shape and pan the backing parts; write each stem and the summed bus.
+    ``levels`` ({part: dB}) adjusts parts relative to their producer defaults (LEVEL_DB)."""
+    levels = levels or {}
+    os.makedirs(out_dir, exist_ok=True)
     hp = butter(2, 180, "high", fs=SR, output="sos")
     ir = _room()
     stems, bus = {}, None
     for part, mono in converted.items():
         if part == "lead" or not np.any(np.abs(mono) > 1e-4):
             continue
-        x = sosfilt(hp, mono).astype(np.float32) * 10 ** (LEVEL_DB.get(part, -7) / 20)
+        x = sosfilt(hp, mono).astype(np.float32) * 10 ** ((LEVEL_DB.get(part, -7) + float(levels.get(part, 0.0))) / 20)
         pan = PAN.get(part, 0.0)
         left, right = np.sqrt((1 - pan) / 2), np.sqrt((1 + pan) / 2)          # constant-power pan
         st = np.stack([x * left, x * right], 1)

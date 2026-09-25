@@ -52,7 +52,8 @@ def plan_chunks(spans: list[tuple[float, float]], total: float) -> list[tuple[fl
 
 def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, quality: str = "studio",
               seed: int = 0, pitch_style: str = "natural", finish_preset: str = "smooth-rnb",
-              master: bool = True, production: str = "full", progress=None) -> dict:
+              master: bool = True, production: str = "full", backing_levels: dict | None = None,
+              backing_db: float = 4.0, progress=None) -> dict:
     """Run the full chain. ``render`` is an instrumental-render result (AU-05/06);
     ``convert(source, output, quality)`` converts one file into ``profile``'s voice."""
     from ..composer.arrange import arrange
@@ -141,7 +142,9 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
         "production": production, "parts": plan["counts"], "parts_why": plan["why"],
         "conversion_calls": calls, "backing_stems": {}, "backing_path": None,
     }
-    backing = backing_bus({k: v for k, v in converted_parts.items() if k != "lead"}, out_dir)
+    backing = backing_bus({k: v for k, v in converted_parts.items() if k != "lead"}, out_dir, backing_levels)
+    out["backing_levels"] = dict(backing_levels or {})
+    out["backing_db"] = float(backing_db)
     out["backing_stems"], out["backing_path"] = backing["stems"], backing["bus_path"]
 
     # ── the song: instrumental stems + the finished vocal ───────────────
@@ -159,7 +162,7 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
             # the backing stack sits under the lead: role "other" (dipped in the vocal band), lifted a little
             paths.append(out["backing_path"])
             roles[out["backing_path"]] = "other"
-            offsets[out["backing_path"]] = 4.0
+            offsets[out["backing_path"]] = float(backing_db)             # the stack under the lead (default +4)
         profile_id = (blueprint.get("arrangement") or {}).get("mix_profile") or "vocal-forward-rnb"
         mixed = run_pipeline(paths, os.path.join(out_dir, "song_master.wav"), profile_id=profile_id,
                              role_overrides=roles, gain_offsets=offsets,

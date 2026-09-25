@@ -13,6 +13,7 @@ export default function DemoPanel({ API, prompt, lyrics, useDna, useVoice, era, 
   const [file, setFile] = useState(null);
   const [role, setRole] = useState("chorus");
   const [tempo, setTempo] = useState("");
+  const [pickup, setPickup] = useState("");               // "" = auto
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const url = useRef(null);
@@ -38,6 +39,7 @@ export default function DemoPanel({ API, prompt, lyrics, useDna, useVoice, era, 
       form.append("prompt", prompt || ""); form.append("lyrics", lyrics || "");
       form.append("role", role); form.append("use_dna", String(useDna)); form.append("use_voice", String(useVoice));
       if (tempo) form.append("tempo", tempo);
+      if (pickup !== "") form.append("pickup_beats", pickup);
       if (era) form.append("era", era);
       onBlueprint(await apiJson(`${API}/composer/demo`, { method: "POST", body: form }));
     } catch (e) { setError(e.message); }
@@ -50,7 +52,7 @@ export default function DemoPanel({ API, prompt, lyrics, useDna, useVoice, era, 
       <button className="bp-icon" onClick={onClose} aria-label="Close demo panel">✕</button>
     </div>
     <div style={{ fontSize: 12, color: "var(--steel)", lineHeight: 1.5 }}>
-      Sing or hum the idea (a hook works best), or choose a voice memo. Auralis keeps your melody and builds the song around it.</div>
+      Sing or hum the idea (a hook works best), or play its chords, or both. Auralis keeps your melody and the chords you play, and builds the song around them. Singing over an instrument works best when your voice is clearly louder.</div>
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       {!rec && <button className="au-btn" onClick={record}><span className="vp-rec-dot small" aria-hidden="true" />{take ? "Record again" : "Record"}</button>}
       {rec && <><button className="au-btn light" onClick={stop}>Stop</button>
@@ -67,6 +69,13 @@ export default function DemoPanel({ API, prompt, lyrics, useDna, useVoice, era, 
       </div>
       <input className="au-input" style={{ width: 110, height: 34 }} placeholder="BPM (auto)" inputMode="numeric"
         value={tempo} onChange={e => setTempo(e.target.value.replace(/[^0-9.]/g, ""))} aria-label="Tempo (optional)" />
+      <select className="au-input" style={{ height: 34 }} value={pickup} onChange={e => setPickup(e.target.value)} aria-label="Where the first note falls">
+        <option value="">First note: auto</option>
+        <option value="0">First note on beat 1</option>
+        <option value="0.5">½-beat pickup</option>
+        <option value="1">1-beat pickup</option>
+        <option value="2">2-beat pickup</option>
+      </select>
     </div>
     {error && <div role="alert" className="bp-alert warn">{error}</div>}
     <button className="au-btn gold" onClick={build} disabled={busy || !(take || file)}>{busy ? "Listening to your demo…" : "Build the song around it"}</button>

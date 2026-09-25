@@ -68,8 +68,50 @@ def remix_stems(store, project_id: str) -> list:
     return list(latest.values())
 
 
+def backing_parts(store, project_id: str) -> list:
+    """The individual backing-vocal parts saved with a sung song (bv_* assets, newest per part)."""
+    latest = {}
+    for a in store.get(project_id).assets:
+        part = (a.metadata or {}).get("part", "")
+        if part.startswith("bv_"):
+            latest[part] = a
+    return list(latest.values())
+
+
+def rebalance_backing(store, project_id: str, levels: dict, out_dir: str) -> dict:
+    """Rebuild the backing-vocal bus from the saved parts with new levels ({part: dB},
+    part names without the bv_ prefix) and save it as the newest backing_vocals stem.
+    No re-singing: the parts are already converted, shaped and panned."""
+    import numpy as np
+    import soundfile as sf
+
+    parts = backing_parts(store, project_id)
+    if not parts:
+        raise ValueError("This song has no separate backing-vocal parts to rebalance.")
+    tracks, sr = [], 44100
+    for a in parts:
+        y, sr = sf.read(str(store.asset_path(project_id, a.id)), always_2d=True, dtype="float32")
+        db = float(levels.get(a.metadata["part"][3:], 0.0))
+        tracks.append(y * (0.0 if db <= -60 else 10 ** (min(12.0, db) / 20)))      # -60 dB or less = muted
+    bus = np.zeros((max(len(t) for t in tracks), max(t.shape[1] for t in tracks)), np.float32)
+    for t in tracks:
+        bus[: len(t), : t.shape[1]] += t
+    peak = float(np.abs(bus).max()) or 1.0
+    if peak > 0.89:
+        bus *= 0.89 / peak
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "backing_vocals_rebalanced.wav")
+    sf.write(path, bus, sr, subtype="PCM_24")
+    n = sum(1 for a in store.get(project_id).assets if (a.metadata or {}).get("part") == "backing_vocals")
+    asset = store.add_asset(project_id, path, "vocal", name=f"backing_vocals_{n + 1:02d}.wav",
+                            origin={"type": "rebalance"},
+                            metadata={"part": "backing_vocals", "mix_role": "other",
+                                      "levels": ", ".join(f"{k} {v:+g} dB" for k, v in sorted(levels.items()))})
+    return {"asset_id": asset.id, "name": asset.name}
+
+
 def remix_project(store, project_id: str, levels: dict | None, out_dir: str, profile_id: str | None = None,
-                  progress=None) -> dict:
+                  progress=None, backing_levels: dict | None = None) -> dict:
     """Re-mix and re-master from the project's own stems.
 
     ``levels``: {asset_id: {"gain_db": float, "mute": bool, "solo": bool}}.
@@ -78,6 +120,9 @@ def remix_project(store, project_id: str, levels: dict | None, out_dir: str, pro
     from ..engine.pipeline import run as run_pipeline
 
     levels = levels or {}
+    rebalanced = None
+    if backing_levels:
+        rebalanced = rebalance_backing(store, project_id, backing_levels, os.path.join(out_dir, "backing"))
     stems = remix_stems(store, project_id)
     if not stems:
         raise ValueError("This project has no mixable stems (make or save a song first).")
@@ -110,5 +155,6 @@ def remix_project(store, project_id: str, levels: dict | None, out_dir: str, pro
                              metadata={"part": "remix_master", "after_lufs": mixed.master_result.get("after_lufs"),
                                        "stems_used": len(used), "profile_id": profile_id})
     return {"master_asset_id": master.id, "name": master.name, "stems": used, "profile_id": profile_id,
+            "backing_rebalanced": rebalanced,
             "after_lufs": mixed.master_result.get("after_lufs"),
             "after_peak_db": mixed.master_result.get("after_peak_db")}

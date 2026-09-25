@@ -283,6 +283,8 @@ function SingPanel({ API, bp, renderJob }) {
   const [voice, setVoice] = useState("");
   const [quality, setQuality] = useState("studio");
   const [production, setProduction] = useState("full");
+  const [backingDb, setBackingDb] = useState(4);
+  const [partLevels, setPartLevels] = useState({});
   const [job, setJob] = useState(null);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
@@ -314,7 +316,8 @@ function SingPanel({ API, bp, renderJob }) {
     setError(""); setStatus(null);
     try {
       const r = await apiJson(`${API}/composer/sing`, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blueprint: bp, render_job_id: renderJob, profile_id: voice, quality, production }) });
+        body: JSON.stringify({ blueprint: bp, render_job_id: renderJob, profile_id: voice, quality, production,
+          backing_db: backingDb, backing_levels: partLevels }) });
       setJob(r.job_id);
     } catch (e) { setError(e.message); }
   };
@@ -343,6 +346,20 @@ function SingPanel({ API, bp, renderJob }) {
       </div>
       <span style={{ fontSize: 11, color: "var(--steel)" }}>each section's BGVs level sets how much it gets</span>
     </div>
+    {production !== "lead" && <details>
+      <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Backing mix</summary>
+      <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+        {[["__stack", "Whole stack"], ...Object.entries({ double_l: "Double (left)", double_r: "Double (right)", harmony_high: "Harmony (high)", harmony_low: "Harmony (low)", adlibs: "Ad-libs" })].map(([k, l]) => {
+          const val = k === "__stack" ? backingDb - 4 : (partLevels[k] ?? 0);
+          return <label key={k} className="bp-row" style={{ display: "grid", gridTemplateColumns: "120px minmax(0, 1fr) 52px", gap: 8 }}>
+            <span>{l}</span>
+            <input type="range" min={-12} max={6} step={1} value={val} aria-label={`${l} level`}
+              onChange={e => k === "__stack" ? setBackingDb(4 + +e.target.value) : setPartLevels(p => ({ ...p, [k]: +e.target.value }))} />
+            <span className="au-mono">{val > 0 ? "+" : ""}{val} dB</span>
+          </label>;
+        })}
+      </div>
+    </details>}
     <div style={{ fontSize: 12, color: "var(--steel)" }}>
       The built-in guide singer performs the melody{sungLines ? ", the rhythm of your lyrics and their vowels" : ""}; your voice model supplies the timbre.
       {sungLines && " It doesn't pronounce clear words yet: that needs a lyric-capable singing engine (planned)."} Close big apps first: the voice engine needs memory.</div>

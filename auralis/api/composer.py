@@ -284,6 +284,8 @@ class SingRequest(BaseModel):
     quality: str = "studio"
     master: bool = True
     production: str = "full"            # lead | doubles | harmony | full (capped per section by the blueprint)
+    backing_levels: dict[str, float] = {}   # per backing part, dB relative to the producer default
+    backing_db: float = Field(4.0, ge=-12, le=12)   # the whole backing stack against its mix role
 
 
 SING_FILES = {"song": "song_master_path", "song_mix": "song_mix_path", "vocal": "finished_path",
@@ -317,6 +319,8 @@ def _run_sing(job_id: str, req: SingRequest, render: dict | None):
 
         result = sing_song(req.blueprint, render, profile, os.path.join(job["work"], "song"), convert,
                            quality=req.quality, master=req.master, production=req.production,
+                           backing_levels={k: max(-18.0, min(12.0, float(v))) for k, v in req.backing_levels.items()},
+                           backing_db=req.backing_db,
                            progress=lambda stage, pct: job.update(stage=stage, pct=pct))
         job["result"] = result
         job.update(stage="done", pct=100.0)
@@ -468,6 +472,7 @@ async def make_song(req: SongRequest):
 class RemixRequest(BaseModel):
     levels: dict = {}
     profile_id: str | None = None
+    backing_levels: dict[str, float] | None = None   # rebalance the saved backing parts first
 
 
 @router.get("/projects/{project_id}/stems")
@@ -491,7 +496,7 @@ def _run_remix(job_id: str, project_id: str, req: RemixRequest):
     job = JOBS[job_id]
     try:
         job["result"] = remix_project(_projects(), project_id, req.levels, os.path.join(job["work"], "remix"),
-                                      profile_id=req.profile_id,
+                                      profile_id=req.profile_id, backing_levels=req.backing_levels,
                                       progress=lambda stage, pct: job.update(stage=stage, pct=pct))
         job.update(stage="done", pct=100.0)
     except Exception as exc:
@@ -606,8 +611,11 @@ async def blueprint_from_demo(
     era: str | None = Form(None),
     use_dna: bool = Form(True),
     use_voice: bool = Form(True),
+    pickup_beats: float | None = Form(None),
 ):
-    """A voice memo or rough idea → a blueprint that keeps its melody (as the chorus or verse)."""
+    """A voice memo or rough idea → a blueprint that keeps its melody (as the chorus or verse).
+    Chords played on an instrument are kept as played; ``pickup_beats`` overrides the
+    detected anacrusis (0 = the first note is on beat 1)."""
     import asyncio
     import os
     import shutil
@@ -631,7 +639,9 @@ async def blueprint_from_demo(
             raise HTTPException(415, "Auralis could not read that recording (use WAV, FLAC, OGG or MP3).") from exc
         if len(audio) / sr > 180:
             raise HTTPException(413, "Keep demos under 3 minutes: the idea, not the whole song.")
-        demo = await asyncio.to_thread(analyse_demo, audio, sr, tempo, key or None)
+        if pickup_beats is not None and not 0 <= pickup_beats <= 3.5:
+            raise HTTPException(422, "A pickup is between 0 and 3.5 beats.")
+        demo = await asyncio.to_thread(analyse_demo, audio, sr, tempo, key or None, pickup_beats)
         req = BlueprintRequest(prompt=prompt, lyrics=lyrics, use_dna=use_dna, use_voice=use_voice, era=era or None)
         dna, voice = None, _voice(None) if use_voice else None
         if use_dna:
@@ -648,3 +658,15 @@ async def blueprint_from_demo(
         raise HTTPException(422, str(exc)) from exc
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+@router.get("/projects/{project_id}/backing-parts")
+def project_backing_parts(project_id: str):
+    """A sung song's individual backing-vocal parts (for rebalancing without re-singing)."""
+    from ..composer.assemble import backing_parts
+
+    try:
+        parts = backing_parts(_projects(), project_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return [{"asset_id": a.id, "part": a.metadata["part"][3:], "name": a.name} for a in parts]

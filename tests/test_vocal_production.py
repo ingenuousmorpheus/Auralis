@@ -144,3 +144,31 @@ def test_gate_song_produces_lead_doubles_harmonies_as_separate_stems(tmp_path):
     lead_only = sing_song(bp, render, profile, str(tmp_path / "song2"), identity, quality="fast",
                           production="lead", master=False)
     assert lead_only["backing_stems"] == {} and lead_only["backing_path"] is None
+
+
+# ── Session 017: adjustable backing-vocal levels ───────────────────────────
+
+def test_backing_levels_move_each_part_by_its_db(tmp_path):
+    from auralis.voice.vocal_production import backing_bus
+
+    tone = (0.2 * np.sin(2 * np.pi * 330 * np.arange(44100 * 2) / 44100)).astype(np.float32)
+    base = backing_bus({"harmony_high": tone}, str(tmp_path / "a"))
+    louder = backing_bus({"harmony_high": tone}, str(tmp_path / "b"), levels={"harmony_high": 6.0})
+    ra = np.sqrt(np.mean(sf.read(base["stems"]["harmony_high"])[0] ** 2))
+    rb = np.sqrt(np.mean(sf.read(louder["stems"]["harmony_high"])[0] ** 2))
+    assert 20 * np.log10(rb / ra) == pytest.approx(6.0, abs=0.2)
+
+
+def test_sing_song_records_backing_mix_settings(tmp_path):
+    from auralis.generation import render_instrumental
+    from auralis.voice import VoiceProfileStore
+    from auralis.voice.full_song import sing_song
+
+    bp = _short()
+    render = render_instrumental(bp, str(tmp_path / "r"), master=False)
+    ref = tmp_path / "ref.wav"
+    sf.write(ref, (0.2 * np.sin(2 * np.pi * 220 * np.arange(44100 * 8) / 44100)).astype(np.float32), 44100)
+    profile = VoiceProfileStore(tmp_path / "v").create("Stand In", str(ref), True)
+    out = sing_song(bp, render, profile, str(tmp_path / "song"), lambda s, d, q: shutil.copyfile(s, d),
+                    quality="fast", master=False, backing_levels={"adlibs": -6.0}, backing_db=1.0)
+    assert out["backing_levels"] == {"adlibs": -6.0} and out["backing_db"] == 1.0

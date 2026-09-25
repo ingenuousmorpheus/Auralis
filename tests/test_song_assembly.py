@@ -124,3 +124,30 @@ def test_gate_one_prompt_to_finished_song_api(tmp_path, monkeypatch):
         time.sleep(0.5)
     assert rs["stage"] == "done", rs
     assert client.get(f"/projects/{res['project_id']}/blueprint").status_code == 200
+
+
+def test_rebalance_backing_parts_without_resinging(made, tmp_path):
+    from auralis.composer.assemble import backing_parts, rebalance_backing
+
+    bp, render, song = made
+    store = ProjectStore(tmp_path / "p")
+    pid = save_song_to_project(store, "Rebalance", bp, render, song)["project_id"]
+    parts = {a.metadata["part"][3:] for a in backing_parts(store, pid)}
+    assert parts == {"double_l", "double_r", "harmony_high", "harmony_low", "adlibs"}
+    before = {a.metadata["part"]: a.id for a in remix_stems(store, pid)}["backing_vocals"]
+    out = remix_project(store, pid, {}, str(tmp_path / "w"),
+                        backing_levels={"harmony_high": -60, "harmony_low": -60, "adlibs": -60})
+    assert out["backing_rebalanced"]["name"].startswith("backing_vocals_")
+    after = {a.metadata["part"]: a.id for a in remix_stems(store, pid)}["backing_vocals"]
+    assert after != before and after == out["backing_rebalanced"]["asset_id"]      # the remix used the new bus
+    # doubles only: the new bus equals the sum of the two doubles (shaped parts are reused, not re-sung)
+    import soundfile as sf
+    parts_by = {a.metadata["part"]: a for a in backing_parts(store, pid)}
+    dl = sf.read(str(store.asset_path(pid, parts_by["bv_double_l"].id)))[0]
+    dr = sf.read(str(store.asset_path(pid, parts_by["bv_double_r"].id)))[0]
+    bus = sf.read(str(store.asset_path(pid, after)))[0]
+    expect = dl + dr
+    expect *= min(1.0, 0.89 / np.abs(expect).max())
+    assert np.allclose(bus, expect, atol=2e-4)
+    with pytest.raises(ValueError, match="no separate backing"):
+        rebalance_backing(store, save_song_to_project(store, "No Vox", bp, render, None)["project_id"], {}, str(tmp_path / "x"))

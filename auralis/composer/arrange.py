@@ -227,15 +227,18 @@ def arrange(blueprint: dict, seed: int = 0) -> dict:
 
     tracks["melody"] = _melody(blueprint, tonic, mode, rng)
     demo = blueprint.get("demo")
-    if demo:                                            # AU-13: the demo's own melody, kept in its sections
-        keep = []
-        for s in sections:
-            start, end = (s["start_bar"] - 1) * 4.0, (s["start_bar"] - 1 + s["bars"]) * 4.0
-            if s["type"] == demo["role"]:
-                keep += [(start + b, l, p, v) for b, l, p, v in demo["line"] if b < s["bars"] * 4]
-            else:
-                keep += [n for n in tracks["melody"] if start <= n[0] < end]
-        tracks["melody"] = keep
+    if demo and demo.get("line"):                       # AU-13: the demo's own melody, kept in its sections
+        line = [tuple(n) for n in demo["line"]]
+        lead_in = -min([b for b, _, _, _ in line] + [0.0])     # pickup length in beats (anacrusis)
+        demo_starts = [(s["start_bar"] - 1) * 4.0 for s in sections if s["type"] == demo["role"]]
+        demo_spans = [(d, d + s["bars"] * 4.0) for d, s in
+                      zip(demo_starts, [s for s in sections if s["type"] == demo["role"]])]
+        keep = [n for n in tracks["melody"]
+                if not any(d - lead_in <= n[0] < e for d, e in demo_spans)          # demo sections + their pickups
+                and not any(n[0] < d - lead_in < n[0] + n[1] for d, _ in demo_spans)]  # nor ring into a pickup
+        for d, e in demo_spans:
+            keep += [(d + b, l, p, v) for b, l, p, v in line if d + b >= 0 and d + b < e]
+        tracks["melody"] = sorted(keep)
     for k in tracks:
         tracks[k].sort()
     return {

@@ -14,6 +14,8 @@ export default function SongStudio({ API, projectId, onEditBlueprint }) {
   const [project, setProject] = useState(null);
   const [stems, setStems] = useState([]);
   const [levels, setLevels] = useState({});
+  const [bvParts, setBvParts] = useState([]);
+  const [bvLevels, setBvLevels] = useState({});
   const [job, setJob] = useState(null);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
@@ -22,6 +24,7 @@ export default function SongStudio({ API, projectId, onEditBlueprint }) {
     const [p, s] = await Promise.all([apiJson(`${API}/projects/${projectId}`), apiJson(`${API}/projects/${projectId}/stems`)]);
     setProject(p);
     setStems(s.sort((a, b) => ORDER.indexOf(a.part) - ORDER.indexOf(b.part)));
+    setBvParts(await apiJson(`${API}/projects/${projectId}/backing-parts`).catch(() => []));
   };
   useEffect(() => { load().catch(e => setError(e.message)); }, [API, projectId]);
   useEffect(() => {
@@ -44,7 +47,7 @@ export default function SongStudio({ API, projectId, onEditBlueprint }) {
     setError(""); setStatus(null);
     try {
       const r = await apiJson(`${API}/projects/${projectId}/remix`, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ levels }) });
+        body: JSON.stringify({ levels, backing_levels: Object.keys(bvLevels).length ? bvLevels : null }) });
       setJob(r.job_id);
     } catch (e) { setError(e.message); }
   };
@@ -100,6 +103,25 @@ export default function SongStudio({ API, projectId, onEditBlueprint }) {
           </span>
         </div>;
       })}
+      {bvParts.length > 0 && <details style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Backing vocal parts</summary>
+        <div style={{ fontSize: 12, color: "var(--steel)", margin: "6px 0" }}>Rebalance the parts inside the backing stack (no re-singing), then Remix and master.</div>
+        {bvParts.map(p => {
+          const v = bvLevels[p.part] ?? 0;
+          const muted = v <= -60;
+          return <div key={p.asset_id} style={{ display: "grid", gridTemplateColumns: "120px minmax(0, 1fr) 150px auto", gap: 10, alignItems: "center", marginTop: 8, opacity: muted ? 0.45 : 1 }}>
+            <span style={{ fontSize: 13 }}>{{ double_l: "Double (left)", double_r: "Double (right)", harmony_high: "Harmony (high)", harmony_low: "Harmony (low)", adlibs: "Ad-libs" }[p.part] || p.part}</span>
+            <audio controls preload="none" src={asset(p.asset_id)} style={{ width: "100%", height: 30 }} aria-label={`Play ${p.part}`} />
+            <label className="bp-row" style={{ gap: 6 }}>
+              <input type="range" min={-12} max={6} step={1} value={muted ? -12 : v} disabled={muted} aria-label={`${p.part} level`}
+                onChange={e => setBvLevels(l => ({ ...l, [p.part]: +e.target.value }))} />
+              <span className="au-mono" style={{ width: 44 }}>{muted ? "off" : `${v > 0 ? "+" : ""}${v} dB`}</span>
+            </label>
+            <button className="bp-icon" aria-pressed={muted} title="Mute this part"
+              onClick={() => setBvLevels(l => ({ ...l, [p.part]: muted ? 0 : -60 }))}>M</button>
+          </div>;
+        })}
+      </details>}
     </div>
   </div>;
 }
