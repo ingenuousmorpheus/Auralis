@@ -84,4 +84,4 @@ To install (only with the user's go-ahead):
 
 - No engine is downloaded or installed.
 - No vocal-separation provider (V5): Demucs weights are non-commercial, see `MODEL_OPTIONS.md`. It would be a new kind (`separator`) with the same pattern.
-- VRAM is not measured live. The memory gate uses system commit memory, which is what failed on this host. A GPU query (for example `nvidia-smi`) could be added to `status()` later.
+- VRAM is read live from `nvidia-smi` (`lifecycle.gpu_memory`, read-only) and shown in Studio → Engines. It is **advisory**: a heavy engine starting with less free VRAM than its typical need logs a warning, but is not refused, because drivers can spill into shared memory. The hard gate stays system commit memory, which is what actually failed on this host.

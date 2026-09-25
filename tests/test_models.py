@@ -346,3 +346,16 @@ def test_api_engines(monkeypatch):
     assert client.post("/models/policy", json={"policy": "balanced"}).json()["policy"] == "balanced"
     assert client.post("/models/select", json={"kind": "guide_singer", "model_id": "diffsinger"}).status_code == 422
     assert client.post("/models/release").status_code == 200
+
+
+def test_low_vram_is_logged_not_refused():
+    m = ModelManager(memory=None, gpu=lambda: {"name": "GPU", "total_gb": 12.0, "used_gb": 9.0, "free_gb": 3.0})
+    big = FakeModel("big")
+    big.spec.vram_gb = 8.0
+    m.register(big)
+    with m.use("big"):
+        pass
+    warnings = [e for e in m.events if e["event"] == "warning"]
+    assert warnings and "3.0 GB VRAM free" in warnings[0]["detail"]
+    assert m.status()["gpu"]["free_gb"] == 3.0
+    assert ModelManager(memory=None, gpu=None).status()["gpu"] is None

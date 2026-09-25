@@ -2907,7 +2907,7 @@ The user chose "Neither yet": no purchase, no DiffSinger voicebank, no ACE-Step 
 - **Design decision still open:** whether generated sections (ACE-Step) should ever replace the synth by default, or only when chosen per section. Currently per section, off by default.
 
 ### What remains (engineering, no purchase needed)
-- A live VRAM reading (e.g. `nvidia-smi`) in the engines status. The gate uses commit memory, which is what failed on this host.
+- ~~A live VRAM reading in the engines status~~, done in the follow-up commit: `nvidia-smi` (advisory warning, not a gate). On this host it showed the RTX 4070 with 5.4 of 12.0 GB VRAM free while LM Studio was resident, so Seed-VC (about 6 GB typical) now logs a warning; it has still converted successfully in earlier sessions.
 - Demos: seventh chords in played-chord reading; melody extraction from singing over a loud instrument needs separation (V5).
 - Backing-vocal level presets per era; lyric phonemes (ARPAbet) for a future lyric singer, which would live in its worker.
 

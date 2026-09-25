@@ -190,7 +190,7 @@ Privacy properties the code enforces:
   - **unloads other resident models**
   - **loads** this one if it is resident
   - **releases per policy:** `balanced` unloads after the job (default); `keep_warm` keeps it until another model needs the slot or `idle_seconds` pass; `low_memory` is like balanced with the stricter memory rule
-  It also offers `release_all()`, `status()` and an event log.
+  It also offers `release_all()`, `status()` and an event log. `status()` includes live GPU memory from `nvidia-smi` (`gpu_memory`, read-only). Low free VRAM is logged as an advisory warning when a heavy engine starts, never refused (Session 017 follow-up).
 - **`interfaces`:** `VoiceConverter.convert(ConversionRequest)`, `GuideSinger.sing(score, total_seconds, seed)` (with `sings_words`, `languages`), `SectionGenerator.generate(SectionRequest) → SectionResult`, and `section_prompt(blueprint, section)` (never mentions vocals).
 - **`builtin`:**
   - `SeedVCConverter` wraps `SeedVCProvider` unchanged (heavy, not resident; about 6 GB minimum, 9 GB typical commit; `provider_getter` points it at the API's shared provider)

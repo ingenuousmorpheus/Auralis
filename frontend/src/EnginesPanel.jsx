@@ -29,7 +29,10 @@ export default function EnginesPanel({ API }) {
         <div className="au-label">Engines</div>
         <div style={{ fontSize: 12, color: "var(--steel)" }}>
           One heavy engine uses the GPU at a time. {st.busy ? `Busy: ${byId[st.busy]?.name || st.busy}${st.busy_with ? ` (${st.busy_with})` : ""}.` : "Idle."}
-          {st.free_commit_gb != null && ` ${st.free_commit_gb} GB memory free.`}</div>
+          {st.free_commit_gb != null && ` ${st.free_commit_gb} GB memory free.`}
+          {st.gpu && ` ${st.gpu.name}: ${st.gpu.free_gb} of ${st.gpu.total_gb} GB VRAM free.`}</div>
+        {st.events?.filter(e => e.event === "warning").slice(-1).map((e, i) =>
+          <div key={i} style={{ fontSize: 12, color: "var(--gold-light)" }}>{e.model}: {e.detail}</div>)}
       </div>
       <button className="au-btn" onClick={() => post("release")} disabled={!st.loaded.length}
         title="Unload every engine that is holding GPU memory">{st.loaded.length ? `Free the GPU (${st.loaded.join(", ")})` : "GPU is free"}</button>

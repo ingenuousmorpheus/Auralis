@@ -109,6 +109,25 @@ def free_commit_gb() -> float | None:
             return None
 
 
+def gpu_memory() -> dict | None:
+    """Live GPU memory from ``nvidia-smi`` (read-only), or None when unavailable."""
+    import shutil
+    import subprocess
+
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return None
+    try:
+        out = subprocess.run([exe, "--query-gpu=name,memory.total,memory.used,memory.free",
+                              "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        name, total, used, free = [x.strip() for x in out.stdout.strip().splitlines()[0].split(",")]
+        return {"name": name, "total_gb": round(float(total) / 1024, 1), "used_gb": round(float(used) / 1024, 1),
+                "free_gb": round(float(free) / 1024, 1)}
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        return None
+
+
 @dataclass
 class _State:
     loaded: set = field(default_factory=set)
@@ -118,13 +137,15 @@ class _State:
 
 
 class ModelManager:
-    def __init__(self, memory=free_commit_gb, policy: str = "balanced", idle_seconds: float = 600.0):
+    def __init__(self, memory=free_commit_gb, policy: str = "balanced", idle_seconds: float = 600.0,
+                 gpu=gpu_memory):
         self._models: dict[str, ManagedModel] = {}
         self._slot = threading.Condition(threading.RLock())
         self._owner: int | None = None        # thread id holding the slot
         self._depth = 0
         self._state = _State()
         self._memory = memory
+        self._gpu = gpu
         self.policy = policy
         self.idle_seconds = idle_seconds
         self.events: deque = deque(maxlen=200)
@@ -172,6 +193,7 @@ class ModelManager:
                 self._sweep_idle()
                 if model.spec.heavy:
                     self._check_memory(model)
+                    self._check_vram(model)
                 for other in list(self._state.loaded):
                     if other != model_id:
                         self._unload(other, reason=f"making room for {model.spec.name}")
@@ -219,6 +241,14 @@ class ModelManager:
                 f"{model.spec.name} needs about {need:.0f} GB of free memory but only {free:.1f} GB is free. "
                 "Close large apps (for example a local LLM) or enlarge the page file, then try again.")
 
+    def _check_vram(self, model: ManagedModel) -> None:
+        """Advisory only: drivers can spill into shared memory, so low VRAM is logged, not refused."""
+        gpu = self._gpu() if self._gpu else None
+        if gpu and model.spec.vram_gb and gpu["free_gb"] < model.spec.vram_gb:
+            self._log("warning", model.spec.id,
+                      f"{gpu['free_gb']} GB VRAM free, typically needs {model.spec.vram_gb:g} GB "
+                      f"(another app is using {gpu['used_gb']} GB); it may run slower")
+
     def _unload(self, model_id: str, reason: str) -> None:
         if model_id in self._state.loaded:
             t = time.monotonic()
@@ -252,6 +282,7 @@ class ModelManager:
                 "busy": self._state.holder, "busy_with": self._state.holder_label,
                 "loaded": sorted(self._state.loaded),
                 "free_commit_gb": None if free is None else round(free, 1),
+                "gpu": self._gpu() if self._gpu else None,
                 "models": [dict(m.spec.to_dict(), installed=m.is_installed(), loaded=m.spec.id in self._state.loaded)
                            for m in self._models.values()],
                 "events": list(self.events)[-20:],
