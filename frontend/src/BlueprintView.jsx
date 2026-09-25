@@ -354,6 +354,7 @@ function SingPanel({ API, bp, renderJob }) {
     </div>
     {production !== "lead" && <details>
       <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Backing mix</summary>
+      <div style={{ fontSize: 11, color: "var(--steel)", marginTop: 6 }}>0 dB is the {bp.era?.name || "era"} balance; move a part from there.</div>
       <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
         {[["__stack", "Whole stack"], ...Object.entries({ double_l: "Double (left)", double_r: "Double (right)", harmony_high: "Harmony (high)", harmony_low: "Harmony (low)", adlibs: "Ad-libs" })].map(([k, l]) => {
           const val = k === "__stack" ? backingDb - 4 : (partLevels[k] ?? 0);

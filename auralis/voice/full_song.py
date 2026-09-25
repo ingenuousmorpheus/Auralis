@@ -149,8 +149,10 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
         "production": production, "parts": plan["counts"], "parts_why": plan["why"],
         "conversion_calls": calls, "backing_stems": {}, "backing_path": None,
     }
-    backing = backing_bus({k: v for k, v in converted_parts.items() if k != "lead"}, out_dir, backing_levels)
+    era = (blueprint.get("era") or {}).get("id") if isinstance(blueprint.get("era"), dict) else blueprint.get("era")
+    backing = backing_bus({k: v for k, v in converted_parts.items() if k != "lead"}, out_dir, backing_levels, era=era)
     out["backing_levels"] = dict(backing_levels or {})
+    out["backing_era"] = era
     out["backing_db"] = float(backing_db)
     out["backing_stems"], out["backing_path"] = backing["stems"], backing["bus_path"]
 

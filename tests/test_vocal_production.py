@@ -159,6 +159,26 @@ def test_backing_levels_move_each_part_by_its_db(tmp_path):
     assert 20 * np.log10(rb / ra) == pytest.approx(6.0, abs=0.2)
 
 
+def test_era_presets_shift_backing_parts_and_user_levels_stay_relative(tmp_path):
+    from auralis.theory.atlas import eras
+    from auralis.voice.vocal_production import ERA_BACKING_DB, backing_bus, part_level_db
+
+    assert set(ERA_BACKING_DB) == {e["id"] for e in eras()}          # every atlas era has a preset
+    assert part_level_db("harmony_high", None) == -7.0 and part_level_db("harmony_high", "unknown") == -7.0
+    assert part_level_db("harmony_high", "90s_rnb") > part_level_db("harmony_high", "neo_soul")
+    assert part_level_db("double_l", "neo_soul") < part_level_db("double_l", "2000s_rnb")
+
+    tone = (0.2 * np.sin(2 * np.pi * 330 * np.arange(44100 * 2) / 44100)).astype(np.float32)
+
+    def rms(out):
+        return np.sqrt(np.mean(sf.read(out["stems"]["harmony_high"])[0] ** 2))
+    plain = rms(backing_bus({"harmony_high": tone}, str(tmp_path / "a")))
+    nineties = rms(backing_bus({"harmony_high": tone}, str(tmp_path / "b"), era="90s_rnb"))
+    user = rms(backing_bus({"harmony_high": tone}, str(tmp_path / "c"), levels={"harmony_high": -3.0}, era="90s_rnb"))
+    assert 20 * np.log10(nineties / plain) == pytest.approx(ERA_BACKING_DB["90s_rnb"]["harmonies"], abs=0.2)
+    assert 20 * np.log10(user / nineties) == pytest.approx(-3.0, abs=0.2)
+
+
 def test_sing_song_records_backing_mix_settings(tmp_path):
     from auralis.generation import render_instrumental
     from auralis.voice import VoiceProfileStore
@@ -172,3 +192,4 @@ def test_sing_song_records_backing_mix_settings(tmp_path):
     out = sing_song(bp, render, profile, str(tmp_path / "song"), lambda s, d, q: shutil.copyfile(s, d),
                     quality="fast", master=False, backing_levels={"adlibs": -6.0}, backing_db=1.0)
     assert out["backing_levels"] == {"adlibs": -6.0} and out["backing_db"] == 1.0
+    assert out["backing_era"] == bp["era"]["id"]

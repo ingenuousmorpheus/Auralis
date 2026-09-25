@@ -23,6 +23,23 @@ SR = 44100
 GAP = 1.5                         # seconds of silence between packed pieces
 PAN = {"double_l": -0.75, "double_r": 0.75, "harmony_high": 0.35, "harmony_low": -0.35, "adlibs": 0.2}
 LEVEL_DB = {"double_l": -5.0, "double_r": -5.0, "harmony_high": -7.0, "harmony_low": -8.0, "adlibs": -6.0}
+# How each era sits its backing stack, in dB on top of LEVEL_DB (atlas era ids).
+# The user's own levels still apply on top of this.
+ERA_BACKING_DB = {
+    "70s_soul":        {"doubles": -2.0, "harmonies": 1.5, "adlibs": -1.0},   # group harmonies, few doubles
+    "80s_quiet_storm": {"doubles": -1.0, "harmonies": 1.0, "adlibs": -2.0},   # lush, smooth harmony pads
+    "90s_rnb":         {"doubles": 0.0, "harmonies": 2.0, "adlibs": 1.0},     # big stacked hooks, answered ad-libs
+    "neo_soul":        {"doubles": -3.0, "harmonies": -1.0, "adlibs": 0.0},   # intimate, lead up front
+    "2000s_rnb":       {"doubles": 1.0, "harmonies": 1.0, "adlibs": 1.0},     # tight glossy stacks
+    "modern_alt_rnb":  {"doubles": 0.0, "harmonies": -2.0, "adlibs": -1.0},   # textural, lead-focused
+}
+_GROUP = {"double_l": "doubles", "double_r": "doubles", "harmony_high": "harmonies",
+          "harmony_low": "harmonies", "adlibs": "adlibs"}
+
+
+def part_level_db(part: str, era: str | None = None) -> float:
+    """A backing part's default level: the producer default shifted by the era's taste."""
+    return LEVEL_DB.get(part, -7.0) + ERA_BACKING_DB.get(era or "", {}).get(_GROUP.get(part, ""), 0.0)
 
 
 def pack(pieces: list[tuple[str, np.ndarray, int]], max_seconds: float) -> list[dict]:
@@ -96,9 +113,11 @@ def _room(seed=11, seconds=0.9):
     return ir / np.sqrt((ir ** 2).sum(axis=0))
 
 
-def backing_bus(converted: dict[str, np.ndarray], out_dir: str, levels: dict | None = None) -> dict:
+def backing_bus(converted: dict[str, np.ndarray], out_dir: str, levels: dict | None = None,
+                era: str | None = None) -> dict:
     """Shape and pan the backing parts; write each stem and the summed bus.
-    ``levels`` ({part: dB}) adjusts parts relative to their producer defaults (LEVEL_DB)."""
+    ``levels`` ({part: dB}) adjusts parts relative to their defaults (``part_level_db``:
+    LEVEL_DB shifted by ``era``'s ERA_BACKING_DB)."""
     levels = levels or {}
     os.makedirs(out_dir, exist_ok=True)
     hp = butter(2, 180, "high", fs=SR, output="sos")
@@ -107,7 +126,7 @@ def backing_bus(converted: dict[str, np.ndarray], out_dir: str, levels: dict | N
     for part, mono in converted.items():
         if part == "lead" or not np.any(np.abs(mono) > 1e-4):
             continue
-        x = sosfilt(hp, mono).astype(np.float32) * 10 ** ((LEVEL_DB.get(part, -7) + float(levels.get(part, 0.0))) / 20)
+        x = sosfilt(hp, mono).astype(np.float32) * 10 ** ((part_level_db(part, era) + float(levels.get(part, 0.0))) / 20)
         pan = PAN.get(part, 0.0)
         left, right = np.sqrt((1 - pan) / 2), np.sqrt((1 + pan) / 2)          # constant-power pan
         st = np.stack([x * left, x * right], 1)

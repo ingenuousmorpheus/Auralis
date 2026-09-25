@@ -2909,7 +2909,7 @@ The user chose "Neither yet": no purchase, no DiffSinger voicebank, no ACE-Step 
 ### What remains (engineering, no purchase needed)
 - ~~A live VRAM reading in the engines status~~, done in the follow-up commit: `nvidia-smi` (advisory warning, not a gate). On this host it showed the RTX 4070 with 5.4 of 12.0 GB VRAM free while LM Studio was resident, so Seed-VC (about 6 GB typical) now logs a warning; it has still converted successfully in earlier sessions.
 - Demos: seventh chords played on an instrument are misread. Triads (I vi IV V, with or without a voice) read correctly, but a Dmaj7 Bm7 Gmaj7 A7 demo reads as another key's triads, because the overtones of the added sevenths outweigh the roots in chroma. Two fixes were tried in Session 017 and reverted, because neither fixed it and seventh templates made plain triads read as maj7: seventh templates, and a bass-note root preference (lowest strong note under MIDI 55). A real fix needs multi-pitch estimation (harmonic-sum / NMF note activations) before chord templating. Also melody extraction from singing over a loud instrument needs separation (V5).
-- Backing-vocal level presets per era; lyric phonemes (ARPAbet) for a future lyric singer, which would live in its worker.
+- Lyric phonemes (ARPAbet) for a future lyric singer, which would live in its worker.
 
 ### Future integration points (exact)
 - **ACE-Step:**
@@ -2933,3 +2933,25 @@ The user chose "Neither yet": no purchase, no DiffSinger voicebank, no ACE-Step 
 - All heavy work goes through `MODELS.use(...)`; never add another lock or a direct provider call.
 - New engines are adapters in `auralis/models/builtin.py`, living in their own venv behind `SubprocessWorker`; never import them into the MIT package.
 - Keep engine choices out of Create.
+
+### Session 017 (continued): era backing presets, seventh-chord finding
+
+**Completed**
+- **Backing-vocal level presets per era.**
+  - `voice/vocal_production.py` has `ERA_BACKING_DB`: dB offsets for doubles, harmonies and ad-libs, one row per atlas era.
+    - 70s soul: harmonies up, doubles down.
+    - 90s R&B: stacked harmonies +2 dB, ad-libs +1 dB.
+    - Neo-soul: doubles −3 dB, lead up front.
+    - Modern alternative R&B: harmonies −2 dB.
+  - `part_level_db(part, era)` gives a part's default level: `LEVEL_DB` plus the era offset.
+  - `backing_bus(..., era=)` uses that default. The user's backing-mix levels still apply on top.
+  - `sing_song` passes the blueprint's era and records it as `backing_era`.
+  - Rebalancing saved parts is unchanged: it is relative to the saved parts, which already carry their era level.
+  - The Sing panel's Backing mix now says that 0 dB is the era's balance.
+  - Test: `test_era_presets_shift_backing_parts_and_user_levels_stay_relative`. The existing sing test also checks `backing_era`.
+- **Seventh chords played on an instrument:** investigated, not fixed.
+  - Both attempts (seventh templates, and a bass-note root preference) were reverted.
+  - The limitation is recorded under "What remains" with the reason and the fix it needs (multi-pitch estimation).
+  - Triad demos are unchanged.
+
+**Tests:** `test_vocal_production`, `test_full_song` and `test_song_assembly` (21 passed); the frontend build is clean.

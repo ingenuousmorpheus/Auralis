@@ -251,7 +251,7 @@ Privacy properties the code enforces:
   Each section's tier comes from its `backing_vocals` level (light = doubles, medium = + high harmony, full = + low harmony and ad-libs), capped by `production`. Harmony notes always stay in the key and inside the voice range (a semitone under the top). Reasons go to `parts_why`.
 - **`voice/vocal_production`:**
   - `convert_parts` **packs** the sung spans of every part (lead included) back to back with 1.5 s gaps into as few Seed-VC calls as possible (≤ 6 min each), then unpacks them to their positions. A short song converts in one model load.
-  - `backing_bus` high-passes each backing part at 180 Hz, sets its level (doubles −5, harmonies −7/−8, ad-libs −6 dB) and constant-power pan (doubles ±0.75, harmonies ±0.35, ad-libs +0.2), adds a short room, and writes each part plus the summed stereo `backing_vocals` bus.
+  - `backing_bus` high-passes each backing part at 180 Hz, sets its level (doubles −5, harmonies −7/−8, ad-libs −6 dB, shifted per era by `ERA_BACKING_DB` via `part_level_db`; user levels apply on top) and constant-power pan (doubles ±0.75, harmonies ±0.35, ad-libs +0.2), adds a short room, and writes each part plus the summed stereo `backing_vocals` bus.
 - **In `sing_song`:** each part is rendered by the guide singer with its own seed, converted with the lead, and the bus joins the song mix as role `other` (so the mixer dips it in the vocal band) with a +4 dB offset.
 - **Guide singer change:** the fundamental is kept at 17.5% under every vowel. Without it, some vowel/pitch pairs had a formant-boosted 2nd harmonic that pitch trackers read an octave up; Seed-VC's own f0 extraction faces the same risk.
 
