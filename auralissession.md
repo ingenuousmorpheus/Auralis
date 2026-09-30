@@ -2972,3 +2972,202 @@ The user chose "Neither yet": no purchase, no DiffSinger voicebank, no ACE-Step 
   - Tightened: the voice-over-instrument test now requires at least 7 of 8 bars.
   - `test_demo` 16 passed.
 - The earlier note under "What remains" (reverted attempts) is replaced by this entry.
+
+
+## Session 018 — 2026-09-30 — Auralis Luxury UI / My Voice Visual Direction
+
+### Goal
+
+The owner reviewed a generated Auralis GUI concept based on the requested mix of Kits-style voice workflow and Suno-style creative-studio polish. The owner approved the direction before any UI code changes.
+
+The problem being addressed is presentation, not missing backend capability. Auralis already has a substantial local voice/music pipeline; My Voice should become the visual proving ground for a premium Auralis design system.
+
+### Approved direction
+
+**Luxury recording studio at midnight.**
+
+- obsidian / near-black foundation
+- deep plum and violet atmosphere
+- restrained cyan/blue waveform accents
+- subtle magenta highlights
+- glass-like raised surfaces
+- thin luminous borders
+- generous spacing
+- strong typography
+- restrained glow
+- animated audio only where useful
+- professional rather than gaming-RGB
+
+Primary composition:
+
+**premium dark studio shell → selected voice hero → input/output workbench → voice tools → local system status**
+
+The generated mockup is a design reference, not a literal implementation target.
+
+### My Voice hero
+
+The selected voice should become the visual identity of the page.
+
+Show:
+
+- voice artwork/avatar
+- voice name
+- version
+- ready/processing/offline state
+- voice description and useful tags
+- Switch Voice
+- Train / Improve
+- Voice Settings
+- waveform
+- training minutes
+- pitch range
+- model type
+- sample rate
+- supported blend/style controls
+
+The first screen should answer:
+
+1. Which voice am I using?
+2. Is it ready?
+3. What does it sound like?
+4. What can I do next?
+
+### Input / Output workbench
+
+Desktop layout uses a balanced two-column workspace.
+
+INPUT:
+- Audio Input
+- Song Input
+- Record
+- My Music
+- large drag/drop area
+- microphone recording
+- supported import/link actions
+- demo/sample
+- recent inputs with compact waveforms
+
+OUTPUT:
+- Converted Vocals
+- Full Songs
+- Harmonies
+- Stems
+- History
+- waveform result cards
+- play
+- favorite
+- A/B
+- download
+- overflow
+
+The output should look like a premium result library rather than a filesystem.
+
+### Voice tools
+
+Full-width tool cards:
+
+- Voice Conversion
+- Vocal Doubles
+- Harmonies
+- Ad-libs
+- Pitch & Key
+- Style Transfer
+
+Only expose capabilities that actually exist. Do not create fake buttons just to match the mockup.
+
+### Training experience
+
+Training should feel like creating an instrument.
+
+Use friendly concepts:
+- Train Voice
+- Improve Voice
+- Add More Takes
+- Dataset Quality
+- Coverage
+- Vocal Range
+- Model Version
+
+Keep existing consent and quality measurements authoritative.
+
+### Product positioning
+
+The design should communicate the existing strengths:
+- local-first
+- private/offline processing
+- personal trained voices
+- demo-to-song
+- Artist DNA
+- vocal production
+- mastering
+- editable stems/projects
+- model lifecycle
+
+First impression:
+
+**I can make music with my voice here.**
+
+Deeper impression:
+
+**This is an entire local music studio.**
+
+### Competitive references
+
+Kits AI and Suno are references for workflow and presentation lessons only.
+
+Do not copy their branding, exact layout, icons, wording, assets, or distinctive expression.
+
+Auralis needs its own identity:
+
+**LOCAL-FIRST / PRIVATE / YOUR VOICE / YOUR MUSIC / YOUR STUDIO**
+
+### Architecture constraints
+
+This is a UI redesign, not a rewrite.
+
+Preserve:
+- existing FastAPI APIs
+- voice store
+- Seed-VC integration
+- model lifecycle / registry
+- conversion queue
+- conversion history
+- My Music integration
+- My Voice capture/training
+- full-song pipeline
+- vocal production
+- mastering
+- tests
+- local-first architecture
+- Studio → Advanced engine controls
+
+Reuse existing components and theme primitives where practical.
+
+Do not create a second voice state store or disconnected backend pathway.
+
+### First implementation sequence
+
+1. My Voice luxury redesign.
+2. Extract reusable Auralis design primitives.
+3. Apply shell/navigation polish.
+4. Bring Create into the same language.
+5. Bring My Music / Projects into the same language.
+6. Polish Studio and advanced controls.
+7. Polish Release / Export.
+8. Upgrade README screenshots/demo presentation.
+
+### Documentation
+
+The complete approved design specification is:
+
+docs/AURALIS_LUXURY_UI_DESIGN.md
+
+### Gate
+
+Do not treat the UI as complete because it looks good.
+
+The first UI pass must also preserve existing functionality, keep tests/build green, avoid fake controls, avoid silent feature removal, and remain responsive at practical desktop widths.
+
+### Next Action
+
+Start the first implementation pass from docs/AURALIS_LUXURY_UI_DESIGN.md, beginning with My Voice only. Inspect the current VoicePage, VoicePage.css, VoiceStudio, VoiceCapture, Shell, theme.css, and related APIs before changing them. Do not redesign the entire application in one pass.
