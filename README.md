@@ -36,6 +36,13 @@ plan is documented in
   reference's audio is never copied into the output and never stored in the repo;
   it lives only in the job's temp folder and is discarded after. This mirrors how
   iZotope Ozone's Master Assistant uses a reference.
+- **Harmonic Reference — reference matching in the note domain.** The same
+  "match this song" idea as above, one axis over: instead of retuning your EQ,
+  it reports what *notes* to change. Key and mode differences, the transposition
+  to line the two up, which scale degrees you over- or under-use versus the
+  reference, notes sitting outside the key (with timecodes), and octave
+  displacement. It advises only — Pitch Polish is the stage that edits audio.
+  See [`docs/HARMONIC_REFERENCE.md`](docs/HARMONIC_REFERENCE.md).
 - Master to a loudness target with a true-peak ceiling (default −1.0 dBTP).
 - Download a 24-bit WAV.
 - Mix multiple stems with filename-assisted role detection, manual overrides,

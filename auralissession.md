@@ -3171,3 +3171,37 @@ The first UI pass must also preserve existing functionality, keep tests/build gr
 ### Next Action
 
 Start the first implementation pass from docs/AURALIS_LUXURY_UI_DESIGN.md, beginning with My Voice only. Inspect the current VoicePage, VoicePage.css, VoiceStudio, VoiceCapture, Shell, theme.css, and related APIs before changing them. Do not redesign the entire application in one pass.
+
+## Session 019 — 2026-10-03 — Harmonic Reference: review, fixes, commit
+
+### Goal
+The user chose to commit their local Harmonic Reference work before any new model or dependency (no ACE-Step, no lyric phonemes, no V5). This was a stabilization and commit gate: review it, fix only genuine issues, verify, commit, stop.
+
+### Starting State
+- Local `main` at `5ac4ac1`, 3 commits behind `origin/main` (Session 018 UI-direction docs). Fast-forwarded to `334d553` (docs only, no overlap).
+- Uncommitted: `auralis/engine/harmony.py`, `tests/test_harmony.py` (20), `frontend/src/HarmonicReference.{jsx,css}`, `docs/HARMONIC_REFERENCE.md`, and `/harmony/*` routes in `auralis/api/main.py` plus a README paragraph.
+
+### Changed (fixes only)
+- **`api/main.py`:** an unreadable key returned 200 and then failed inside the background job after both uploads were read. Keys are now checked at the request (`_harmony_key`: 422; blank or any-case `auto` = detect). File types are checked before the job exists, so a 415 no longer leaves an orphaned job.
+- **`engine/harmony.py`:** `_detect_notes` was a drifted private copy of Pitch Polish's tracker. It never split on pitch changes and dropped a note held to the end of the file. It now calls `voice/pitch._track_pitch` + `_segment_notes`. The stray-note message read "1 note sit"; it now reads "1 note sits".
+- **`HarmonicReference.jsx`:** shows the API's `detail` message instead of raw JSON.
+- **Tests:** the timecode test asserted only `if` a stray was found (it always is), so it is now unconditional. Added an API round-trip (upload pair → job → report), the 422/415-before-job cases, and a final-held-note regression. 20 → 23.
+- **Docs:** `HARMONIC_REFERENCE.md` (where it lives in the sidebar, the 422/415 errors, the shared tracker and its legato limitation). `AURALIS_CURRENT_ARCHITECTURE.md` no longer calls it local or uncommitted; it adds the API and test rows and removes the stale naming-clash note (AU-09 used `voice/vocal_production.py`).
+
+### Verification
+- Full suite before the tracker change: **250 passed** (14.5 min). After it: `test_harmony` + `test_pitch_polish` **25 passed**.
+- `npm run build` clean (43 modules).
+- **Real app** (restarted with the launcher scripts), Harmonic reference tool in the browser pane, synthetic tones only:
+  - `H minor` shows "Unknown key tonic: H"
+  - with auto keys: C major vs D major, +2, ♭5 imbalance and register suggestion
+  - after the restart: key cards, transposition, mode and degree suggestions render
+
+### Findings
+- Legato semitone steps with no gap can merge into one note in the **shared** Pitch Polish segmenter (E→F reads as about 64.7). Not changed: it would alter Pitch Polish. The degree chart still carries that energy. Documented.
+- `App.jsx` still loads the screen through `import.meta.glob`. It works and was left alone.
+
+### Do Not Redo
+- Harmonic Reference uses `voice/pitch` for key **and** notes. Never reintroduce a private tracker.
+
+### Next Action
+Stopped here at the user's instruction. Session 018's next action (the My Voice luxury UI pass from `docs/AURALIS_LUXURY_UI_DESIGN.md`) is still open; AU-11, lyric phonemes and V5 wait for the user.

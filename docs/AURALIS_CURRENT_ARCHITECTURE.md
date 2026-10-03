@@ -21,16 +21,14 @@ Status vocabulary:
 | **DOCUMENTED-ONLY** | Described in docs/comments; no code |
 | **NOT FOUND** | Neither code nor docs |
 
-> **Local uncommitted work (not part of this baseline).** At audit time the working
-> tree also held an uncommitted *Harmonic Reference* feature:
-> `auralis/engine/harmony.py`, `tests/test_harmony.py`,
+> **Harmonic Reference (committed after Session 018).** At AU-00 audit time the
+> working tree held the user's uncommitted *Harmonic Reference* feature; it was kept
+> out of every baseline until it was reviewed and committed after Session 018:
+> `auralis/engine/harmony.py`, `tests/test_harmony.py` (23),
 > `frontend/src/HarmonicReference.{jsx,css}`, `docs/HARMONIC_REFERENCE.md`, and
-> edits to `auralis/api/main.py`, `frontend/src/App.jsx` and `README.md`
-> (`POST /harmony/compare`, `GET /harmony/{job_id}/report`). It was preserved
-> untouched and was **not** committed with AU-00. It is noted here only because
-> its 20 tests ran green alongside the baseline and its routes appeared in the
-> live OpenAPI listing. It is a note-domain *analysis* tool. It is not the vocal
-> harmony/doubles generator the roadmap plans for `auralis/voice/harmony.py`.
+> `POST /harmony/compare`, `GET /harmony/{job_id}/report` in `auralis/api/main.py`.
+> It is a note-domain *analysis* tool (advice only), not the vocal harmony
+> generator, which AU-09 built as `voice/vocal_production.py`.
 
 ---
 
@@ -304,6 +302,7 @@ All routes are in `auralis/api/main.py`. Long-running work starts with
 | Training | `POST /voice/train` | `{profile_id, depth: studio\|deep}`. Only one training job at a time |
 | Conversion | `POST /voice/convert`, `GET /voice/download/{id}` | Guide → my voice |
 | Pitch | `GET /voice/pitch-styles`, `POST /voice/pitch`, `GET /voice/pitch/{id}/download\|report` | |
+| Harmonic Reference | `POST /harmony/compare`, `GET /harmony/{id}/report` | Two uploads + optional keys (`auto` or `F# minor`) → background job `harmonic-reference`: key, mode, scale-degree balance, out-of-key notes, register, as advice. 422 for an unreadable key and 415 for a bad file type, before any job exists |
 | Finish | `GET /voice/finish-presets`, `GET /voice/rack-modules`, `POST /voice/finish`, `GET /voice/finish/{id}/download\|preview\|report\|source` | |
 | Auto polish | `POST /voice/auto-polish`, `GET /voice/auto-polish/{id}/download\|preview` | |
 | Voice library (Session 009, `api/voices.py`) | `POST /voice/takes/check` | Analyse a take without saving: level, room noise, singing seconds, the chosen reference window, issues and tips |
@@ -354,7 +353,7 @@ outputs become durable.
 | File | Screen / role |
 |---|---|
 | `frontend/src/main.jsx` | React root |
-| `frontend/src/App.jsx` | **Console shell (UI redesign, 2026-09-24):** `Sidebar` + page + `PlayerBar`. Pages: `create`, `music`, `studio`, `voice`, `projects`, and tools `master`, `mix`, `rack`, plus `harmony` only when `HarmonicReference.jsx` exists in the checkout (`import.meta.glob`, so the build never depends on it). `API = VITE_API ?? http://127.0.0.1:8001` |
+| `frontend/src/App.jsx` | **Console shell (UI redesign, 2026-09-24):** `Sidebar` + page + `PlayerBar`. Pages: `create`, `music`, `studio`, `voice`, `projects`, and tools `master`, `mix`, `rack`, plus `harmony` (Harmonic Reference; loaded through `import.meta.glob`, from when it was uncommitted local work). `API = VITE_API ?? http://127.0.0.1:8001` |
 | `frontend/src/Shell.jsx` | `Sidebar`: 3D gold AURALIS wordmark that morphs on press, nav, tools, the trained voice card from `/voice/profiles`. `PlayerBar`: plays catalog songs through `/artist/library/songs/{id}/preview` |
 | `frontend/src/CreatePage.jsx` | Suno-style Simple/Advanced create panel (description or lyrics + styles, suggestions from real catalog aggregates, Era & style, Artist DNA / my-voice switches) beside the workspace. **Create builds a Song Blueprint (AU-04)**, and the workspace switches between *Blueprint* and *My songs*. **Make the whole song** (AU-10) runs the one-click job with a Screen-3 stage list and opens the result in the Song studio. An *Influence* choice (all my songs / closest 5 / songs I pick) steers the DNA; in pick mode, clicking songs on the right picks them (AU-12). No audio is rendered yet, and the page says so |
 | `frontend/src/DemoPanel.jsx` | Create's *Demo* button (AU-13): record the idea with the mic (the My Voice recorder) or choose a memo; it becomes the chorus, a verse or the bridge; an optional BPM; *Build the song around it* opens the blueprint, badged "melody from your demo" |
@@ -550,8 +549,7 @@ Every decision writes a sentence to `why` (per field) or to the section's `why`,
 
 ## Tests
 
-`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). After AU-09, **180** (200). After Session 013, **190** (210). After AU-13, **198** (218). After Session 016, 199. After Session 017, **225** (245). The run with the local
-uncommitted `tests/test_harmony.py` included gives 48 passed. No frontend tests
+`pytest -q`: **28 committed tests pass** (18.3 s) at AU-00. After AU-01 there are **42**, with 14 more in `tests/test_projects.py`. After AU-04 there are **133** committed tests (153 with the local harmony tests). After AU-05, **146** (166). After Session 009, **157** (177). After AU-06, **166** (186). After Session 011, **173** (193). After AU-09, **180** (200). After Session 013, **190** (210). After AU-13, **198** (218). After Session 016, 199. After Session 017, **225** (245). With Harmonic Reference committed after Session 018, `tests/test_harmony.py` (23) is part of the committed suite. No frontend tests
 or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 `npm run build` passes (21 modules, ~201 kB JS).
 
@@ -561,6 +559,7 @@ or lint scripts exist (`package.json` has only `dev`, `build` and `preview`).
 | `tests/test_voice.py` (6) | Profile privacy (`public_dict` strips paths) and reuse. Consent required. Clipping rejected. Provider status isolated to its dir. Dataset segmentation and readiness scoring. Training state transitions |
 | `tests/test_paired_calibration.py` (2) | Matching performances accepted. Unrelated audio rejected |
 | `tests/test_pitch_polish.py` (2) | Key parsing and detection. Note-center correction plus report |
+| `tests/test_harmony.py` (23) | Harmonic Reference. **Load-bearing:** the same melody in C and F major compares as alike in scale degrees while the raw pitch classes differ. Shortest transposition, mode reported apart from pitch, degree imbalance named and ranked, a track against itself gets no degree advice, out-of-key notes with a target and a timecode (including a final held note), octave displacement, JSON-safe report, short input refused. API: upload pair → job → report; a bad key (422) or file type (415) creates no job |
 | `tests/test_composer.py` (30, AU-04) | Brief words and explicit overrides. Lyrics headers (a lyric line starting with "hook" is not a header). 11 Roman-numeral realisations; key parsing. **Gate:** a complete blueprint: tempo, key, 4/4, intro to outro, chords filling every bar, arrangement roles, energy curve, vocal registers inside the voice, chorus above verse, a reason for every decision. No melody keys anywhere. DNA loops re-voiced and used once; chorus differs from verse. Key fits the voice and DNA; a narrow voice gets an honest stretch. An era without the DNA's mode follows the era. Tempo from DNA, half-time, prompt. Form from lyrics and length. Works with no DNA and no voice. Catalog twin flagged. Edits to key, tempo, sections and chords re-derive everything; invalid edits reported; regenerate changes one section type only. Save with revisions and lyrics, survives a new store, refused when closed. API: create, revise, 422, regenerate, save, read |
 | `tests/test_models.py` (16, Session 017) | Balanced loads then releases; switching models unloads the other first; keep-warm idle release and policy change; one job at a time across threads and models; re-entrant for the same model but not a different one; the memory gate (refuse, allow, low-memory strictness, unknown memory, env override, reclaimable memory); not-installed refused; a real subprocess worker loads, answers, errors cleanly and is gone after unload; a failing worker reports its stderr; the ACE-Step adapter drives a stand-in worker through the manager; registry defaults, fallback, persistence and status; the Seed-VC adapter uses the shared provider; render sends only marked sections to a section generator, places them, and releases it; the sing pipeline uses the registry's guide singer; the engines API |
 | `tests/test_demo.py` (16, AU-13 + Session 017) | **Gate (ground truth):** four synthetic voice memos (no click, hiss added): a D-major hook at 100 BPM, the same hook in F at 88, an A-minor hook at 76, an eighth-note line at 92. Each gives the tempo within 1 BPM, the right key, every pitch kept and every onset on its 16th. The blueprint keeps the demo as every chorus (arranged melody = demo), chords written under it hold ≥70% of the notes, and the rest of the song exists. Harmonizer and key helpers; a clear error when there is no melody; API upload and a 422 for an invalid role |
@@ -592,13 +591,13 @@ The generation layer should **feed** these modules, not replace them.
 
 | Future feature | Reuse (existing) | Notes |
 |---|---|---|
-| **Artist DNA** (AU-03) | **Built (AU-03):** `artist/dna.build_dna` over the AU-02 library, `GET /artist/dna`. Feed its `traits.key.families[].major_tonic`, tempo band, loops, form and `traits.voice` into AU-04. Originally planned from: aggregate `artist/analyses/*.json` over songs with `included = true`, weighting stem sets higher (their melody, structure and rhythm come from stems). Also available: `engine/analysis.analyse` for spectral, loudness, stereo and onset features. `engine/loudness.measure` for LUFS/TP. `voice/pitch.detect_key`, `_track_pitch`, `_segment_notes` for key and melody contour. `voice/profiles.analyse_dataset` for vocal range and readiness. Pipeline `session.json` as a model of provenance output | New: tempo/structure/chord/section analysis, catalog storage under `%LOCALAPPDATA%\Auralis\artist\`. The local uncommitted `engine/harmony.py` (scale-degree profiles, out-of-key notes) could become a harmony-trait extractor if the user commits it |
+| **Artist DNA** (AU-03) | **Built (AU-03):** `artist/dna.build_dna` over the AU-02 library, `GET /artist/dna`. Feed its `traits.key.families[].major_tonic`, tempo band, loops, form and `traits.voice` into AU-04. Originally planned from: aggregate `artist/analyses/*.json` over songs with `included = true`, weighting stem sets higher (their melody, structure and rhythm come from stems). Also available: `engine/analysis.analyse` for spectral, loudness, stereo and onset features. `engine/loudness.measure` for LUFS/TP. `voice/pitch.detect_key`, `_track_pitch`, `_segment_notes` for key and melody contour. `voice/profiles.analyse_dataset` for vocal range and readiness. Pipeline `session.json` as a model of provenance output | New: tempo/structure/chord/section analysis, catalog storage under `%LOCALAPPDATA%\Auralis\artist\`. `engine/harmony.py` (scale-degree profiles, out-of-key notes; Harmonic Reference) could become a harmony-trait extractor |
 | **Song Blueprint** (AU-04) | **Built (AU-04):** `composer.build_blueprint` over `artist/dna`, `theory.candidates`, `theory.suggest_keys`/`key_fit`, the trained voice range and the library summaries; saved via `ProjectStore.save_blueprint`. AU-05 should read `sections[].chords` (bar, beat, beats, roman, chord), `groove`, `arrangement`, `energy_curve` and `sections[].vocal`. `arrangement.mix_profile` names a `StyleProfile` for AU-10 | `composer/chords.parse_key` accepts G♯/D♭ spellings that `voice/pitch.parse_key` rejects |
 | **Composer** (AU-05) | **Built (AU-05):** `composer.arrange` + `composer.midi` + `generation` (provider registry, `synth`) + `engine.pipeline.run` for mix/master | Next: better instruments as extra providers (SoundFont/sampler in an isolated venv), per-section regenerate of a single part |
 | **Atmosphere Engine** (AU-06) | **Built (AU-06):** `generation/atmosphere.py` (plan + render), the `atmos` section role, mixed as `other` −6 dB via `mixer` `gain_offsets` | Next: sample-based textures as a provider; per-layer edits beyond the section level |
 | **Guide Singer** (AU-07) | `voice/paired` DTW alignment to check a synthetic guide against its target melody. `voice/pitch` note tracking to verify the guide is pitched and timed correctly | New: `voice/guide.py`, `voice/singing_provider.py`, installed as an isolated provider like Seed-VC |
 | **My Voice full-song pipeline** (AU-08) | `SeedVCProvider.convert` (with trained checkpoint), then `pitch.pitch_polish`, then `finish.finish_vocal` with instrumental. `_run_auto_studio_polish` already chains pitch and finish | New: long-song chunking and stitching (Seed-VC runs on a whole file; 30 min timeout), plus orchestration from project assets rather than `source_job_id` |
-| **Vocal harmonies/doubles** (AU-09) | `pitch._render_edits` (per-note cents shifting), `SCALES`, `finish._double_send`, `SeedVCProvider.convert(semitone_shift=…)` | New: `voice/harmony.py` generator. Naming clash: the uncommitted `engine/harmony.py` is a different concept, so pick distinct names before committing either |
+| **Vocal harmonies/doubles** (AU-09) | `pitch._render_edits` (per-note cents shifting), `SCALES`, `finish._double_send`, `SeedVCProvider.convert(semitone_shift=…)` | New: `voice/harmony.py` generator. |
 | **Mix/master assembly** (AU-10) | `engine/pipeline.run(stem_paths, role_overrides, profile_id, reference_path, target_lufs)` exactly as is. Pass generated stems with explicit `role_overrides` so detection is not needed. `master_file` for a pre-mixed bounce | New: route project stems into the pipeline, keep them editable |
 
 Rules carried forward:

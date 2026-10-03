@@ -675,6 +675,102 @@ def download_voice(job_id: str):
     return FileResponse(path, filename="auralis_my_voice.wav", media_type="audio/wav")
 
 
+def _harmony_key(value: str):
+    """A declared key, or None for auto. Bad keys fail the request, not the job."""
+    from ..voice.pitch import parse_key
+
+    text = (value or "").strip()
+    if not text or text.lower() == "auto":
+        return None
+    try:
+        return parse_key(text)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+def _run_harmonic_reference(job_id: str, target_path: str, reference_path: str,
+                            target_key, reference_key):
+    """Compare two tracks harmonically and write the suggestion report."""
+    job = JOBS[job_id]
+    try:
+        import soundfile as sf
+
+        from ..engine.harmony import compare_to_reference, comparison_to_dict
+
+        job.update(stage="reading audio", pct=6.0)
+        target_audio, target_sr = sf.read(target_path, always_2d=True, dtype="float32")
+        reference_audio, reference_sr = sf.read(reference_path, always_2d=True, dtype="float32")
+
+        job.update(stage="analysing harmony", pct=25.0)
+        comparison = compare_to_reference(
+            target_audio, target_sr,
+            reference_audio, reference_sr,
+            target_key=target_key,
+            reference_key=reference_key,
+        )
+
+        job.update(stage="writing report", pct=90.0)
+        payload = comparison_to_dict(comparison)
+        report_path = os.path.join(job["work"], "harmonic_reference.json")
+        with open(report_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, ensure_ascii=False)
+        payload["report_path"] = report_path
+
+        job["result"] = payload
+        job.update(stage="done", pct=100.0)
+    except Exception as exc:
+        job.update(stage="error", error=str(exc))
+
+
+@app.post("/harmony/compare")
+async def create_harmonic_reference(
+    target: UploadFile = File(...),
+    reference: UploadFile = File(...),
+    target_key: str = Form("auto"),
+    reference_key: str = Form("auto"),
+):
+    """Harmonic Reference — what NOTES to change to sit closer to a reference.
+
+    The note-domain counterpart to /master's Ozone-style reference matching.
+    Like the mastering reference, both files stay in this job's working
+    directory and neither is copied into any output.
+    """
+    target_key = _harmony_key(target_key)
+    reference_key = _harmony_key(reference_key)
+    uploads = [
+        (label, upload, _safe_audio_name(upload.filename, f"{label}.wav"))
+        for label, upload in (("target", target), ("reference", reference))
+    ]
+    job_id = _create_job()
+    job = JOBS[job_id]
+
+    paths = {}
+    for label, upload, safe_name in uploads:
+        path = os.path.join(job["work"], label + os.path.splitext(safe_name)[1])
+        with open(path, "wb") as handle:
+            shutil.copyfileobj(upload.file, handle)
+        paths[label] = path
+
+    job.update(kind="harmonic-reference", stage="queued", pct=0.0)
+    asyncio.create_task(asyncio.to_thread(
+        _run_harmonic_reference,
+        job_id, paths["target"], paths["reference"], target_key, reference_key,
+    ))
+    return {"job_id": job_id, "status": "started"}
+
+
+@app.get("/harmony/{job_id}/report")
+def download_harmonic_reference(job_id: str):
+    if job_id not in JOBS or not JOBS[job_id].get("result"):
+        raise HTTPException(404, "No Harmonic Reference report is ready.")
+    path = JOBS[job_id]["result"].get("report_path")
+    if not path or not os.path.exists(path):
+        raise HTTPException(410, "The Harmonic Reference report is no longer available.")
+    return FileResponse(
+        path, filename="auralis_harmonic_reference.json", media_type="application/json"
+    )
+
+
 def _run_pitch_polish(
     job_id: str,
     source_path: str,
