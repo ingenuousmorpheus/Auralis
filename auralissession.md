@@ -3205,3 +3205,63 @@ The user chose to commit their local Harmonic Reference work before any new mode
 
 ### Next Action
 Stopped here at the user's instruction. Session 018's next action (the My Voice luxury UI pass from `docs/AURALIS_LUXURY_UI_DESIGN.md`) is still open; AU-11, lyric phonemes and V5 wait for the user.
+
+## Session 020 — 2026-10-04 — My Voice luxury redesign (first pass)
+
+### Goal
+Implement the owner-approved My Voice redesign (`docs/AURALIS_LUXURY_UI_DESIGN.md`) as a UI redesign, not a rewrite: hero → input/output workbench → voice tools → local status, on reusable design primitives. Then stop for owner visual validation.
+
+### Starting State
+- `main` at `4686d20` (Session 019, Harmonic Reference), 1 commit ahead of `origin/main`. Clean tree.
+- The backend was running from the Session 019 restart.
+
+### Changed
+- **New design layer:** `frontend/src/Lux.jsx` + `lux.css`:
+  - tokens and primitives (glass surfaces, buttons, badges, tabs, segmented choice, tool cards, stats, progress, status strip, menu)
+  - `WavePlayer`: waveform, playhead, seek, one player at a time, keeps its position on an A/B switch
+  - `decodePeaks`: browser-side peaks
+- **`VoicePage.jsx` / `VoicePage.css` rebuilt** on that layer. Every endpoint and behaviour is the same:
+  - conversion queue, one at a time, with cancel
+  - My Music guides; engine install
+  - history A/B, rating, download, save to project, delete
+  - training, rename, delete, capture
+  - the classic Studio tools
+- **Additions, frontend only:**
+  - a *Record* input tab: the existing `TakeRecorder`, now exported from `VoiceCapture.jsx`, makes a guide take that is converted through `/voice/convert`
+  - decoded waveforms and durations for files waiting to convert
+  - live GPU and memory in a status strip from the existing `/models`
+  - readiness notes shown as *Next step*
+- **History moved, not removed:** the History tab is now *Output → All history*. The disabled "Harmonies · soon" tab is gone; harmonies, doubles and ad-libs exist (AU-09) and the tool cards open them in Create.
+- **Bug fix (it predates this session):** adding files read the input's live FileList inside a deferred state updater. The input clears that list right after, so a second pick could add nothing. The list is now copied first.
+- **Other edits:**
+  - `ui.jsx`: new icons
+  - `App.jsx`: passes `go` to My Voice
+  - docs: architecture rows, and the design doc's §15 implementation status
+
+### Verification
+- `npm run build` clean.
+- `test_voice_library` + `test_models`: 29 passed. The backend is unchanged.
+- **Real app, browser pane:**
+  - hero with the real voice: READY, studio model 1,000 steps, a decoded 30 s sample waveform, 16 min, D3–C5, 72%, 44.1 kHz, Next step
+  - real history card: 111-bar waveform; playback with playhead; A/B switches source and keeps the position (2.95 s, still playing)
+  - real favourite toggled on and off; download link; menu
+  - All history; My Music lists 15 lead-vocal songs; Record tab
+  - My voices card; classic Studio tools expand; New voice capture renders
+  - tool cards go to Create / Vocal chain; *Engine details* goes to Studio
+  - no console errors
+- **Real conversion attempt:** refused by the existing memory gate (5.5 GB free, needs 6 GB). The new queue showed **Failed** with the backend's message. With only the engine calls stubbed in the page, three files went in one at a time through analysing → converting → finishing → Complete; the third was cancelled while waiting and never sent.
+- **Widths 1440, 1280, 1024, 820, 640:** no horizontal overflow. The hero is side by side from 1360 px; the workbench is two columns from 1080 px; tool cards run 6 / 3 / 2 columns.
+
+### Findings
+- Screenshots under viewport emulation crop in the browser pane; layout was checked by measuring instead.
+- The real conversion needs host memory (LM Studio resident). It is not a UI issue.
+
+### Gate/Blocker
+**Owner visual validation of My Voice.** Nothing beyond it starts until then: no shell or other-page redesign, no ACE-Step, no lyric phonemes, no V5.
+
+### Do Not Redo
+- New UI uses the `lx-*` primitives and `--lx-*` tokens. Never add one-off colours.
+- Copy a FileList before using it in a state updater.
+
+### Next Action
+Owner reviews My Voice. Then design §13 step 2–3 (extract and apply to the shell) on approval.

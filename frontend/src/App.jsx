@@ -60,7 +60,7 @@ export default function App() {
   else if (page === "master" || page === "mix") content = <MasterMix API={API} mode={page} />;
   else if (page === "projects") content = <div className="au-page-scroll"><ProjectsPanel API={API} /></div>;
   else if (page === "voice") content = <div className="au-page-scroll" style={{ padding: 0 }}>
-    <VoicePage API={API} classic={<main className="voice-stage voice-studio-shell">
+    <VoicePage API={API} go={setPage} classic={<main className="voice-stage voice-studio-shell">
       <VoiceStudio API={API} card={voiceCard} btn={voiceBtn} colors={VOICE_COLORS} />
     </main>} />
   </div>;

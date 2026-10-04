@@ -1,6 +1,6 @@
 # Auralis Luxury UI Design — My Voice + Studio Visual Direction
 
-Status: OWNER-APPROVED DESIGN DIRECTION
+Status: OWNER-APPROVED DESIGN DIRECTION · My Voice first pass BUILT (Session 020), awaiting owner visual validation
 Date: 2026-09-30
 
 ## 1. Purpose
@@ -202,3 +202,8 @@ Central composition: premium dark studio shell → selected voice hero → input
 Implementation should reproduce the design intent and hierarchy, not copy the image literally and not imitate Kits or Suno pixel-for-pixel.
 
 Core message: your music stays on your machine.
+## 15. Implementation status (Session 020)
+
+- **Built:** My Voice in this direction (`frontend/src/VoicePage.jsx`, `VoicePage.css`) on a reusable layer (`frontend/src/Lux.jsx`, `lux.css`). See `AURALIS_CURRENT_ARCHITECTURE.md` for what each part does.
+- **Not built, on purpose (no backend capability yet):** Song Input (full-mix separation, V5), link import, Demo Song sample, voice blend/style controls, Style Transfer, a Storage status, a model version number (the hero shows the real training steps instead), Full Songs / Harmonies / Stems output tabs (those results live in Create and Projects, linked from Output).
+- **Not changed yet:** the global shell (sidebar, gold wordmark, player bar) and the other pages. They are the next steps of §13, after the owner validates My Voice.

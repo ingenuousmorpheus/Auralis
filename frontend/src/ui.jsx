@@ -18,6 +18,23 @@ const PATHS = {
   wave: <path d="M3 13h2M8 8v10M12 4v18M16 9v8M20 6v14M24 12v2" />,
   back: <path d="M15 18l-6-6 6-6" />,
   dna: <path d="M7 3c0 6 10 6 10 12s-10 6-10 6M17 3c0 6-10 6-10 12s10 6 10 6M8 7h8M8 17h8" />,
+  upload: <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />,
+  download: <path d="M12 4v12M7 11l5 5 5-5M4 20h16" />,
+  more: <><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></>,
+  heart: <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />,
+  convert: <path d="M4 8h13l-3-3M20 16H7l3 3" />,
+  layers: <path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5" />,
+  harmony: <path d="M3 16c3-6 6-6 9 0s6 6 9 0M3 9c3-6 6-6 9 0s6 6 9 0" />,
+  sparkle: <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6" />,
+  pitch: <path d="M3 17l5-6 4 3 5-8 4 5" />,
+  chain: <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />,
+  shield: <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />,
+  chip: <><rect x="6" y="6" width="12" height="12" rx="2" /><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4" /></>,
+  memory: <><rect x="3" y="7" width="18" height="10" rx="2" /><path d="M7 11v2M11 11v2M15 11v2M7 17v3M17 17v3" /></>,
+  trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
+  thumbDown: <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H6.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 5.3 15zM17 2h3v11h-3" />,
+  check: <path d="M5 12l5 5L20 7" />,
+  x: <path d="M6 6l12 12M18 6L6 18" />,
 };
 
 export function Icon({ name, size = 19, stroke = "currentColor", width = 2 }) {

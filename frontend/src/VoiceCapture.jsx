@@ -226,4 +226,4 @@ export default function VoiceCapture({ API, addTo = null, onSaved, onCancel }) {
   </div>;
 }
 
-export { Wave };
+export { Wave, TakeRecorder };

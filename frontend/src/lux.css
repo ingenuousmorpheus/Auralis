@@ -1,0 +1,234 @@
+/* Auralis luxury design layer: "a recording studio at midnight".
+
+   Tokens and primitives for pages moving to the approved direction
+   (docs/AURALIS_LUXURY_UI_DESIGN.md). My Voice is the first consumer; Create,
+   My Music, Projects, Studio and Release are meant to reuse these classes
+   rather than copy CSS. Every colour comes from a token below. */
+
+:root {
+  --lx-obsidian: #08070c;
+  --lx-ink: #0d0b13;
+  --lx-surface: rgba(20, 16, 30, 0.72);
+  --lx-surface-solid: #14111d;
+  --lx-raised: #1b1727;
+  --lx-sunken: rgba(8, 7, 12, 0.55);
+  --lx-border: rgba(176, 152, 255, 0.13);
+  --lx-border-strong: rgba(176, 152, 255, 0.3);
+  --lx-text: #f3effa;
+  --lx-muted: #a9a2bd;
+  --lx-dim: #8a839f;
+  --lx-plum: #2b1838;
+  --lx-purple: #6c4fd6;
+  --lx-violet: #a08bff;
+  --lx-magenta: #e06ac8;
+  --lx-cyan: #6fd8f2;
+  --lx-success: #6fdcae;
+  --lx-warning: #f2c46f;
+  --lx-danger: #ff8597;
+  --lx-glow: 0 0 0 1px rgba(160, 139, 255, 0.18), 0 18px 48px rgba(10, 6, 24, 0.55);
+  --lx-radius: 20px;
+  --lx-radius-sm: 12px;
+  --lx-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ── Surfaces ──────────────────────────────────────────────────────────── */
+
+.lx-atmosphere {
+  background:
+    radial-gradient(80% 60% at 12% -10%, rgba(108, 79, 214, 0.22), transparent 60%),
+    radial-gradient(60% 50% at 100% 0%, rgba(224, 106, 200, 0.10), transparent 60%),
+    radial-gradient(70% 60% at 50% 110%, rgba(43, 24, 56, 0.55), transparent 70%),
+    var(--lx-obsidian);
+  color: var(--lx-text);
+}
+
+.lx-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 40%), var(--lx-surface);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius);
+  box-shadow: var(--lx-glow);
+  backdrop-filter: blur(14px);
+}
+.lx-sunken {
+  background: var(--lx-sunken); border: 1px solid var(--lx-border); border-radius: var(--lx-radius-sm);
+}
+
+.lx-eyebrow {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--lx-dim);
+}
+.lx-h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; color: var(--lx-text); }
+.lx-muted { color: var(--lx-muted); }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+
+.lx-btn {
+  height: 42px; padding: 0 18px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-body); font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap;
+  color: var(--lx-text); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--lx-border-strong);
+  transition: border-color 0.2s, background 0.2s, transform 0.2s var(--lx-ease);
+}
+.lx-btn:hover:not(:disabled) { border-color: var(--lx-violet); background: rgba(160, 139, 255, 0.08); }
+.lx-btn:disabled { opacity: 0.42; cursor: default; }
+.lx-btn.primary {
+  border: none; color: #fff;
+  background: linear-gradient(120deg, var(--lx-purple), #8a55d8 55%, var(--lx-magenta));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset, 0 10px 30px rgba(108, 79, 214, 0.35);
+}
+.lx-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.lx-btn.big { height: 54px; font-size: 16px; font-weight: 800; padding: 0 24px; }
+.lx-btn.small { height: 34px; padding: 0 14px; font-size: 13px; }
+.lx-btn.quiet { border-color: transparent; background: transparent; color: var(--lx-muted); }
+.lx-btn.quiet:hover:not(:disabled) { color: var(--lx-text); background: rgba(255, 255, 255, 0.05); }
+
+.lx-icon-btn {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+  color: var(--lx-muted); background: transparent; border: 1px solid transparent;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+.lx-icon-btn:hover:not(:disabled) { color: var(--lx-text); background: rgba(255, 255, 255, 0.06); }
+.lx-icon-btn[aria-pressed="true"] { color: var(--lx-magenta); }
+.lx-icon-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Badges, tabs, segmented choice ────────────────────────────────────── */
+
+.lx-badge {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+  color: var(--lx-muted); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--lx-border);
+}
+.lx-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.lx-badge.plain::before { display: none; }
+.lx-badge.ready { color: var(--lx-success); border-color: rgba(111, 220, 174, 0.3); background: rgba(111, 220, 174, 0.08); }
+.lx-badge.busy { color: var(--lx-cyan); border-color: rgba(111, 216, 242, 0.3); background: rgba(111, 216, 242, 0.08); }
+.lx-badge.warn { color: var(--lx-warning); border-color: rgba(242, 196, 111, 0.3); background: rgba(242, 196, 111, 0.08); }
+.lx-badge.fail { color: var(--lx-danger); border-color: rgba(255, 133, 151, 0.3); background: rgba(255, 133, 151, 0.08); }
+.lx-badge.violet { color: var(--lx-violet); border-color: rgba(160, 139, 255, 0.3); background: rgba(160, 139, 255, 0.08); }
+@media (prefers-reduced-motion: no-preference) {
+  .lx-badge.busy::before { animation: lx-pulse 1.4s ease-in-out infinite; }
+}
+@keyframes lx-pulse { 50% { opacity: 0.3; } }
+
+.lx-tag {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; color: var(--lx-muted); background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--lx-border); white-space: nowrap;
+}
+.lx-tag.mono { font-family: var(--font-mono); font-weight: 500; }
+
+.lx-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.lx-tabs button {
+  position: relative; height: 38px; padding: 0 14px; border: none; background: transparent; cursor: pointer;
+  font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--lx-dim); border-radius: 10px;
+  transition: color 0.2s, background 0.2s;
+}
+.lx-tabs button:hover:not(:disabled) { color: var(--lx-text); }
+.lx-tabs button[aria-selected="true"] { color: var(--lx-text); background: rgba(160, 139, 255, 0.1); }
+.lx-tabs button[aria-selected="true"]::after {
+  content: ""; position: absolute; left: 14px; right: 14px; bottom: 4px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--lx-violet), var(--lx-magenta));
+}
+.lx-tabs button small { margin-left: 6px; color: var(--lx-dim); font-weight: 600; }
+.lx-tabs.large button { height: 46px; padding: 0 18px; font-size: 14px; }
+
+.lx-segment { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--lx-sunken); border: 1px solid var(--lx-border); }
+.lx-segment button {
+  height: 32px; padding: 0 14px; border-radius: 999px; border: none; cursor: pointer; background: transparent;
+  font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--lx-muted);
+}
+.lx-segment button[aria-selected="true"] { background: var(--lx-raised); color: var(--lx-text); box-shadow: 0 0 0 1px var(--lx-border-strong) inset; }
+
+/* ── Inputs ────────────────────────────────────────────────────────────── */
+
+.lx-select, .lx-input {
+  height: 40px; padding: 0 14px; border-radius: var(--lx-radius-sm); width: 100%; box-sizing: border-box;
+  background: var(--lx-sunken); border: 1px solid var(--lx-border); color: var(--lx-text);
+  font-family: var(--font-body); font-size: 14px;
+}
+.lx-select:focus, .lx-input:focus { border-color: var(--lx-violet); outline: none; }
+.lx-range { width: 100%; accent-color: var(--lx-violet); }
+
+/* ── Waveform player ───────────────────────────────────────────────────── */
+
+.lx-wave { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.lx-wave-play {
+  width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff;
+  background: linear-gradient(140deg, var(--lx-purple), var(--lx-magenta));
+  box-shadow: 0 6px 20px rgba(108, 79, 214, 0.35);
+}
+.lx-wave-play:disabled { opacity: 0.45; cursor: default; }
+.lx-wave.large .lx-wave-play { width: 56px; height: 56px; }
+.lx-wave-track { position: relative; flex-grow: 1; min-width: 0; cursor: pointer; border-radius: 6px; }
+.lx-wave-track svg { display: block; width: 100%; }
+.lx-wave-track rect { fill: rgba(169, 162, 189, 0.32); }
+.lx-wave-track rect.played { fill: url(#lx-wave-grad); }
+.lx-wave-head {
+  position: absolute; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: var(--lx-cyan);
+  box-shadow: 0 0 10px var(--lx-cyan); pointer-events: none;
+}
+.lx-wave-flat {
+  height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(160, 139, 255, 0.4), rgba(111, 216, 242, 0.25));
+}
+.lx-wave-time { font-family: var(--font-mono); font-size: 11px; color: var(--lx-dim); white-space: nowrap; min-width: 74px; text-align: right; }
+@media (prefers-reduced-motion: no-preference) {
+  .lx-wave.playing .lx-wave-play { box-shadow: 0 0 0 6px rgba(160, 139, 255, 0.12), 0 6px 22px rgba(224, 106, 200, 0.35); }
+  .lx-wave-track rect { transition: fill 0.25s; }
+}
+
+/* ── Stats, progress, tool cards, status strip ─────────────────────────── */
+
+.lx-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lx-stat b { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: var(--lx-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lx-stat small { font-size: 12px; color: var(--lx-dim); }
+
+.lx-progress { height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.lx-progress > i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--lx-violet), var(--lx-cyan)); transition: width 0.4s var(--lx-ease); }
+.lx-progress.done > i { background: var(--lx-success); }
+.lx-progress.fail > i { background: var(--lx-danger); }
+
+.lx-tool {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px; min-height: 150px;
+  text-align: left; cursor: pointer; color: var(--lx-text); font: inherit;
+  transition: transform 0.25s var(--lx-ease), border-color 0.25s, box-shadow 0.25s;
+}
+.lx-tool:hover:not(:disabled) { border-color: var(--lx-border-strong); transform: translateY(-2px); }
+.lx-tool[aria-current="true"] { border-color: rgba(160, 139, 255, 0.45); box-shadow: 0 0 0 1px rgba(160, 139, 255, 0.25), 0 18px 48px rgba(108, 79, 214, 0.18); }
+.lx-tool-icon {
+  width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  color: var(--lx-violet); background: rgba(160, 139, 255, 0.1); border: 1px solid rgba(160, 139, 255, 0.2);
+}
+.lx-tool b { font-size: 15px; font-weight: 800; }
+.lx-tool span { font-size: 13px; line-height: 1.45; color: var(--lx-muted); }
+.lx-tool em { margin-top: auto; font-style: normal; font-size: 12px; font-weight: 700; color: var(--lx-violet); }
+
+.lx-status { display: flex; align-items: center; gap: 10px 22px; flex-wrap: wrap; padding: 14px 18px; }
+.lx-status-item { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; }
+.lx-status-item svg { color: var(--lx-dim); flex-shrink: 0; }
+.lx-status-item b { font-weight: 700; color: var(--lx-text); }
+.lx-status-item span { color: var(--lx-muted); }
+.lx-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--lx-dim); }
+.lx-dot.ready { background: var(--lx-success); box-shadow: 0 0 8px rgba(111, 220, 174, 0.6); }
+.lx-dot.warn { background: var(--lx-warning); }
+.lx-dot.fail { background: var(--lx-danger); }
+
+.lx-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 220px; padding: 6px;
+  background: var(--lx-surface-solid); border: 1px solid var(--lx-border-strong); border-radius: 14px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6); display: flex; flex-direction: column; gap: 2px;
+}
+.lx-menu > button, .lx-menu > a {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: none; border-radius: 9px;
+  background: transparent; color: var(--lx-text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; text-decoration: none;
+}
+.lx-menu > button:hover, .lx-menu > a:hover { background: rgba(160, 139, 255, 0.1); }
+.lx-menu > button.danger { color: var(--lx-danger); }
+.lx-menu hr { border: none; border-top: 1px solid var(--lx-border); margin: 4px 0; }
+
+.lx-empty { padding: 34px 16px; text-align: center; color: var(--lx-muted); font-size: 14px; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lx-tool, .lx-btn, .lx-progress > i, .lx-wave-track rect { transition: none; }
+  .lx-tool:hover:not(:disabled) { transform: none; }
+}
