@@ -312,3 +312,115 @@ body {
 }
 
 .au-page > .au-page { flex-grow: 1; }
+
+
+/* ── Session 022: luxury shell convergence ── */
+/* Re-skins the existing shell/navigation/player with the owner-approved
+   "recording studio at midnight" tokens. Component behavior and routing stay
+   unchanged; this is intentionally a presentation-only bridge so pages can
+   migrate to Lux primitives incrementally. */
+
+.au-shell {
+  background:
+    radial-gradient(70% 58% at 18% -8%, rgba(108, 79, 214, 0.16), transparent 62%),
+    radial-gradient(55% 45% at 98% 5%, rgba(224, 106, 200, 0.08), transparent 64%),
+    var(--lx-obsidian, #08070c);
+  color: var(--lx-text, #f3effa);
+}
+
+.au-nav {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.018), transparent 34%),
+    var(--lx-ink, #0d0b13);
+  border-right-color: var(--lx-border, rgba(176, 152, 255, 0.13));
+}
+
+.au-brand { gap: 9px; }
+
+.au-logo-word {
+  background: linear-gradient(105deg,
+    var(--lx-violet, #a08bff) 0%,
+    #ded4ff 28%,
+    #ffffff 46%,
+    var(--lx-magenta, #e06ac8) 72%,
+    var(--lx-cyan, #6fd8f2) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px rgba(108,79,214,.2));
+}
+
+.au-status { color: var(--lx-muted, #a9a2bd); }
+.au-dot {
+  background: var(--lx-success, #6fdcae);
+  box-shadow: 0 0 10px rgba(111,220,174,.7);
+}
+
+.au-nav-label { color: var(--lx-dim, #8a839f); }
+.au-nav-item { color: var(--lx-muted, #a9a2bd); }
+.au-nav-item:hover {
+  color: var(--lx-text, #f3effa);
+  background: rgba(160,139,255,.07);
+}
+.au-nav-item[aria-current="page"] {
+  color: var(--lx-text, #f3effa);
+  background: linear-gradient(90deg, rgba(108,79,214,.16), rgba(224,106,200,.055));
+  box-shadow: inset 2px 0 0 var(--lx-violet, #a08bff);
+}
+.au-nav-item[aria-current="page"] svg { stroke: var(--lx-violet, #a08bff); }
+.au-nav-item.small { color: var(--lx-muted, #a9a2bd); }
+
+.au-voice-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.025), transparent 40%),
+    var(--lx-surface, rgba(20,16,30,.72));
+  border-color: var(--lx-border, rgba(176,152,255,.13));
+  box-shadow: 0 14px 34px rgba(7,4,16,.28);
+}
+.au-voice-card:hover { border-color: var(--lx-border-strong, rgba(176,152,255,.3)); }
+.au-avatar {
+  background: rgba(108,79,214,.14);
+  color: var(--lx-violet, #a08bff);
+  border: 1px solid rgba(160,139,255,.18);
+}
+.au-chip { background: rgba(255,255,255,.045); color: var(--lx-muted, #a9a2bd); }
+.au-chip.holo { background: rgba(111,216,242,.08); color: var(--lx-cyan, #6fd8f2); }
+.au-chip.signal { background: rgba(111,220,174,.08); color: var(--lx-success, #6fdcae); }
+
+.au-player {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.018), transparent),
+    var(--lx-ink, #0d0b13);
+  border-top-color: var(--lx-border, rgba(176,152,255,.13));
+  box-shadow: 0 -14px 40px rgba(5,3,12,.22);
+}
+.au-play {
+  background: linear-gradient(140deg, var(--lx-purple, #6c4fd6), var(--lx-magenta, #e06ac8));
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(108,79,214,.28);
+}
+.au-progress { background: rgba(255,255,255,.07); }
+.au-progress > div {
+  background: linear-gradient(90deg, var(--lx-violet, #a08bff), var(--lx-cyan, #6fd8f2));
+}
+.au-btn {
+  background: rgba(255,255,255,.035);
+  border-color: var(--lx-border-strong, rgba(176,152,255,.3));
+  color: var(--lx-text, #f3effa);
+}
+.au-btn:hover { border-color: var(--lx-violet, #a08bff); }
+.au-btn.gold {
+  background: linear-gradient(120deg, var(--lx-purple, #6c4fd6), #8a55d8 55%, var(--lx-magenta, #e06ac8));
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(108,79,214,.28);
+}
+.au-btn.gold:hover { filter: brightness(1.08); }
+
+:focus-visible {
+  outline-color: var(--lx-violet, #a08bff);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-logo-word { animation: none; }
+}
