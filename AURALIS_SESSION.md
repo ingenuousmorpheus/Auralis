@@ -298,3 +298,34 @@ Completed:
 - Preserved the owner visual gate: the luxury design is not propagated across all pages until My Voice is visually accepted or corrected.
 
 No runtime/audio/model/frontend behavior changed in this phase, so no runtime test claim is made. The next implementation phase remains the owner-gated luxury shell/navigation propagation; independent non-visual engineering may continue without bypassing that gate.
+
+
+## Session 022 — luxury shell convergence
+
+**Date:** 2026-10-06  
+**Scope:** propagate the approved luxury language to the shared application shell without changing page workflows or backend behavior.
+
+Owner continuation signal:
+- After Session 021 explicitly surfaced the visual propagation gate, the owner instructed Auralis work to continue. This phase therefore proceeds with the smallest reversible shared-shell step; full page-by-page visual acceptance is still separate.
+
+Completed:
+- Re-skinned the existing sidebar/navigation and global player using the existing Lux design tokens rather than creating a second theme system.
+- Replaced the old bridge-console gold emphasis in the shell with the approved obsidian/plum/violet/magenta/cyan "recording studio at midnight" language.
+- Preserved all existing navigation ids, routes, player behavior, voice-card behavior and responsive shell structure.
+- Changed the static shell status copy from `LOCAL CORE · ONLINE` to `LOCAL · PRIVATE` so the interface does not imply a live health check it does not actually perform.
+- Added reduced-motion-safe treatment for the shell logo path.
+
+Files changed:
+- `frontend/src/theme.css`
+- `frontend/src/Shell.jsx`
+
+Behavioral impact:
+- Presentation only. No API, model, DSP, project, voice, storage or audio-pipeline behavior changed.
+- No fake controls or unsupported backend capability were added.
+
+Verification status:
+- Source-level review completed in-repo.
+- This environment did not execute the Vite build or browser visual check, so Session 022 remains pending owner/browser validation before treating the shell appearance as visually accepted.
+
+Next bounded phase:
+- Apply the same reusable Lux primitives to the Create page without altering Create's composition, voice-selection, rendering, or project behavior; then checkpoint before moving to My Music/Projects.
