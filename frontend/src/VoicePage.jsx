@@ -572,8 +572,21 @@ export default function VoicePage({ API, classic, go }) {
   const refreshEngine = () => apiJson(`${API}/voice/provider`).then(setEngine).catch(() => setEngine({ installed: false }));
   useEffect(() => { refresh(); refreshEngine(); }, [API]);
 
+  // Selection precedence: an explicit remembered choice wins. If it no longer
+  // exists (first run, deleted voice, cleared browser storage), prefer the
+  // strongest ready personal instrument instead of whichever profile happens
+  // to be first in the API list. Persist the fallback so every Auralis voice
+  // surface sees a stable choice on the next visit.
   const voice = useMemo(() => voices.find(v => v.id === selected)
-    || voices.find(v => v.training_status === "trained") || voices[0] || null, [voices, selected]);
+    || voices.find(v => v.training_status === "trained")
+    || voices.find(v => v.kind === "studio-dataset")
+    || voices[0] || null, [voices, selected]);
+  useEffect(() => {
+    if (voice && voice.id !== selected) {
+      setSelected(voice.id);
+      keep("auralis.voice", voice.id);
+    }
+  }, [voice?.id, selected]);
   const select = id => { setSelected(id); keep("auralis.voice", id); };
   const scrollTo = id => requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
 
