@@ -285,3 +285,16 @@ At the beginning of a future Auralis engineering session:
 
 Documentation/continuity only. No audio engine, model, voice data, frontend,
 provider, project data, or user audio was modified.
+
+
+## Session 021 — architecture reconciliation
+
+**Date:** 2026-10-06  
+**Scope:** safe continuation while the Session 020 My Voice visual acceptance gate remains open.
+
+Completed:
+- Reconciled `docs/AURALIS_CURRENT_ARCHITECTURE.md` through the committed Harmonic Reference, luxury My Voice, deterministic personal-voice selection, and Create/full-song voice-selection work.
+- Corrected continuity authority in the architecture document: `AURALIS_SESSION.md` is canonical; older references to missing `auralissession.md` are drift.
+- Preserved the owner visual gate: the luxury design is not propagated across all pages until My Voice is visually accepted or corrected.
+
+No runtime/audio/model/frontend behavior changed in this phase, so no runtime test claim is made. The next implementation phase remains the owner-gated luxury shell/navigation propagation; independent non-visual engineering may continue without bypassing that gate.
