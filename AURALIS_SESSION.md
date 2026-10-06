@@ -60,8 +60,8 @@ Recent committed milestones include:
 - Public artist integration plan committed.
 - Luxury My Voice UI first pass committed on 2026-10-04.
 
-Latest reviewed commit at this checkpoint:
-`3c5f236` — My Voice luxury redesign on a reusable design layer (first pass).
+Latest reviewed implementation commit at this checkpoint:
+`1620c13` — My Voice persists a deterministic personal-voice fallback (explicit saved choice > trained Studio Voice > Studio dataset > first available voice). This keeps the chosen personal instrument stable across visits without changing old project data.
 
 ## Luxury UI state
 
