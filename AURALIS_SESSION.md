@@ -60,8 +60,9 @@ Recent committed milestones include:
 - Public artist integration plan committed.
 - Luxury My Voice UI first pass committed on 2026-10-04.
 
-Latest reviewed implementation commit at this checkpoint:
-`1620c13` — My Voice persists a deterministic personal-voice fallback (explicit saved choice > trained Studio Voice > Studio dataset > first available voice). This keeps the chosen personal instrument stable across visits without changing old project data.
+Latest reviewed implementation commits at this checkpoint:
+- `1620c13` — My Voice persists a deterministic personal-voice fallback (explicit saved choice > trained Studio Voice > Studio dataset > first available voice).
+- `aad4c9e` — Create now reads that same remembered selection and sends it as `profile_id` to the existing full-song pipeline, so the voice selected in My Voice is the voice used for new vocal renders. Fallback precedence is identical and is persisted when the remembered id is stale.
 
 ## Luxury UI state
 
