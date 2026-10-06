@@ -1,5 +1,18 @@
 # Auralis Current Architecture
 
+## 2026-10-06 reconciliation — post Session 020
+
+This document's older subsystem inventory remains useful, but the implementation has advanced beyond its original Session 017 header. The following committed work is now part of the current architecture and should be treated as authoritative when reading older sections below:
+
+- Harmonic Reference is implemented as a note-domain analysis/advice tool (`auralis/engine/harmony.py` plus API/UI/docs); Pitch Polish remains the audio-editing stage.
+- The owner-approved luxury My Voice first pass is implemented in `frontend/src/VoicePage.jsx` on the reusable `frontend/src/Lux.jsx` / `lux.css` layer. It preserves the existing voice APIs, queue, history, training, capture and My Music integration.
+- Personal voice selection is persisted deterministically. Current precedence is remembered explicit selection when valid, then trained Studio Voice, then Studio dataset, then the first available voice.
+- Create/full-song rendering now consumes that same selected My Voice through the existing `profile_id` path rather than creating a second singer-selection system.
+- `AURALIS_SESSION.md` is the canonical lightweight continuity checkpoint. Any older reference to a missing `auralissession.md` is historical documentation drift.
+
+**Visual propagation gate:** My Voice Session 020 still awaits owner visual acceptance. Do not propagate the luxury visual language across every page until that acceptance/fix pass occurs. Safe work that does not depend on that visual decision may continue.
+
+
 **Audit phase:** AU-00 (baseline audit, see `auralissession.md`)
 **Audited:** 2026-09-23
 **Baseline commit:** `4910b1c` (GitHub `main`)
