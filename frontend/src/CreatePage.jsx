@@ -5,12 +5,12 @@ import SongStudio from "./SongStudio.jsx";
 import DemoPanel from "./DemoPanel.jsx";
 import { Cover, Icon, apiJson, catalogStats, fmtTime } from "./ui.jsx";
 
-/* Create: the prompt / lyrics panel beside the workspace.
+/* Create: prompt / lyrics beside the workspace.
 
-   Create builds a Song Blueprint (AU-04) from the prompt, lyrics, Era & style
-   choices, Artist DNA and the trained voice range, and shows it editable in
-   the workspace. Audio (composer → guide singer → voice) is the next phase,
-   so nothing here pretends to render a song. */
+   Create can build an editable Song Blueprint or run the implemented full-song
+   chain (composer → guide singer → selected My Voice → vocal production →
+   mix/master → persistent project). My Voice and Create intentionally share
+   the same remembered voice selection. */
 
 const FILTERS = ["All", "Stem sets", "Full mixes", "With vocal"];
 
@@ -67,8 +67,18 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
 
   useEffect(() => {
     apiJson(`${API}/artist/library`).then(d => setSongs(d.songs)).catch(() => setSongs([]));
-    apiJson(`${API}/voice/profiles`).then(list =>
-      setVoice(list.find(p => p.training_status === "trained") || list[0] || null)).catch(() => {});
+    apiJson(`${API}/voice/profiles`).then(list => {
+      let remembered = "";
+      try { remembered = localStorage.getItem("auralis.voice") || ""; } catch { /* private mode */ }
+      const chosen = list.find(p => p.id === remembered)
+        || list.find(p => p.training_status === "trained")
+        || list.find(p => p.kind === "studio-dataset")
+        || list[0] || null;
+      setVoice(chosen);
+      if (chosen && chosen.id !== remembered) {
+        try { localStorage.setItem("auralis.voice", chosen.id); } catch { /* private mode */ }
+      }
+    }).catch(() => setVoice(null));
   }, [API]);
 
   const stats = useMemo(() => catalogStats(songs), [songs]);
