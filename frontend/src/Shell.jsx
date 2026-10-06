@@ -28,7 +28,7 @@ export function Sidebar({ API, page, go, tools }) {
         <span className={`au-logo-word${morphing ? " morphing" : ""}`}
           onAnimationEnd={e => { if (e.animationName === "au-morph") setMorphing(false); }}>AURALIS</span>
       </button>
-      <div className="au-status"><span className="au-dot" />LOCAL CORE · ONLINE</div>
+      <div className="au-status"><span className="au-dot" />LOCAL · PRIVATE</div>
     </div>
 
     <div className="au-nav-group">
