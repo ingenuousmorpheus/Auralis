@@ -1,331 +1,85 @@
-# Auralis Session
+import React, { useEffect, useRef, useState } from "react";
+import { startRecording } from "./recorder.js";
+import { apiJson } from "./ui.jsx";
+
+/* Demo → song (AU-13): hum, sing or play the idea (or choose a voice memo);
+   Auralis finds its tempo, key and melody, harmonizes it, and builds the song
+   around it, keeping your melody note for note as the chorus (or a verse). */
+
+export default function DemoPanel({ API, prompt, lyrics, useDna, useVoice, era, onBlueprint, onClose }) {
+  const [rec, setRec] = useState(null);
+  const [secs, setSecs] = useState(0);
+  const [take, setTake] = useState(null);
+  const [file, setFile] = useState(null);
+  const [role, setRole] = useState("chorus");
+  const [tempo, setTempo] = useState("");
+  const [pickup, setPickup] = useState("");               // "" = auto
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const url = useRef(null);
+  useEffect(() => () => { rec?.cancel(); if (url.current) URL.revokeObjectURL(url.current); }, [rec]);
+
+  const record = async () => {
+    setError(""); setTake(null); setFile(null);
+    try { setRec(await startRecording({ onLevel: l => setSecs(l.seconds) })); }
+    catch (e) { setError(e.name === "NotAllowedError" ? "Microphone access was blocked for this page." : e.message); }
+  };
+  const stop = async () => {
+    const r = rec; setRec(null);
+    const t = await r.stop();
+    if (url.current) URL.revokeObjectURL(url.current);
+    url.current = URL.createObjectURL(t.blob);
+    setTake({ ...t, url: url.current });
+  };
+  const build = async () => {
+    setBusy(true); setError("");
+    try {
+      const form = new FormData();
+      form.append("file", take ? take.blob : file, take ? "demo.wav" : file.name);
+      form.append("prompt", prompt || ""); form.append("lyrics", lyrics || "");
+      form.append("role", role); form.append("use_dna", String(useDna)); form.append("use_voice", String(useVoice));
+      if (tempo) form.append("tempo", tempo);
+      if (pickup !== "") form.append("pickup_beats", pickup);
+      if (era) form.append("era", era);
+      onBlueprint(await apiJson(`${API}/composer/demo`, { method: "POST", body: form }));
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return <div className="lx-glass" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 16 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="au-label" style={{ color: "var(--lx-muted)" }}>Build from my demo</div>
+      <button className="lx-icon-btn" onClick={onClose} aria-label="Close demo panel">✕</button>
+    </div>
+    <div style={{ fontSize: 12, color: "var(--lx-muted)", lineHeight: 1.5 }}>
+      Sing or hum the idea (a hook works best), or play its chords, or both. Auralis keeps your melody and the chords you play, and builds the song around them. Singing over an instrument works best for the clearest demo-to-song result.
+    </div>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      {!rec && <button className="lx-btn" onClick={record}><span className="vp-rec-dot small" aria-hidden="true" />{take ? "Record again" : "Record"}</button>}
+      {rec && <><button className="lx-btn" onClick={stop}>Stop</button>
+        <span className="au-mono" style={{ fontSize: 14, color: "var(--lx-text)" }}>{Math.floor(secs / 60)}:{String(Math.floor(secs % 60)).padStart(2, "0")}</span></>}
+      <label style={{ fontSize: 12, color: "var(--lx-muted)" }}>or <input type="file" accept=".wav,.flac,.ogg,.mp3"
+        onChange={e => { setFile(e.target.files?.[0] || null); setTake(null); }} aria-label="Choose a demo file" /></label>
+    </div>
+    {take && <audio controls src={take.url} style={{ width: "100%" }} aria-label="Your demo" />}
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <span className="au-caption" style={{ color: "var(--lx-muted)" }}>It's the</span>
+      <div className="lx-segment" role="tablist" aria-label="Demo becomes">
+        {[['chorus', 'Chorus'], ['verse', 'Verse'], ['bridge', 'Bridge']].map(([r, l]) =>
+          <button key={r} role="tab" aria-selected={role === r} onClick={() => setRole(r)}>{l}</button>)}
+      </div>
+      <input className="lx-input" style={{ width: 110, height: 34 }} placeholder="BPM (auto)" inputMode="numeric"
+        value={tempo} onChange={e => setTempo(e.target.value.replace(/[^0-9.]/g, ""))} aria-label="Tempo (optional)" />
+      <select className="lx-select" style={{ height: 34 }} value={pickup} onChange={e => setPickup(e.target.value)} aria-label="Where the first note falls">
+        <option value="">First note: auto</option>
+        <option value="0">First note on beat 1</option>
+        <option value="0.5">½-beat pickup</option>
+        <option value="1">1-beat pickup</option>
+        <option value="2">2-beat pickup</option>
+      </select>
+    </div>
+    {error && <div role="alert" className="bp-alert warn">{error}</div>}
+    <button className="lx-btn primary" onClick={build} disabled={busy || !(take || file)}>{busy ? "Listening to your demo…" : "Build the song around it"}</button>
+  </div>;
+}
 
-> Canonical lightweight continuity checkpoint for ChatGPT, Claude, Codex, and
-> future Auralis work.
->
-> Last reconciled from GitHub: 2026-10-06.
-> Repository: ingeniousmorpheus/Auralis
->
-> Read this before proposing a new Auralis phase. Code and tests establish what
-> exists; the owner's explicit decisions establish product direction.
-
-## Product identity
-
-Auralis is a local-first music, mixing, mastering, composition, and personal
-voice studio. Its strongest product direction is not "another Suno clone" and
-not "another DAW." It should feel like a premium creative instrument built
-around the user's own music and voice.
-
-Core product message:
-
-> YOUR VOICE. YOUR MUSIC. YOUR STUDIO. LOCAL FIRST.
-
-The owner wants a luxury-feeling public product while preserving local
-processing and user control.
-
-## Current product priorities
-
-1. Personal voice is a flagship feature, not a side utility.
-2. My Voice should make a trained personal voice feel like a reusable musical
-   instrument.
-3. The user's trained voice should be the natural/default voice choice where
-   the workflow needs a singer, while still allowing other saved voices.
-4. Auralis should combine a Kits-like clarity around voice workflows with a
-   Suno-like creative flow, without copying either product's branding,
-   distinctive UI, assets, or wording.
-5. Existing local music-production capability should remain available beneath
-   a simpler luxury interface.
-6. The project should remain extensible so users can eventually bring their own
-   legally installed audio tools/providers.
-
-## Verified current state
-
-Recent committed milestones include:
-
-- My Voice microphone capture and Kits-inspired workflow.
-- Persistent voice conversion history and one-at-a-time conversion queue.
-- My Music lead-vocal stem -> saved voice conversion.
-- Studio Voice training and trained-checkpoint conversion.
-- AU-05 structured composer and local instrumental rendering.
-- AU-06 atmosphere engine.
-- AU-07/08 guide singer + full-song voice pipeline, verified live.
-- AU-09 vocal production: doubles, harmonies, ad-libs as separate stems.
-- AU-10 full song assembly with persistent project stems.
-- AU-12 Artist DNA retrieval and similarity guard.
-- AU-13 demo-to-song.
-- Model lifecycle/registry with one-heavy-engine-at-a-time policy.
-- Seed-VC as the working voice converter.
-- ACE-Step and DiffSinger adapters/provider seams present but not installed.
-- Harmonic Reference committed as a note-domain analysis/advice tool.
-- Public artist integration plan committed.
-- Luxury My Voice UI first pass committed on 2026-10-04.
-
-Latest reviewed implementation commits at this checkpoint:
-- `1620c13` — My Voice persists a deterministic personal-voice fallback (explicit saved choice > trained Studio Voice > Studio dataset > first available voice).
-- `aad4c9e` — Create now reads that same remembered selection and sends it as `profile_id` to the existing full-song pipeline, so the voice selected in My Voice is the voice used for new vocal renders. Fallback precedence is identical and is persisted when the remembered id is stale.
-
-## Luxury UI state
-
-Owner-approved direction lives in:
-
-`docs/AURALIS_LUXURY_UI_DESIGN.md`
-
-The first My Voice implementation now exists:
-
-- `frontend/src/Lux.jsx`
-- `frontend/src/lux.css`
-- redesigned `VoicePage`
-- selected-voice hero
-- input/output workbench
-- waveform players
-- conversion result cards
-- My Music input
-- voice/training status
-- tool cards
-- GPU/model status
-
-The implementation commit reports successful Vite build, 29 relevant tests,
-responsive checks, and stubbed queue verification.
-
-Important: the first pass is still awaiting owner visual acceptance. Do not
-spread the visual system across every page until the owner has evaluated the
-My Voice screen and requested/accepted adjustments.
-
-## Voice direction
-
-The personal voice-copying workflow is one of Auralis's strongest
-differentiators.
-
-Current architecture already supports:
-
-- consent-confirmed voice creation;
-- microphone capture;
-- instant/reference voices;
-- dataset growth;
-- range/readiness measurement;
-- Studio Voice training;
-- trained checkpoint use;
-- conversion history;
-- conversion from My Music lead-vocal stems;
-- full-song singing pipeline;
-- pitch polish;
-- Vocal Finish;
-- vocal doubles/harmonies/ad-libs.
-
-Do not rebuild this as a second voice subsystem.
-
-### Default personal voice intent
-
-Product intent: when an owner/user has a ready trained personal voice, Auralis
-should prefer/present that voice as the natural default for creation rather than
-making the user repeatedly hunt for it.
-
-This is a UX/product preference, not permission to silently train, overwrite,
-share, upload, or publish a voice.
-
-A future implementation should define deterministic selection rules, for
-example: explicit project choice > explicit user default > ready personal
-Studio Voice > existing safe fallback. Do not implement that precedence until
-the existing voice-selection paths are audited so old projects remain
-reproducible.
-
-## Model/provider state
-
-Auralis already has the correct seam for heavyweight providers:
-
-- `auralis/models/lifecycle.py`
-- `auralis/models/interfaces.py`
-- `auralis/models/registry.py`
-- isolated worker/provider environments
-- one heavy model at a time
-- commit-memory gate
-- advisory VRAM reporting
-
-ACE-Step is planned as a section generator and has an adapter, but is not
-installed. DiffSinger has a guide-singer adapter, but a suitable voicebank
-licence remains a gating concern.
-
-Do not download/install a large model merely because its adapter exists.
-
-Re-check upstream licences before any provider installation or public release.
-
-## Harmonic Reference
-
-Harmonic Reference is BUILT and committed.
-
-It compares a target and reference in scale-degree/note space and reports:
-
-- transposition;
-- mode differences;
-- scale-degree balance;
-- out-of-key notes with timecodes;
-- register differences;
-- confidence.
-
-It advises only. Pitch Polish remains the stage that changes audio.
-
-Do not merge Harmonic Reference conceptually with the AU-09 vocal harmony
-generator; they solve different problems.
-
-## VST / existing-plugin integration direction
-
-Owner direction: investigate letting Auralis use audio plug-ins the user already
-owns, including examples such as Waves, Soundtoys, and Antares, as optional
-skills/tools in the local production chain.
-
-This is a future integration track, not an implemented capability.
-
-Design goal:
-
-Auralis decides *what processing is needed* -> an approved local plug-in host
-executes the user's installed plug-in -> Auralis measures/compares the result
-and continues the pipeline.
-
-Guardrails:
-
-- Do not bundle or redistribute commercial plug-ins.
-- Do not bypass licence managers, copy protection, activation, or vendor terms.
-- Do not assume a plug-in is installed or licensed.
-- Do not hard-code one vendor as required.
-- Keep Auralis functional without commercial VSTs.
-- Prefer a provider/adapter boundary rather than putting vendor-specific logic
-  throughout the DSP engine.
-- Preserve reproducibility by recording plug-in identity/version and parameter
-  state when possible.
-- A failed/unavailable plug-in should fall back safely rather than corrupt a
-  project.
-- Audit VST3 hosting/licensing/automation feasibility before implementation.
-
-A useful future architecture is a `processor`/effect-provider interface beside
-the existing model-provider interfaces, with a local host process isolated from
-the core engine. That is a proposal, not yet an approved implementation.
-
-## Public artist integration
-
-A public artist integration plan was committed in `334d553`.
-
-Intent: Auralis can be discoverable from the owner's artist/GitHub presence
-without turning private/local processing into a cloud dependency.
-
-Preserve the distinction between:
-
-- public presentation/download/discovery;
-- local Auralis processing;
-- private personal voice assets.
-
-Do not publish personal voice checkpoints or private audio as part of artist
-site integration.
-
-## Monetization direction requiring later product decision
-
-The owner has discussed a roughly $10/month public plan and a possible
-voice-based ownership/revenue concept. These are product ideas, not finalized
-billing/legal terms.
-
-Do not encode a 7% ownership/revenue rule, subscription entitlement, or legal
-claim into code until the owner explicitly approves the final model and the
-licensing/business implications have been reviewed.
-
-Local/free functionality and paid/public-service functionality should remain
-architecturally distinguishable.
-
-## Documentation drift found 2026-10-06
-
-`docs/AURALIS_CURRENT_ARCHITECTURE.md` says its last update was Session 017,
-while later committed work includes Harmonic Reference, the public artist plan,
-Sessions 018/020, and the luxury My Voice implementation.
-
-That architecture document also references `auralissession.md`, but that file
-was not present on GitHub main during this reconciliation.
-
-The README is substantially more current than the architecture header, but it
-does not capture all owner product decisions above.
-
-Do not treat the stale architecture header as evidence that later committed
-features do not exist.
-
-## Next safe work
-
-When Claude/Codex capacity is available:
-
-1. Owner visually tests the Session 020 My Voice luxury redesign.
-2. Fix only issues found in that acceptance pass before propagating the visual
-   language.
-3. Reconcile `docs/AURALIS_CURRENT_ARCHITECTURE.md` through the latest
-   committed feature state.
-4. Audit all current voice-selection entry points and propose the safest
-   personal-voice default precedence without changing old project behavior.
-5. Decide whether ACE-Step installation is worth its local RAM/VRAM cost before
-   downloading anything.
-6. Research a vendor-neutral local VST3/effect-host boundary before touching
-   Waves/Soundtoys/Antares integration.
-7. Keep the public artist integration thin: discovery/presentation outside,
-   audio and voice processing local.
-8. Revisit pricing/ownership terms separately from engineering.
-
-## Handoff instructions
-
-At the beginning of a future Auralis engineering session:
-
-1. Read this file.
-2. Read `README.md`.
-3. Read `docs/AURALIS_CURRENT_ARCHITECTURE.md`, but account for its documented
-   stale sections.
-4. Read `docs/AURALIS_LUXURY_UI_DESIGN.md`.
-5. Read `docs/VOICE_STUDIO_PLAN.md`, `docs/MODEL_INTEGRATION.md`,
-   `docs/MODEL_OPTIONS.md`, and `docs/HARMONIC_REFERENCE.md` when relevant.
-6. Inspect commits newer than the latest reviewed commit recorded here.
-7. Do not create a parallel voice, model, project, or DSP architecture when an
-   existing seam already solves the problem.
-8. Preserve local-first behavior and existing project compatibility.
-9. Separate owner-approved direction from speculative future ideas.
-10. Update this checkpoint after meaningful accepted work.
-
-## This reconciliation
-
-Documentation/continuity only. No audio engine, model, voice data, frontend,
-provider, project data, or user audio was modified.
-
-
-## Session 021 — architecture reconciliation
-
-**Date:** 2026-10-06  
-**Scope:** safe continuation while the Session 020 My Voice visual acceptance gate remains open.
-
-Completed:
-- Reconciled `docs/AURALIS_CURRENT_ARCHITECTURE.md` through the committed Harmonic Reference, luxury My Voice, deterministic personal-voice selection, and Create/full-song voice-selection work.
-- Corrected continuity authority in the architecture document: `AURALIS_SESSION.md` is canonical; older references to missing `auralissession.md` are drift.
-- Preserved the owner visual gate: the luxury design is not propagated across all pages until My Voice is visually accepted or corrected.
-
-No runtime/audio/model/frontend behavior changed in this phase, so no runtime test claim is made. The next implementation phase remains the owner-gated luxury shell/navigation propagation; independent non-visual engineering may continue without bypassing that gate.
-
-
-## Session 022 — luxury shell convergence
-
-**Date:** 2026-10-06  
-**Scope:** propagate the approved luxury language to the shared application shell without changing page workflows or backend behavior.
-
-Owner continuation signal:
-- After Session 021 explicitly surfaced the visual propagation gate, the owner instructed Auralis work to continue. This phase therefore proceeds with the smallest reversible shared-shell step; full page-by-page visual acceptance is still separate.
-
-Completed:
-- Re-skinned the existing sidebar/navigation and global player using the existing Lux design tokens rather than creating a second theme system.
-- Replaced the old bridge-console gold emphasis in the shell with the approved obsidian/plum/violet/magenta/cyan "recording studio at midnight" language.
-- Preserved all existing navigation ids, routes, player behavior, voice-card behavior and responsive shell structure.
-- Changed the static shell status copy from `LOCAL CORE · ONLINE` to `LOCAL · PRIVATE` so the interface does not imply a live health check it does not actually perform.
-- Added reduced-motion-safe treatment for the shell logo path.
-
-Files changed:
-- `frontend/src/theme.css`
-- `frontend/src/Shell.jsx`
-
-Behavioral impact:
-- Presentation only. No API, model, DSP, project, voice, storage or audio-pipeline behavior changed.
-- No fake controls or unsupported backend capability were added.
-
-Verification status:
-- Source-level review completed in-repo.
-- This environment did not execute the Vite build or browser visual check, so Session 022 remains pending owner/browser validation before treating the shell appearance as visually accepted.
-
-Next bounded phase:
-- Apply the same reusable Lux primitives to the Create page without altering Create's composition, voice-selection, rendering, or project behavior; then checkpoint before moving to My Music/Projects.

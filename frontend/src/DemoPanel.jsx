@@ -1,83 +1,121 @@
-import React, { useEffect, useRef, useState } from "react";
-import { startRecording } from "./recorder.js";
+import React, { useEffect, useState } from "react";
 import { apiJson } from "./ui.jsx";
 
-/* Demo → song (AU-13): hum, sing or play the idea (or choose a voice memo);
-   Auralis finds its tempo, key and melody, harmonizes it, and builds the song
-   around it, keeping your melody note for note as the chorus (or a verse). */
+/* Era & style controls for Create, backed by the R&B Theory Atlas.
+   Shows documented, transposable candidates with sources and a key fitted to
+   the user's voice. Nothing here plays or generates audio. */
 
-export default function DemoPanel({ API, prompt, lyrics, useDna, useVoice, era, onBlueprint, onClose }) {
-  const [rec, setRec] = useState(null);
-  const [secs, setSecs] = useState(0);
-  const [take, setTake] = useState(null);
-  const [file, setFile] = useState(null);
-  const [role, setRole] = useState("chorus");
-  const [tempo, setTempo] = useState("");
-  const [pickup, setPickup] = useState("");               // "" = auto
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const url = useRef(null);
-  useEffect(() => () => { rec?.cancel(); if (url.current) URL.revokeObjectURL(url.current); }, [rec]);
+const HARMONY = [["", "Any"], ["familiar", "Familiar"], ["rich", "Rich"], ["gospel", "Gospel-influenced"],
+  ["dark", "Dark"], ["romantic", "Romantic"], ["experimental", "Experimental"]];
+const VOCAL = [["", "Any"], ["smooth", "Smooth"], ["conversational", "Conversational"], ["melismatic", "Melismatic"],
+  ["falsetto", "Falsetto-heavy"], ["power_ballad", "Power ballad"], ["adlib_heavy", "Ad-lib heavy"]];
+const GROOVE = [["", "Any"], ["straight", "Straight"], ["laid_back", "Laid-back"], ["deep_pocket", "Deep pocket"],
+  ["swing", "Swing"], ["hiphop", "Hip-hop influenced"]];
 
-  const record = async () => {
-    setError(""); setTake(null); setFile(null);
-    try { setRec(await startRecording({ onLevel: l => setSecs(l.seconds) })); }
-    catch (e) { setError(e.name === "NotAllowedError" ? "Microphone access was blocked for this page." : e.message); }
-  };
-  const stop = async () => {
-    const r = rec; setRec(null);
-    const t = await r.stop();
-    if (url.current) URL.revokeObjectURL(url.current);
-    url.current = URL.createObjectURL(t.blob);
-    setTake({ ...t, url: url.current });
-  };
-  const build = async () => {
-    setBusy(true); setError("");
-    try {
-      const form = new FormData();
-      form.append("file", take ? take.blob : file, take ? "demo.wav" : file.name);
-      form.append("prompt", prompt || ""); form.append("lyrics", lyrics || "");
-      form.append("role", role); form.append("use_dna", String(useDna)); form.append("use_voice", String(useVoice));
-      if (tempo) form.append("tempo", tempo);
-      if (pickup !== "") form.append("pickup_beats", pickup);
-      if (era) form.append("era", era);
-      onBlueprint(await apiJson(`${API}/composer/demo`, { method: "POST", body: form }));
-    } catch (e) { setError(e.message); }
-    finally { setBusy(false); }
-  };
+function Status({ status }) {
+  const sourced = status === "sourced";
+  return <span className={sourced ? "lx-badge ready" : "lx-badge warn"} title={sourced ? "Stated in the cited source" : "Starting hypothesis, not yet validated"}>{status}</span>;
+}
 
-  return <div className="au-card au-console" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div className="au-label">Build from my demo</div>
-      <button className="bp-icon" onClick={onClose} aria-label="Close demo panel">✕</button>
-    </div>
-    <div style={{ fontSize: 12, color: "var(--steel)", lineHeight: 1.5 }}>
-      Sing or hum the idea (a hook works best), or play its chords, or both. Auralis keeps your melody and the chords you play, and builds the song around them. Singing over an instrument works best when your voice is clearly louder.</div>
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      {!rec && <button className="au-btn" onClick={record}><span className="vp-rec-dot small" aria-hidden="true" />{take ? "Record again" : "Record"}</button>}
-      {rec && <><button className="au-btn light" onClick={stop}>Stop</button>
-        <span className="au-mono" style={{ fontSize: 14 }}>{Math.floor(secs / 60)}:{String(Math.floor(secs % 60)).padStart(2, "0")}</span></>}
-      <label style={{ fontSize: 12, color: "var(--steel)" }}>or <input type="file" accept=".wav,.flac,.ogg,.mp3"
-        onChange={e => { setFile(e.target.files?.[0] || null); setTake(null); }} aria-label="Choose a demo file" /></label>
-    </div>
-    {take && <audio controls src={take.url} style={{ width: "100%" }} aria-label="Your demo" />}
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      <span className="au-caption">It's the</span>
-      <div className="au-segment" role="tablist" aria-label="Demo becomes">
-        {[["chorus", "Chorus"], ["verse", "Verse"], ["bridge", "Bridge"]].map(([r, l]) =>
-          <button key={r} role="tab" aria-selected={role === r} onClick={() => setRole(r)}>{l}</button>)}
-      </div>
-      <input className="au-input" style={{ width: 110, height: 34 }} placeholder="BPM (auto)" inputMode="numeric"
-        value={tempo} onChange={e => setTempo(e.target.value.replace(/[^0-9.]/g, ""))} aria-label="Tempo (optional)" />
-      <select className="au-input" style={{ height: 34 }} value={pickup} onChange={e => setPickup(e.target.value)} aria-label="Where the first note falls">
-        <option value="">First note: auto</option>
-        <option value="0">First note on beat 1</option>
-        <option value="0.5">½-beat pickup</option>
-        <option value="1">1-beat pickup</option>
-        <option value="2">2-beat pickup</option>
-      </select>
-    </div>
-    {error && <div role="alert" className="bp-alert warn">{error}</div>}
-    <button className="au-btn gold" onClick={build} disabled={busy || !(take || file)}>{busy ? "Listening to your demo…" : "Build the song around it"}</button>
+function Sources({ list }) {
+  return <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+    {list.map(s => s.url
+      ? <a key={s.id} href={s.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "var(--lx-violet)" }}>{s.title}</a>
+      : <span key={s.id} style={{ fontSize: 11, color: "var(--lx-muted)" }}>{s.title}</span>)}
   </div>;
 }
+
+function Select({ id, label, value, onChange, options }) {
+  return <label htmlFor={id} style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+    <span className="au-caption" style={{ color: "var(--lx-muted)" }}>{label}</span>
+    <select id={id} value={value} onChange={e => onChange(e.target.value)} className="lx-select" style={{ height: 38, padding: "0 10px" }}>
+      {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  </label>;
+}
+
+export default function AtlasPanel({ API, value, onChange }) {
+  /* Controlled by Create when `value`/`onChange` are passed, so the choices
+     feed the blueprint; era "" means Auto (the blueprint picks and explains). */
+  const [open, setOpen] = useState(false);
+  const [eraList, setEraList] = useState([]);
+  const [local, setLocal] = useState({ era: "", harmony: "", vocal: "", groove: "" });
+  const sel = value || local;
+  const set = key => v => (onChange || setLocal)({ ...sel, [key]: v });
+  const { era, harmony, vocal, groove } = sel;
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => { if (open && !eraList.length) apiJson(`${API}/theory/eras`).then(setEraList).catch(e => setError(e.message)); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    if (!era) { setResult(null); return; }
+    const q = new URLSearchParams({ era, ...(harmony && { harmony }), ...(vocal && { vocal }), ...(groove && { groove }) });
+    apiJson(`${API}/theory/candidates?${q}`).then(r => { setResult(r); setError(""); }).catch(e => setError(e.message));
+  }, [open, era, harmony, vocal, groove]);
+
+  return <div className="lx-glass" style={{ padding: 0 }}>
+    <button onClick={() => setOpen(v => !v)} aria-expanded={open} style={{
+      width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px",
+      background: "transparent", border: "none", color: "inherit", cursor: "pointer", font: "inherit", textAlign: "left",
+    }}>
+      <span><span className="au-label" style={{ color: "var(--lx-muted)" }}>Era &amp; style</span>
+        <span style={{ display: "block", fontSize: 12, color: "var(--lx-muted)" }}>R&amp;B Theory Atlas: documented options, keyed to your voice</span></span>
+      <span aria-hidden="true" style={{ color: "var(--lx-violet)", fontSize: 18 }}>{open ? "−" : "+"}</span>
+    </button>
+
+    {open && <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+        <Select id="atlas-era" label="Era" value={era} onChange={set("era")}
+          options=[["", "Auto (from prompt + DNA)"], ...eraList.map(e => [e.id, e.name])]} />
+        <Select id="atlas-harmony" label="Harmony" value={harmony} onChange={set("harmony")} options={HARMONY} />
+        <Select id="atlas-vocal" label="Vocal approach" value={vocal} onChange={set("vocal")} options={VOCAL} />
+        <Select id="atlas-groove" label="Groove" value={groove} onChange={set("groove")} options={GROOVE} />
+      </div>
+      {error && <div role="alert" style={{ color: "var(--lx-danger)", fontSize: 13 }}>{error}</div>}
+      {!era && <div style={{ fontSize: 12, color: "var(--lx-muted)", lineHeight: 1.5 }}>
+        Auto lets the blueprint pick the era from your prompt and Artist DNA and explain why. Pick an era to preview its candidates.</div>}
+
+      {result && <>
+        <div style={{ fontSize: 12, color: "var(--lx-muted)", lineHeight: 1.5 }}>
+          <b style={{ color: "var(--lx-text)" }}>{result.era.name}</b> · {result.era.bpm_band[0]}–{result.era.bpm_band[1]} BPM · {result.era.harmonic_rhythm} <Status status={result.era.status} />
+        </div>
+
+        <div>
+          <div className="au-caption" style={{ marginBottom: 6, color: "var(--lx-muted)" }}>Harmony candidates</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {result.harmony.map(h => <div key={h.id} style={{ border: "1px solid var(--lx-border)", borderRadius: 12, padding: "10px 12px", background: "var(--lx-surface)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                <span style={{ fontWeight: 800, fontSize: 13, color: "var(--lx-text)" }}>{h.name}</span><Status status={h.status} />
+              </div>
+              <div className="au-mono" style={{ color: "var(--lx-cyan)", fontSize: 14, margin: "6px 0" }}>{h.roman.join("  –  ")}</div>
+              {h.keys[0] && <div style={{ fontSize: 12, color: "var(--lx-muted)" }}>
+                <span style={{ color: "var(--lx-violet)", fontWeight: 700 }}>Try {h.keys[0].key}</span>
+                <span> · {h.keys[0].why}</span>
+              </div>}
+              <div style={{ fontSize: 12, color: "var(--lx-muted)", marginTop: 4 }}>{h.comment}</div>
+              <Sources list={h.sources} />
+            </div>)}
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+          {result.vocal[0] && <div style={{ border: "1px solid var(--lx-border)", borderRadius: 12, padding: "10px 12px", background: "var(--lx-surface)" }}>
+            <div className="au-caption" style={{ color: "var(--lx-muted)" }}>Vocal · {result.vocal[0].section}</div>
+            <div style={{ fontWeight: 700, fontSize: 13, marginTop: 4, color: "var(--lx-text)" }}>{result.vocal[0].name}</div>
+            <div style={{ fontSize: 12, color: "var(--lx-muted)" }}>{result.vocal[0].contour} · {result.vocal[0].phrase_bars[0]}–{result.vocal[0].phrase_bars[1]} bar phrases</div>
+            <div style={{ marginTop: 6 }}><Status status={result.vocal[0].status} /></div>
+          </div>}
+          {result.groove[0] && <div style={{ border: "1px solid var(--lx-border)", borderRadius: 12, padding: "10px 12px", background: "var(--lx-surface)" }}>
+            <div className="au-caption" style={{ color: "var(--lx-muted)" }}>Groove</div>
+            <div style={{ fontWeight: 700, fontSize: 13, marginTop: 4, color: "var(--lx-text)" }}>{result.groove[0].name}</div>
+            <div style={{ fontSize: 12, color: "var(--lx-muted)" }}>{result.groove[0].bpm_band[0]}–{result.groove[0].bpm_band[1]} BPM · {result.groove[0].push_pull}</div>
+            <div style={{ marginTop: 6 }}><Status status={result.groove[0].status} /></div>
+          </div>}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--lx-muted)" }}>{result.originality}</div>
+      </>}
+    </div>}
+  </div>;
+}
+

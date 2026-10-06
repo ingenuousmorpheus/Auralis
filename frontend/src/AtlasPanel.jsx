@@ -1,121 +1,80 @@
-import React, { useEffect, useState } from "react";
-import { apiJson } from "./ui.jsx";
+/* Song Blueprint view (AU-04). Uses the approved Lux token set. */
 
-/* Era & style controls for Create, backed by the R&B Theory Atlas.
-   Shows documented, transposable candidates with sources and a key fitted to
-   the user's voice. Nothing here plays or generates audio. */
+.bp { display: flex; flex-direction: column; gap: 14px; padding: 0 28px 24px; }
+.bp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bp-title-input {
+  font-family: var(--font-display); font-size: 20px; letter-spacing: 0.02em; color: var(--lx-text);
+  background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 4px 8px; margin-left: -8px;
+  width: min(520px, 100%);
+}
+.bp-title-input:hover, .bp-title-input:focus { border-color: var(--lx-border-strong); outline: none; }
+.bp-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 
-const HARMONY = [["", "Any"], ["familiar", "Familiar"], ["rich", "Rich"], ["gospel", "Gospel-influenced"],
-  ["dark", "Dark"], ["romantic", "Romantic"], ["experimental", "Experimental"]];
-const VOCAL = [["", "Any"], ["smooth", "Smooth"], ["conversational", "Conversational"], ["melismatic", "Melismatic"],
-  ["falsetto", "Falsetto-heavy"], ["power_ballad", "Power ballad"], ["adlib_heavy", "Ad-lib heavy"]];
-const GROOVE = [["", "Any"], ["straight", "Straight"], ["laid_back", "Laid-back"], ["deep_pocket", "Deep pocket"],
-  ["swing", "Swing"], ["hiphop", "Hip-hop influenced"]];
+.bp-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.bp-fact { background: var(--lx-surface); border: 1px solid var(--lx-border); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.bp-fact .au-input { height: 36px; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 0 10px; }
+.bp-fact-value { font-family: var(--font-mono); font-size: 18px; margin-top: 6px; color: var(--lx-cyan); }
 
-function Status({ status }) {
-  const sourced = status === "sourced";
-  return <span className="au-chip mono" title={sourced ? "Stated in the cited source" : "Starting hypothesis, not yet validated"}
-    style={{ color: sourced ? "var(--signal)" : "var(--gold-light)", background: "#11151c" }}>{status}</span>;
+.bp-why { font-size: 12px; color: var(--lx-muted); line-height: 1.5; margin-top: 6px; }
+.bp-why li { margin: 2px 0; }
+.bp-why ul { margin: 0; padding-left: 16px; }
+.bp-why-toggle {
+  background: none; border: none; padding: 0; margin-top: 6px; cursor: pointer; font: inherit;
+  font-size: 12px; font-weight: 700; color: var(--lx-violet);
 }
 
-function Sources({ list }) {
-  return <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-    {list.map(s => s.url
-      ? <a key={s.id} href={s.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "var(--holo-soft)" }}>{s.title}</a>
-      : <span key={s.id} style={{ fontSize: 11, color: "var(--steel-dim)" }}>{s.title}</span>)}
-  </div>;
+.bp-curve { background: var(--lx-surface); border: 1px solid var(--lx-border); border-radius: 14px; padding: 12px; }
+.bp-curve svg { display: block; width: 100%; height: 96px; }
+
+.bp-section {
+  background: var(--lx-surface); border: 1px solid var(--lx-border); border-radius: 16px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px; box-shadow: var(--lx-glow);
+}
+.bp-section-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bp-section-head .au-input { height: 34px; padding: 0 8px; }
+.bp-section-name { font-weight: 800; font-size: 14px; min-width: 96px; color: var(--lx-text); }
+.bp-bars { width: 64px; }
+.bp-tools { margin-left: auto; display: flex; gap: 4px; }
+.bp-icon {
+  height: 32px; min-width: 32px; padding: 0 8px; border-radius: 9px; cursor: pointer;
+  background: transparent; border: 1px solid var(--lx-border); color: var(--lx-muted); font: inherit; font-size: 12px; font-weight: 700;
+}
+.bp-icon:hover:not(:disabled) { color: var(--lx-text); border-color: var(--lx-border-strong); }
+.bp-icon:disabled { opacity: 0.35; cursor: default; }
+
+.bp-chords { display: flex; gap: 6px; flex-wrap: wrap; }
+.bp-chord {
+  display: flex; flex-direction: column; align-items: center; min-width: 58px; padding: 6px 8px;
+  border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--lx-border);
+}
+.bp-chord b { font-family: var(--font-mono); font-size: 13px; color: var(--lx-cyan); font-weight: 500; }
+.bp-chord span { font-size: 11px; color: var(--lx-muted); font-family: var(--font-mono); }
+.bp-chord-edit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.bp-chord-edit .au-input { height: 34px; width: 100%; box-sizing: border-box; padding: 0 10px; font-family: var(--font-mono); font-size: 13px; }
+
+.bp-roles { display: flex; gap: 6px; flex-wrap: wrap; }
+.bp-role {
+  height: 28px; padding: 0 10px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700;
+  border: 1px solid var(--lx-border); background: transparent; color: var(--lx-muted);
+}
+.bp-role[data-level="light"] { color: var(--lx-text); border-color: var(--lx-border-strong); }
+.bp-role[data-level="medium"] { color: var(--lx-text); background: rgba(160, 139, 255, 0.08); border-color: rgba(160, 139, 255, 0.32); }
+.bp-role[data-level="full"] { color: #100d17; background: linear-gradient(135deg, var(--lx-violet), var(--lx-magenta)); border-color: transparent; }
+
+.bp-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--lx-muted); }
+.bp-row input[type="range"] { accent-color: var(--lx-violet); width: 120px; }
+
+.bp-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.bp-panel { background: var(--lx-surface); border: 1px solid var(--lx-border); border-radius: 14px; padding: 12px 14px; font-size: 13px; color: var(--lx-text); }
+.bp-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; line-height: 1.45; }
+.bp-check i { font-style: normal; font-weight: 800; }
+.bp-alert { border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
+.bp-alert.warn { background: rgba(255, 133, 151, 0.08); color: var(--lx-danger); border: 1px solid rgba(255, 133, 151, 0.25); }
+.bp-alert.note { background: rgba(242, 196, 111, 0.10); color: var(--lx-warning); border: 1px solid rgba(242, 196, 111, 0.25); }
+
+@media (max-width: 720px) {
+  .bp { padding: 0 16px 20px; }
+  .bp-chord-edit { grid-template-columns: 1fr; }
+  .bp-tools { margin-left: 0; }
 }
 
-function Select({ id, label, value, onChange, options }) {
-  return <label htmlFor={id} style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-    <span className="au-caption">{label}</span>
-    <select id={id} value={value} onChange={e => onChange(e.target.value)} className="au-input" style={{ height: 38, padding: "0 10px" }}>
-      {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-    </select>
-  </label>;
-}
-
-export default function AtlasPanel({ API, value, onChange }) {
-  /* Controlled by Create when `value`/`onChange` are passed, so the choices
-     feed the blueprint; era "" means Auto (the blueprint picks and explains). */
-  const [open, setOpen] = useState(false);
-  const [eraList, setEraList] = useState([]);
-  const [local, setLocal] = useState({ era: "", harmony: "", vocal: "", groove: "" });
-  const sel = value || local;
-  const set = key => v => (onChange || setLocal)({ ...sel, [key]: v });
-  const { era, harmony, vocal, groove } = sel;
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => { if (open && !eraList.length) apiJson(`${API}/theory/eras`).then(setEraList).catch(e => setError(e.message)); }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    if (!era) { setResult(null); return; }
-    const q = new URLSearchParams({ era, ...(harmony && { harmony }), ...(vocal && { vocal }), ...(groove && { groove }) });
-    apiJson(`${API}/theory/candidates?${q}`).then(r => { setResult(r); setError(""); }).catch(e => setError(e.message));
-  }, [open, era, harmony, vocal, groove]);
-
-  return <div className="au-card au-console" style={{ padding: 0 }}>
-    <button onClick={() => setOpen(v => !v)} aria-expanded={open} style={{
-      width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px",
-      background: "transparent", border: "none", color: "inherit", cursor: "pointer", font: "inherit", textAlign: "left",
-    }}>
-      <span><span className="au-label">Era &amp; style</span>
-        <span style={{ display: "block", fontSize: 12, color: "var(--steel)" }}>R&amp;B Theory Atlas: documented options, keyed to your voice</span></span>
-      <span aria-hidden="true" style={{ color: "var(--gold-light)", fontSize: 18 }}>{open ? "−" : "+"}</span>
-    </button>
-
-    {open && <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-        <Select id="atlas-era" label="Era" value={era} onChange={set("era")}
-          options={[["", "Auto (from prompt + DNA)"], ...eraList.map(e => [e.id, e.name])]} />
-        <Select id="atlas-harmony" label="Harmony" value={harmony} onChange={set("harmony")} options={HARMONY} />
-        <Select id="atlas-vocal" label="Vocal approach" value={vocal} onChange={set("vocal")} options={VOCAL} />
-        <Select id="atlas-groove" label="Groove" value={groove} onChange={set("groove")} options={GROOVE} />
-      </div>
-      {error && <div role="alert" style={{ color: "var(--warn)", fontSize: 13 }}>{error}</div>}
-      {!era && <div style={{ fontSize: 12, color: "var(--steel)", lineHeight: 1.5 }}>
-        Auto lets the blueprint pick the era from your prompt and Artist DNA and explain why. Pick an era to preview its candidates.</div>}
-
-      {result && <>
-        <div style={{ fontSize: 12, color: "var(--steel)", lineHeight: 1.5 }}>
-          <b style={{ color: "var(--ivory)" }}>{result.era.name}</b> · {result.era.bpm_band[0]}–{result.era.bpm_band[1]} BPM · {result.era.harmonic_rhythm} <Status status={result.era.status} />
-        </div>
-
-        <div>
-          <div className="au-caption" style={{ marginBottom: 6 }}>Harmony candidates</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {result.harmony.map(h => <div key={h.id} style={{ border: "1px solid var(--edge)", borderRadius: 12, padding: "10px 12px", background: "var(--deck)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                <span style={{ fontWeight: 800, fontSize: 13 }}>{h.name}</span><Status status={h.status} />
-              </div>
-              <div className="au-mono" style={{ color: "var(--gold-light)", fontSize: 14, margin: "6px 0" }}>{h.roman.join("  –  ")}</div>
-              {h.keys[0] && <div style={{ fontSize: 12 }}>
-                <span style={{ color: "var(--holo-soft)", fontWeight: 700 }}>Try {h.keys[0].key}</span>
-                <span style={{ color: "var(--steel)" }}> · {h.keys[0].why}</span>
-              </div>}
-              <div style={{ fontSize: 12, color: "var(--steel)", marginTop: 4 }}>{h.comment}</div>
-              <Sources list={h.sources} />
-            </div>)}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-          {result.vocal[0] && <div style={{ border: "1px solid var(--edge)", borderRadius: 12, padding: "10px 12px" }}>
-            <div className="au-caption">Vocal · {result.vocal[0].section}</div>
-            <div style={{ fontWeight: 700, fontSize: 13, marginTop: 4 }}>{result.vocal[0].name}</div>
-            <div style={{ fontSize: 12, color: "var(--steel)" }}>{result.vocal[0].contour} · {result.vocal[0].phrase_bars[0]}–{result.vocal[0].phrase_bars[1]} bar phrases</div>
-            <Status status={result.vocal[0].status} />
-          </div>}
-          {result.groove[0] && <div style={{ border: "1px solid var(--edge)", borderRadius: 12, padding: "10px 12px" }}>
-            <div className="au-caption">Groove</div>
-            <div style={{ fontWeight: 700, fontSize: 13, marginTop: 4 }}>{result.groove[0].name}</div>
-            <div style={{ fontSize: 12, color: "var(--steel)" }}>{result.groove[0].bpm_band[0]}–{result.groove[0].bpm_band[1]} BPM · {result.groove[0].push_pull}</div>
-            <Status status={result.groove[0].status} />
-          </div>}
-        </div>
-        <div style={{ fontSize: 11, color: "var(--steel-dim)" }}>{result.originality}</div>
-      </>}
-    </div>}
-  </div>;
-}

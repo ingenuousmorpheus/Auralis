@@ -1,79 +1,332 @@
-/* Song Blueprint view (AU-04). Uses the console theme tokens from theme.css. */
+import React, { useEffect, useMemo, useState } from "react";
+import AtlasPanel from "./AtlasPanel.jsx";
+import BlueprintView from "./BlueprintView.jsx";
+import SongStudio from "./SongStudio.jsx";
+import DemoPanel from "./DemoPanel.jsx";
+import { Cover, Icon, apiJson, catalogStats, fmtTime } from "./ui.jsx";
 
-.bp { display: flex; flex-direction: column; gap: 14px; padding: 0 28px 24px; }
-.bp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.bp-title-input {
-  font-family: var(--font-display); font-size: 20px; letter-spacing: 0.02em; color: var(--ivory);
-  background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 4px 8px; margin-left: -8px;
-  width: min(520px, 100%);
+/* Create: prompt / lyrics beside the workspace.
+
+   Create can build an editable Song Blueprint or run the implemented full-song
+   chain (composer → guide singer → selected My Voice → vocal production →
+   mix/master → persistent project). My Voice and Create intentionally share
+   the same remembered voice selection. */
+
+const FILTERS = ["All", "Stem sets", "Full mixes", "With vocal"];
+
+/* Roadmap Screen 3: the visible stages of making a song. */
+const STAGES = [
+  ["writing the blueprint", "Writing song blueprint"], ["arranging", "Composing harmony, bass and drums"],
+  ["planning atmosphere", "Creating atmosphere"], ["rendering", "Rendering instrumental"],
+  ["mix and master", "Mixing and mastering the instrumental"], ["guide", "Creating guide vocals"],
+  ["convert", "Rendering your voice"], ["pitch polish", "Pitch polish"], ["vocal finish", "Producing vocals"],
+  ["song mix", "Mixing and mastering the song"], ["saving", "Saving to a new project"],
+];
+
+function MakingSong({ status, sung }) {
+  const stage = (status?.stage || "").toLowerCase();
+  const list = sung ? STAGES : STAGES.filter(([k]) => !["guide", "convert", "pitch polish", "vocal finish", "song mix"].includes(k));
+  const current = list.reduce((found, [k], i) => (stage.includes(k.split(" ")[0]) ? i : found), 0);
+  return <div style={{ padding: "0 28px 24px" }}>
+    <div className="bp-panel" role="status" style={{ background: "var(--lx-surface)", border: "1px solid var(--lx-border)" }}>
+      <div className="au-caption" style={{ color: "var(--lx-muted)" }}>Making your song · {Math.round(status?.pct || 0)}%</div>
+      <div style={{ height: 6, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden", margin: "10px 0" }}>
+        <div style={{ width: `${status?.pct || 0}%`, height: "100%", background: "linear-gradient(90deg, var(--lx-violet), var(--lx-magenta))", transition: "width 0.4s" }} /></div>
+      <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 6 }}>
+        {list.map(([k, label], i) => <li key={k} style={{ fontSize: 13, color: i < current ? "var(--lx-cyan)" : i === current ? "var(--lx-text)" : "var(--lx-dim)" }}>
+          {i < current ? "✓" : i === current ? "▸" : "·"} {label}</li>)}
+      </ol>
+      <div style={{ fontSize: 12, color: "var(--lx-muted)", marginTop: 10 }}>{status?.stage}</div>
+      {sung && <div style={{ fontSize: 12, color: "var(--lx-muted)", marginTop: 4 }}>Singing takes several minutes; close big apps so the voice engine has memory.</div>}
+    </div>
+  </div>;
 }
-.bp-title-input:hover, .bp-title-input:focus { border-color: var(--edge-strong); outline: none; }
-.bp-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 
-.bp-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.bp-fact { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 10px 12px; min-width: 0; }
-.bp-fact .au-input { height: 36px; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 0 10px; }
-.bp-fact-value { font-family: var(--font-mono); font-size: 18px; margin-top: 6px; color: var(--gold-light); }
+export default function CreatePage({ API, go, play, nowPlayingId }) {
+  const [mode, setMode] = useState("advanced");
+  const [useDna, setUseDna] = useState(true);
+  const [useVoice, setUseVoice] = useState(true);
+  const [influence, setInfluence] = useState("all");      // all | closest | picked (AU-12)
+  const [picked, setPicked] = useState([]);
+  const [idea, setIdea] = useState("");
+  const [lyrics, setLyrics] = useState("");
+  const [styles, setStyles] = useState("");
+  const [songs, setSongs] = useState([]);
+  const [voice, setVoice] = useState(null);
+  const [filter, setFilter] = useState("All");
+  const [query, setQuery] = useState("");
+  const [notice, setNotice] = useState("");
+  const [style, setStyle] = useState({ era: "", harmony: "", vocal: "", groove: "" });
+  const [blueprint, setBlueprint] = useState(null);
+  const [view, setView] = useState("songs");
+  const [creating, setCreating] = useState(false);
+  const [songJob, setSongJob] = useState(null);
+  const [songStatus, setSongStatus] = useState(null);
+  const [projectId, setProjectId] = useState(null);
+  const [showDemo, setShowDemo] = useState(false);
 
-.bp-why { font-size: 12px; color: var(--steel); line-height: 1.5; margin-top: 6px; }
-.bp-why li { margin: 2px 0; }
-.bp-why ul { margin: 0; padding-left: 16px; }
-.bp-why-toggle {
-  background: none; border: none; padding: 0; margin-top: 6px; cursor: pointer; font: inherit;
-  font-size: 12px; font-weight: 700; color: var(--holo-soft);
+  useEffect(() => {
+    apiJson(`${API}/artist/library`).then(d => setSongs(d.songs)).catch(() => setSongs([]));
+    apiJson(`${API}/voice/profiles`).then(list => {
+      let remembered = "";
+      try { remembered = localStorage.getItem("auralis.voice") || ""; } catch { /* private mode */ }
+      const chosen = list.find(p => p.id === remembered)
+        || list.find(p => p.training_status === "trained")
+        || list.find(p => p.kind === "studio-dataset")
+        || list[0] || null;
+      setVoice(chosen);
+      if (chosen && chosen.id !== remembered) {
+        try { localStorage.setItem("auralis.voice", chosen.id); } catch { /* private mode */ }
+      }
+    }).catch(() => setVoice(null));
+  }, [API]);
+
+  const stats = useMemo(() => catalogStats(songs), [songs]);
+  const dnaTags = stats ? [
+    `${stats.tempoLow}–${stats.tempoHigh} BPM`,
+    stats.minorShare >= 50 ? "minor keys" : "major keys",
+    `${stats.chordsPerBar} chords / bar`,
+    `${stats.lufs} LUFS`,
+  ] : [];
+
+  const visible = songs.filter(s => {
+    if (filter === "Stem sets" && s.kind !== "stem-set") return false;
+    if (filter === "Full mixes" && s.kind !== "mix") return false;
+    if (filter === "With vocal" && !s.summary?.vocal_range) return false;
+    const q = query.trim().toLowerCase();
+    return !q || s.title.toLowerCase().includes(q);
+  });
+
+  const addTag = tag => setStyles(prev => (prev.trim() ? `${prev.trim().replace(/,$/, "")}, ${tag}` : tag));
+  const requestBody = () => ({
+    prompt: mode === "simple" ? idea : [styles, idea].filter(s => s.trim()).join(", "),
+    lyrics: mode === "advanced" ? lyrics : "", use_dna: useDna, use_voice: useVoice,
+    influence: useDna ? (influence === "picked" && !picked.length ? "all" : influence) : "all", influence_song_ids: picked,
+    ...(mode === "advanced" && Object.fromEntries(Object.entries(style).filter(([, v]) => v))),
+  });
+  useEffect(() => {
+    if (!songJob) return;
+    let stop = false;
+    const tick = async () => {
+      const st = await apiJson(`${API}/jobs/${songJob}`).catch(e => ({ stage: "error", error: e.message }));
+      if (stop) return;
+      setSongStatus(st);
+      if (st.stage === "done") { setProjectId(st.result.project_id); setView("studio"); setCreating(false); }
+      else if (st.stage === "error") { setNotice(`The song could not be made: ${st.error}`); setCreating(false); }
+      else setTimeout(tick, 1200);
+    };
+    tick();
+    return () => { stop = true; };
+  }, [songJob]);
+  const makeSong = async () => {
+    setCreating("song"); setNotice(""); setSongStatus(null); setProjectId(null);
+    try {
+      const r = await apiJson(`${API}/composer/song`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...requestBody(), profile_id: useVoice && voice ? voice.id : null, production: "full", quality: "studio" }) });
+      setSongJob(r.job_id);
+      setView("making");
+    } catch (e) { setNotice(`Could not start the song: ${e.message}`); setCreating(false); }
+  };
+  const editProjectBlueprint = async () => {
+    try { setBlueprint(await apiJson(`${API}/projects/${projectId}/blueprint`)); setView("blueprint"); }
+    catch (e) { setNotice(e.message); }
+  };
+  const create = async () => {
+    const prompt = mode === "simple" ? idea : [styles, idea].filter(s => s.trim()).join(", ");
+    setCreating("blueprint");
+    setNotice("");
+    try {
+      const bp = await apiJson(`${API}/composer/blueprint`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt, lyrics: mode === "advanced" ? lyrics : "", use_dna: useDna, use_voice: useVoice,
+          influence: useDna ? (influence === "picked" && !picked.length ? "all" : influence) : "all", influence_song_ids: picked,
+          ...(mode === "advanced" && Object.fromEntries(Object.entries(style).filter(([, v]) => v))),
+          seed: blueprint ? (blueprint.inputs.seed || 0) + 1 : 0,
+        }),
+      });
+      setBlueprint(bp);
+      setView("blueprint");
+      setNotice("Blueprint ready: edit it on the right, then save it to a project. Rendering audio from it is the next build phase.");
+    } catch (e) {
+      setNotice(`Could not build a blueprint: ${e.message}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return <div className="lx-atmosphere" style={{ display: "grid", gridTemplateColumns: "452px minmax(0, 1fr)", minHeight: "100vh" }}>
+    <section aria-label="Create a song" className="lx-glass" style={{ borderRight: "1px solid var(--lx-border)", display: "flex", flexDirection: "column", minHeight: 0, background: "rgba(20, 16, 30, 0.82)", borderRadius: "0 var(--lx-radius) var(--lx-radius) 0", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 14px" }}>
+        <div className="lx-segment" role="tablist" aria-label="Create mode">
+          <button role="tab" aria-selected={mode === "simple"} onClick={() => setMode("simple")}>Simple</button>
+          <button role="tab" aria-selected={mode === "advanced"} onClick={() => setMode("advanced")}>Advanced</button>
+        </div>
+        <span className="lx-badge plain" style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.12em", color: "var(--lx-cyan)" }}>LOCAL ENGINE</span>
+      </div>
+
+      <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto", padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+          <button className="lx-btn" style={{ height: 48, borderRadius: 14 }} onClick={() => setShowDemo(v => !v)} aria-expanded={showDemo}>
+            <Icon name="plus" size={16} width={2.4} />Demo</button>
+          <button className="lx-btn" style={{ height: 48, borderRadius: 14, background: "rgba(111, 216, 242, 0.10)", borderColor: "rgba(111, 216, 242, 0.42)", color: "var(--lx-text)" }} onClick={() => go("voice")}>
+            <Icon name="voice" size={16} />My Voice</button>
+          <button className="lx-btn" style={{ height: 48, borderRadius: 14 }} onClick={() => go("music")}><Icon name="plus" size={16} width={2.4} />My songs</button>
+        </div>
+
+        {showDemo && <DemoPanel API={API} prompt={mode === "simple" ? idea : [styles, idea].filter(x => x.trim()).join(", ")}
+          lyrics={mode === "advanced" ? lyrics : ""} useDna={useDna} useVoice={useVoice} era={mode === "advanced" ? style.era : ""}
+          onClose={() => setShowDemo(false)}
+          onBlueprint={bp => { setBlueprint(bp); setView("blueprint"); setShowDemo(false);
+            setNotice(`Built around your demo: ${bp.demo.note_count} notes kept as the ${bp.demo.role} at ${bp.tempo} BPM in ${bp.key}.`); }} />}
+        {mode === "simple" && <div className="lx-glass" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 16 }}>
+          <label htmlFor="idea" className="au-label" style={{ color: "var(--lx-muted)" }}>Song description</label>
+          <textarea id="idea" rows={7} className="lx-input" value={idea} onChange={e => setIdea(e.target.value)}
+            placeholder="Dark late-night R&B, big chorus, feels like my last three songs without copying them"
+            style={{ minHeight: 120, resize: "vertical", background: "var(--lx-sunken)", borderColor: "var(--lx-border)", color: "var(--lx-text)" }} />
+        </div>}
+
+        {mode === "advanced" && <>
+          <div className="lx-glass" style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <label htmlFor="lyrics" className="au-label" style={{ color: "var(--lx-muted)" }}>Lyrics</label>
+              <span className="au-mono" style={{ fontSize: 11, color: "var(--lx-dim)" }}>{lyrics.trim() ? `${lyrics.trim().split(/\n+/).length} lines` : "instrumental if empty"}</span>
+            </div>
+            <textarea id="lyrics" rows={7} className="lx-input" value={lyrics} onChange={e => setLyrics(e.target.value)}
+              placeholder="Write or paste lyrics. Leave empty for an instrumental."
+              style={{ minHeight: 120, resize: "vertical", background: "var(--lx-sunken)", borderColor: "var(--lx-border)", color: "var(--lx-text)" }} />
+          </div>
+
+          <div className="lx-glass" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 16 }}>
+            <label htmlFor="styles" className="au-label" style={{ color: "var(--lx-muted)" }}>Styles</label>
+            <input id="styles" className="lx-input" value={styles} onChange={e => setStyles(e.target.value)}
+              placeholder="late-night R&B, warm low end, big chorus"
+              style={{ background: "var(--lx-sunken)", borderColor: "var(--lx-border)", color: "var(--lx-text)" }} />
+            {dnaTags.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lx-cyan)", letterSpacing: "0.04em" }}>FROM YOUR MUSIC</span>
+              {dnaTags.map(tag => <button key={tag} onClick={() => addTag(tag)} style={{
+                fontSize: 12, fontWeight: 600, padding: "6px 10px", borderRadius: 999, cursor: "pointer",
+                border: "1px solid var(--lx-border)", background: "rgba(160, 139, 255, 0.08)", color: "var(--lx-text)", fontFamily: "inherit",
+              }}>+ {tag}</button>)}
+            </div>}
+          </div>
+
+          <AtlasPanel API={API} value={style} onChange={setStyle} />
+
+          <div className="lx-glass" style={{ padding: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: "1px solid var(--lx-border)", gap: 12 }}>
+              <div><div className="au-label" style={{ color: "var(--lx-muted)" }}>Use my Artist DNA</div>
+                <div style={{ fontSize: 12, color: "var(--lx-muted)" }}>{stats ? `Tempo, keys, form and groove from ${stats.analysed} analysed songs` : "Add your songs in My Music first"}</div></div>
+              <button role="switch" className="lx-segment" style={{ padding: 0 }} aria-checked={useDna} aria-label="Use my Artist DNA" onClick={() => setUseDna(v => !v)}>
+                <button type="button" aria-selected={useDna} style={{ width: 54 }}>On</button>
+              </button>
+            </div>
+            {useDna && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderBottom: "1px solid var(--lx-border)", flexWrap: "wrap" }}>
+              <span className="au-caption" style={{ color: "var(--lx-muted)" }}>Influence</span>
+              <div className="lx-segment" role="tablist" aria-label="Influence from my songs">
+                {[['all', 'All my songs'], ['closest', 'Closest 5'], ['picked', 'Songs I pick']].map(([k, l]) =>
+                  <button key={k} role="tab" aria-selected={influence === k} onClick={() => { setInfluence(k); if (k === "picked") setView("songs"); }}>{l}</button>)}
+              </div>
+              {influence === "picked" && <span style={{ fontSize: 12, color: "var(--lx-muted)" }}>
+                {picked.length ? `${picked.length} picked` : "click songs on the right to pick them"}</span>}
+            </div>}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: "1px solid var(--lx-border)", gap: 12 }}>
+              <div><div className="au-label" style={{ color: "var(--lx-muted)" }}>Sing it in my voice</div>
+                <div style={{ fontSize: 12, color: "var(--lx-muted)" }}>{voice ? `Guide singer → ${voice.name} → pitch + vocal finish` : "Create a voice profile in My Voice"}</div></div>
+              <button role="switch" className="lx-segment" style={{ padding: 0 }} aria-checked={useVoice} aria-label="Sing it in my voice" onClick={() => setUseVoice(v => !v)}>
+                <button type="button" aria-selected={useVoice} style={{ width: 54 }}>On</button>
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, padding: "13px 16px" }}>
+              <div><div className="au-caption" style={{ color: "var(--lx-muted)" }}>Vocals</div><div style={{ fontSize: 13, fontWeight: 700, marginTop: 3, color: "var(--lx-text)" }}>Lead + doubles</div></div>
+              <div><div className="au-caption" style={{ color: "var(--lx-muted)" }}>Mix</div><div style={{ fontSize: 13, fontWeight: 700, marginTop: 3, color: "var(--lx-text)" }}>Vocal-forward R&amp;B</div></div>
+              <div><div className="au-caption" style={{ color: "var(--lx-muted)" }}>Master</div><div className="au-mono" style={{ fontSize: 13, marginTop: 3, color: "var(--lx-cyan)" }}>−14 LUFS</div></div>
+            </div>
+          </div>
+        </>}
+
+        {notice && <div role="status" className="lx-glass" style={{ borderColor: "rgba(224, 106, 200, 0.35)", fontSize: 13, lineHeight: 1.55, color: "var(--lx-text)", padding: 16 }}>{notice}</div>}
+      </div>
+
+      <div style={{ padding: "14px 20px 18px", borderTop: "1px solid var(--lx-border)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+          <button className="lx-btn primary" onClick={create} disabled={creating} title="Write an editable blueprint first">
+            <Icon name="create" size={18} width={2.4} />{creating === "blueprint" ? "Writing…" : blueprint ? "New blueprint" : "Create"}</button>
+          <button className="lx-btn" onClick={makeSong} disabled={creating}
+            title={useVoice && voice ? `Blueprint, instrumental and vocals in ${voice.name}, saved to a new project` : "Blueprint and instrumental, saved to a new project"}>
+            {creating === "song" ? "Making the song…" : "Make the whole song"}</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Workspace" style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 28px 12px", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <h1 className="au-title au-shine" style={{ fontSize: 22, color: "var(--lx-text)" }}>{view === "blueprint" && blueprint ? "Song blueprint" : "My workspace"}</h1>
+          {(blueprint || songJob) && <div className="lx-segment" role="tablist" aria-label="Workspace view">
+            {blueprint && <button role="tab" aria-selected={view === "blueprint"} onClick={() => setView("blueprint")}>Blueprint</button>}
+            {songJob && <button role="tab" aria-selected={view === "making" || view === "studio"} onClick={() => setView(projectId ? "studio" : "making")}>Song</button>}
+            <button role="tab" aria-selected={view === "songs"} onClick={() => setView("songs")}>My songs</button>
+          </div>}
+        </div>
+        {view === "songs" && <label style={{ display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: 12, background: "var(--lx-surface)", border: "1px solid var(--lx-border)", minWidth: 200, color: "var(--lx-text)" }}>
+          <Icon name="search" size={16} />
+          <input aria-label="Search songs" placeholder="Search" value={query} onChange={e => setQuery(e.target.value)}
+            style={{ background: "transparent", border: "none", outline: "none", color: "var(--lx-text)", fontFamily: "inherit", fontSize: 14, width: "100%" }} />
+        </label>}
+      </div>
+      {view === "making" && <MakingSong status={songStatus} sung={useVoice && !!voice} />}
+      {view === "studio" && projectId && <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto" }}>
+        <SongStudio API={API} projectId={projectId} onEditBlueprint={editProjectBlueprint} />
+      </div>}
+      {view === "blueprint" && blueprint && <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto" }}>
+        <BlueprintView API={API} blueprint={blueprint} setBlueprint={setBlueprint} />
+      </div>}
+      {view === "songs" && <><div style={{ display: "flex", gap: 8, padding: "0 28px 14px", flexWrap: "wrap" }}>
+        {FILTERS.map(f => <button key={f} className="lx-tag" aria-pressed={filter === f} onClick={() => setFilter(f)} style={{
+          background: filter === f ? "rgba(160, 139, 255, 0.12)" : "rgba(255,255,255,0.04)", borderColor: filter === f ? "var(--lx-border-strong)" : "var(--lx-border)" 
+        }}>{f}</button>)}
+      </div>
+      <div style={{ flexGrow: 1, minHeight: 0, overflowY: "auto", padding: "0 16px 16px" }}>
+        {songs.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "var(--lx-muted)" }}>
+          Your songs appear here. <button className="lx-btn" style={{ marginLeft: 8 }} onClick={() => go("music")}>Add a music folder</button>
+        </div>}
+        {visible.map(s => {
+          const sm = s.summary || {};
+          const active = s.id === nowPlayingId;
+          const picking = influence === "picked" && useDna;
+          const isPicked = picked.includes(s.id);
+          return <button key={s.id} aria-pressed={picking ? isPicked : undefined}
+            onClick={() => picking ? setPicked(p => isPicked ? p.filter(x => x !== s.id) : [...p, s.id].slice(0, 8)) : play(s)}
+            aria-label={picking ? `${isPicked ? "Unpick" : "Pick"} ${s.title} as an influence` : `Play ${s.title}`} style={{
+            outline: isPicked && picking ? "1px solid var(--lx-violet)" : "none",
+            width: "100%", display: "flex", alignItems: "center", gap: 16, padding: "10px 12px", borderRadius: 16,
+            border: "1px solid transparent", cursor: "pointer", fontFamily: "inherit", color: "inherit", textAlign: "left",
+            background: active ? "var(--lx-surface-solid)" : "transparent",
+          }}>
+            <Cover id={s.id} label={sm.duration_seconds ? fmtTime(sm.duration_seconds) : null} />
+            <div style={{ minWidth: 0, flexGrow: 1, display: "flex", flexDirection: "column", gap: 5 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--lx-text)" }}>{s.title}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", color: s.kind === "stem-set" ? "var(--lx-cyan)" : "var(--lx-muted)", flexShrink: 0 }}>
+                  {s.kind === "stem-set" ? "STEMS" : "MIX"}</span>
+                {s.variants.map(v => <span key={v} className="lx-tag" style={{ flexShrink: 0 }}>{v}</span>)}
+                {influence === "picked" && useDna && isPicked && <span className="lx-badge violet" style={{ flexShrink: 0 }}>✓ influence</span>}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--lx-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {[sm.key, sm.roles_form, sm.vocal_range && `voice ${sm.vocal_range}`].filter(Boolean).join(" · ") || s.analysis_status}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {sm.bpm && <span className="lx-tag mono">{sm.bpm} BPM</span>}
+                {sm.lufs != null && <span className="lx-tag mono">{sm.lufs} LUFS</span>}
+                {s.has_lyrics && <span className="lx-badge" style={{ color: "var(--lx-violet)" }}>lyrics</span>}
+              </div>
+            </div>
+          </button>;
+        })}
+      </div></>}
+    </section>
+  </div>;
 }
 
-.bp-curve { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 12px; }
-.bp-curve svg { display: block; width: 100%; height: 96px; }
-
-.bp-section {
-  background: var(--panel); border: 1px solid var(--edge); border-radius: 16px; padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-.bp-section-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.bp-section-head .au-input { height: 34px; padding: 0 8px; }
-.bp-section-name { font-weight: 800; font-size: 14px; min-width: 96px; }
-.bp-bars { width: 64px; }
-.bp-tools { margin-left: auto; display: flex; gap: 4px; }
-.bp-icon {
-  height: 32px; min-width: 32px; padding: 0 8px; border-radius: 9px; cursor: pointer;
-  background: transparent; border: 1px solid var(--edge); color: var(--steel); font: inherit; font-size: 12px; font-weight: 700;
-}
-.bp-icon:hover:not(:disabled) { color: var(--ivory); border-color: var(--edge-strong); }
-.bp-icon:disabled { opacity: 0.35; cursor: default; }
-
-.bp-chords { display: flex; gap: 6px; flex-wrap: wrap; }
-.bp-chord {
-  display: flex; flex-direction: column; align-items: center; min-width: 58px; padding: 6px 8px;
-  border-radius: 10px; background: var(--deck); border: 1px solid var(--edge);
-}
-.bp-chord b { font-family: var(--font-mono); font-size: 13px; color: var(--gold-light); font-weight: 500; }
-.bp-chord span { font-size: 11px; color: var(--steel); font-family: var(--font-mono); }
-.bp-chord-edit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-.bp-chord-edit .au-input { height: 34px; width: 100%; box-sizing: border-box; padding: 0 10px; font-family: var(--font-mono); font-size: 13px; }
-
-.bp-roles { display: flex; gap: 6px; flex-wrap: wrap; }
-.bp-role {
-  height: 28px; padding: 0 10px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700;
-  border: 1px solid var(--edge); background: transparent; color: var(--steel-dim);
-}
-.bp-role[data-level="light"] { color: var(--steel); border-color: var(--edge-strong); }
-.bp-role[data-level="medium"] { color: var(--ivory); background: #161b24; border-color: #3a4252; }
-.bp-role[data-level="full"] { color: var(--gold-ink); background: var(--gold); border-color: var(--gold); }
-
-.bp-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--steel); }
-.bp-row input[type="range"] { accent-color: var(--gold); width: 120px; }
-
-.bp-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
-.bp-panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 12px 14px; font-size: 13px; }
-.bp-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; line-height: 1.45; }
-.bp-check i { font-style: normal; font-weight: 800; }
-.bp-alert { border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
-.bp-alert.warn { background: #2a1712; color: var(--warn); border: 1px solid #5a2c20; }
-.bp-alert.note { background: #1d1a10; color: var(--gold-light); border: 1px solid rgba(212, 175, 95, 0.35); }
-
-@media (max-width: 720px) {
-  .bp { padding: 0 16px 20px; }
-  .bp-chord-edit { grid-template-columns: 1fr; }
-  .bp-tools { margin-left: 0; }
-}
+},{
