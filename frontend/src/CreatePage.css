@@ -1,0 +1,173 @@
+/* Create page luxury pass (Session 023). Page-scoped `cp-*` classes on the
+   shared Lux tokens (`--lx-*` from lux.css) — the same pattern VoicePage uses
+   with `vp-*`. No one-off colors. Structure, routes, state and API calls are
+   unchanged; this is presentation only. */
+
+.cp {
+  display: grid;
+  grid-template-columns: 452px minmax(0, 1fr);
+}
+
+/* ── Left: the create panel ───────────────────────────────────────────── */
+
+.cp-create {
+  border-right: 1px solid var(--lx-border);
+  display: flex; flex-direction: column; min-height: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 30%), var(--lx-ink);
+}
+
+.cp-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 14px; gap: 12px; flex-wrap: wrap;
+}
+
+.cp-body {
+  flex-grow: 1; min-height: 0; overflow-y: auto; padding: 0 20px 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.cp-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cp-actions .lx-btn { height: 48px; border-radius: 14px; width: 100%; }
+
+.cp-field-block { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; }
+
+.cp-textarea {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  background: var(--lx-sunken); border: 1px solid var(--lx-border); border-radius: var(--lx-radius-sm);
+  color: var(--lx-text); font-family: var(--font-body); font-size: 14px; line-height: 1.6;
+  padding: 10px 12px;
+}
+.cp-textarea::placeholder { color: var(--lx-dim); }
+.cp-textarea:focus { border-color: var(--lx-violet); outline: none; }
+
+.cp-field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cp-count { font-family: var(--font-mono); font-size: 11px; color: var(--lx-dim); }
+
+.cp-dna-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+button.lx-tag { font-family: var(--font-body); cursor: pointer; transition: border-color 0.2s, color 0.2s; }
+button.lx-tag:hover { border-color: var(--lx-violet); color: var(--lx-text); }
+
+.cp-setting { padding: 0; }
+.cp-setting-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 16px; border-bottom: 1px solid var(--lx-border); gap: 12px;
+}
+.cp-label { font-size: 14px; font-weight: 700; color: var(--lx-text); }
+.cp-sub { font-size: 12px; color: var(--lx-muted); margin-top: 3px; }
+.cp-influence { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--lx-border); flex-wrap: wrap; }
+.cp-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 13px 16px; }
+.cp-summary-value { font-size: 13px; font-weight: 700; margin-top: 3px; color: var(--lx-text); }
+.cp-mono { font-family: var(--font-mono); }
+
+/* Switch on Lux tokens. */
+.cp-switch {
+  position: relative; width: 48px; height: 28px; border-radius: 999px; border: 1px solid var(--lx-border-strong);
+  cursor: pointer; flex-shrink: 0; background: var(--lx-sunken); transition: background 0.2s, border-color 0.2s;
+}
+.cp-switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--lx-muted); transition: left 0.2s var(--lx-ease), background 0.2s;
+}
+.cp-switch[aria-checked="true"] {
+  background: linear-gradient(120deg, var(--lx-purple), var(--lx-magenta));
+  border-color: transparent;
+}
+.cp-switch[aria-checked="true"]::after { left: 23px; background: #fff; }
+
+.cp-notice {
+  padding: 12px 16px; font-size: 13px; line-height: 1.55;
+  color: var(--lx-warning); border-color: rgba(242, 196, 111, 0.45);
+}
+
+.cp-cta { padding: 14px 20px 18px; border-top: 1px solid var(--lx-border); }
+.cp-cta-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.cp-cta-row .lx-btn { width: 100%; }
+
+/* ── Right: the workspace ─────────────────────────────────────────────── */
+
+.cp-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+.cp-work-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 28px 12px; gap: 12px; flex-wrap: wrap;
+}
+.cp-work-title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cp-title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 22px; letter-spacing: 0.02em; color: var(--lx-text); }
+
+.cp-search {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
+  border-radius: 12px; background: var(--lx-sunken); border: 1px solid var(--lx-border);
+  color: var(--lx-dim); width: 260px; box-sizing: border-box;
+}
+.cp-search input {
+  background: transparent; border: none; outline: none; color: var(--lx-text);
+  font-family: var(--font-body); font-size: 14px; width: 100%;
+}
+.cp-search input::placeholder { color: var(--lx-dim); }
+
+.cp-filters { display: flex; gap: 8px; padding: 0 28px 14px; flex-wrap: wrap; }
+.cp-pill {
+  height: 34px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+  font-family: var(--font-body); font-size: 13px; font-weight: 700;
+  background: transparent; color: var(--lx-muted); border: 1px solid var(--lx-border);
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.cp-pill:hover { border-color: var(--lx-border-strong); color: var(--lx-text); }
+.cp-pill[aria-pressed="true"] { background: rgba(160, 139, 255, 0.12); color: var(--lx-text); border-color: var(--lx-border-strong); }
+
+.cp-song-list { flex-grow: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px; }
+
+.cp-song {
+  width: 100%; display: flex; align-items: center; gap: 16px; padding: 10px 12px;
+  border-radius: 16px; border: 1px solid transparent; cursor: pointer;
+  font-family: var(--font-body); color: var(--lx-text); text-align: left; background: transparent;
+  transition: background 0.2s, border-color 0.2s;
+}
+.cp-song:hover { background: rgba(160, 139, 255, 0.06); }
+.cp-song.active { background: var(--lx-raised); }
+.cp-song.picked { border-color: var(--lx-violet); }
+.cp-song-meta { min-width: 0; flex-grow: 1; display: flex; flex-direction: column; gap: 5px; }
+.cp-song-top { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.cp-song-title { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-kind { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--lx-dim); flex-shrink: 0; }
+.cp-kind.stems { color: var(--lx-success); }
+.cp-song-line { font-size: 13px; color: var(--lx-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-song-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ── Making-song progress ─────────────────────────────────────────────── */
+
+.cp-making { padding: 0 28px 24px; }
+.cp-making .cp-panel { padding: 18px 20px; }
+.cp-making .lx-progress { margin: 10px 0; height: 6px; }
+.cp-stages { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.cp-stages li { font-size: 13px; color: var(--lx-dim); }
+.cp-stages li.done { color: var(--lx-success); }
+.cp-stages li.now { color: var(--lx-text); }
+.cp-stage-note { font-size: 12px; color: var(--lx-muted); margin-top: 10px; }
+.cp-stage-note + .cp-stage-note { margin-top: 4px; }
+
+.cp-view { flex-grow: 1; min-height: 0; overflow-y: auto; }
+
+@media (max-width: 1180px) {
+  /* Stacked layout: the whole page scrolls as one. The create panel sizes to
+     its content (flex:none + visible overflow) so the CTA row flows after the
+     fields instead of overlapping them inside a height-constrained flex
+     column. */
+  .cp { grid-template-columns: minmax(0, 1fr); }
+  /* Higher specificity than theme.css `.au-page { overflow: hidden }` so the
+     stacked page actually scrolls instead of clipping. */
+  .au-page.cp { overflow-y: auto; }
+  .cp-create { border-right: none; border-bottom: 1px solid var(--lx-border); }
+  .cp-body { overflow: visible; flex: none; }
+}
+
+@media (max-width: 720px) {
+  .cp-work-head, .cp-filters, .cp-making { padding-left: 16px; padding-right: 16px; }
+  .cp-search { width: 100%; }
+  .cp-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cp-cta-row { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-song, .cp-pill, .cp-switch, .cp-switch::after, button.lx-tag { transition: none; }
+}
