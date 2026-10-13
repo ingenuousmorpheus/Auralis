@@ -4,7 +4,7 @@
 > future Auralis work.
 >
 > Last reconciled from GitHub: 2026-10-06.
-> Repository: ingeniousmorpheus/Auralis
+> Repository: ingenuousmorpheus/Auralis
 >
 > Read this before proposing a new Auralis phase. Code and tests establish what
 > exists; the owner's explicit decisions establish product direction.
@@ -329,3 +329,57 @@ Verification status:
 
 Next bounded phase:
 - Apply the same reusable Lux primitives to the Create page without altering Create's composition, voice-selection, rendering, or project behavior; then checkpoint before moving to My Music/Projects.
+
+
+## Session 023 — luxury shell: made revertible, completed, verified
+
+**Date:** 2026-10-13
+**Scope:** the owner approved the obsidian / violet-plum / cyan-waveform / magenta direction from the Session 020 My Voice pass, and asked for the gold sidebar, wordmark and player bar to match it, *with the original implementation preserved so it can be reverted*. Build, test, screenshot, then stop for review.
+
+Starting state:
+- Local `main` was 10 commits behind GitHub (Sessions 021/022 and the voice-selection commits by another agent). Fast-forwarded to `e3c970e`; the local tree was clean.
+- Session 022 had already re-skinned the shell by appending unconditional overrides to `theme.css`, unverified: no build or browser check. Those overrides also restyled `.au-btn` on every page.
+
+Changed:
+- **Revertible shell.** Session 022's rules moved out of `theme.css` into `frontend/src/shell-lux.css`, each scoped to `[data-shell="lux"]`. `theme.css` is byte-for-byte the original gold shell again (as of `3c5f236`).
+  - `App.jsx` sets `<html data-shell>`. The default is `lux`.
+  - `?shell=classic` or `?shell=lux` switches and is remembered (`localStorage auralis.shell`).
+  - `VITE_SHELL=classic` changes the build default.
+- **Missing pieces Session 022 left gold:**
+  - the logo's click morph glowed gold: new `lx-morph` keyframes; `Shell.jsx` now resets on any `*-morph` animation end
+  - the now-playing cover was a gold icon on brown and the volume slider was ivory (both inline-styled): now violet
+  - the console scanline overlay is hidden in the luxury shell
+- **Narrow windows (below 900 px), luxury shell only.** These are pre-existing flaws, so classic is untouched:
+  - The player's volume row is inline `display:flex`, which beat `theme.css`'s `display:none`, so it spilled below the player. It is now hidden.
+  - Two-word nav labels wrapped onto two lines (the top bar was 95 px tall); they now stay on one line (63 px).
+- `App.jsx` now imports `lux.css` itself, so the `--lx-*` tokens no longer depend on My Voice being loaded.
+
+Verification (real app, launcher-started backend + Vite):
+- `npm run build` clean.
+- `test_voice_library` + `test_models`: 29 passed. No backend change.
+- **Playwright (system Chrome):** every page at 1440x900, 1280x800, 1024x768 and 820x1000 in the luxury shell; Create and My Voice at 1440 in the classic shell; full-length My Voice captures. 47 screenshots in local `screenshots/session-023/` (git-excluded: My Music shows catalog titles).
+  - No horizontal overflow on any page at any size.
+  - The only console error is `/favicon.ico` 404. It predates this work: the app has no favicon.
+- **Functional checks:**
+  - a My Music cover plays in the player (Pause shown, 5.8 s in, violet cover) and pauses
+  - the logo morph runs and clears, and still goes to Create
+  - `?shell=classic` survives a plain reload (ivory play button) and `?shell=lux` switches back
+  - nav reaches all ten pages
+
+Findings and contradictions:
+- Session 021 says `auralissession.md` "was not present on GitHub main". It is tracked there (both session files are on `origin/main`). The canonical header also misspelled the repository as `ingeniousmorpheus`; corrected above. `auralissession.md` remains the detailed engineering log (AU-00 to Session 020); this file is the lightweight canonical checkpoint.
+- The page bodies are not yet converted. Create, My Music, Artist DNA, Studio, Projects and the tool screens still use gold headings, icons, toggles and corner brackets inside the violet shell. In the luxury shell, gold `.au-btn` buttons already render violet (Session 022's choice, kept). That mix is expected until each page migrates.
+- The sidebar voice card still picks "trained or first" voice itself, while My Voice and Create share the remembered selection (`1620c13`/`aad4c9e`). With one voice they agree; with several they can differ. Not changed here (behaviour, not shell look).
+
+Revert:
+- Per user: open `http://localhost:5173/?shell=classic`.
+- Per build: `VITE_SHELL=classic`.
+- In code: delete the `shell-lux.css` import in `App.jsx`. `theme.css` needs no edit.
+- In git: the original gold shell is unchanged at `3c5f236`.
+
+Remaining work:
+- Owner visual review of the shell (these screenshots and the live app).
+- Page-by-page migration to Lux primitives (design section 13): Create first, then My Music / Projects, then Studio and the tool screens, then Release / Export.
+- Small items: a favicon (from `docs/icon.png`); the sidebar voice card should use the shared voice selection; the status strip's "Engine details" wraps to its own line at 1440 px.
+
+Next recommended phase: **Create in the luxury language** (presentation only). Its composition, voice selection, blueprint, rendering and project behaviour stay as they are. Checkpoint with the owner before My Music / Projects. ACE-Step, lyric phonemes and V5 stay parked until the owner decides on them.

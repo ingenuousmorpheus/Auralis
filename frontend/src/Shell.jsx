@@ -26,7 +26,7 @@ export function Sidebar({ API, page, go, tools }) {
       <button className="au-logo" aria-label="Auralis, go to Create"
         onClick={() => { setMorphing(false); requestAnimationFrame(() => setMorphing(true)); go("create"); }}>
         <span className={`au-logo-word${morphing ? " morphing" : ""}`}
-          onAnimationEnd={e => { if (e.animationName === "au-morph") setMorphing(false); }}>AURALIS</span>
+          onAnimationEnd={e => { if (e.animationName.endsWith("-morph")) setMorphing(false); }}>AURALIS</span>
       </button>
       <div className="au-status"><span className="au-dot" />LOCAL · PRIVATE</div>
     </div>

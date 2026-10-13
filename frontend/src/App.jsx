@@ -11,8 +11,25 @@ import VoiceStudio from "./VoiceStudio.jsx";
 import { PlayerBar, Sidebar } from "./Shell.jsx";
 import "./App.css";
 import "./theme.css";
+import "./lux.css";
+import "./shell-lux.css";
 
 const API = import.meta.env.VITE_API ?? "http://127.0.0.1:8001";
+
+// Shell look: "lux" (approved luxury direction) or "classic" (the original
+// gold console, kept intact in theme.css). `?shell=classic` / `?shell=lux`
+// switches and is remembered; VITE_SHELL sets the build default.
+const SHELLS = ["lux", "classic"];
+function pickShell() {
+  try {
+    const asked = new URLSearchParams(window.location.search).get("shell");
+    if (SHELLS.includes(asked)) { localStorage.setItem("auralis.shell", asked); return asked; }
+    const kept = localStorage.getItem("auralis.shell");
+    if (SHELLS.includes(kept)) return kept;
+  } catch { /* storage blocked: use the default */ }
+  return SHELLS.includes(import.meta.env.VITE_SHELL) ? import.meta.env.VITE_SHELL : "lux";
+}
+document.documentElement.dataset.shell = pickShell();
 
 // Optional screens: shown only when their module exists in this checkout.
 const optional = import.meta.glob("./HarmonicReference.jsx", { eager: true });

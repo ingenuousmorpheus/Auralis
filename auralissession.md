@@ -3265,3 +3265,15 @@ Implement the owner-approved My Voice redesign (`docs/AURALIS_LUXURY_UI_DESIGN.m
 
 ### Next Action
 Owner reviews My Voice. Then design §13 step 2–3 (extract and apply to the shell) on approval.
+
+
+## Session 023 — 2026-10-13 — Luxury shell made revertible and verified
+
+Full entry in `AURALIS_SESSION.md` (Session 023). Summary:
+- Sessions 021/022 by another agent were reviewed first. Session 022's unverified shell overrides moved from `theme.css` into `frontend/src/shell-lux.css`, scoped to `[data-shell="lux"]`.
+- `theme.css` is the original gold shell again. `App.jsx` picks the shell: default `lux`; `?shell=classic|lux` remembered; `VITE_SHELL`.
+- Completed the parts left gold: the logo morph, the now-playing cover and the volume slider. Hid the scanlines in lux.
+- Fixed two pre-existing narrow-window shell flaws (in lux only): a volume row spilling below the player, and wrapping nav labels.
+- Verified: build clean; voice/engine tests 29 passed; Playwright screenshots of every page at 1440/1280/1024/820 with no horizontal overflow; player, logo and shell-switch persistence checked.
+- **Correction:** Session 021's note that this file was missing from GitHub is wrong; it is tracked on `origin/main`.
+- Next: owner review, then Create in the luxury language.

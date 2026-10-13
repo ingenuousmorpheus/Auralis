@@ -1,0 +1,129 @@
+/* Luxury shell: sidebar, wordmark and player in the approved "recording
+   studio at midnight" language (docs/AURALIS_LUXURY_UI_DESIGN.md).
+
+   Revertible by design. theme.css still holds the original gold "bridge
+   console" shell untouched; every rule here applies only while
+   <html data-shell="lux">. App.jsx sets that attribute: `?shell=classic`
+   (remembered) or VITE_SHELL=classic brings the gold shell back without a
+   code change. Session 022 wrote the first version of these rules;
+   Session 023 scoped them, added the missing pieces and verified them. */
+
+[data-shell="lux"] .au-shell {
+  background:
+    radial-gradient(70% 58% at 18% -8%, rgba(108, 79, 214, 0.16), transparent 62%),
+    radial-gradient(55% 45% at 98% 5%, rgba(224, 106, 200, 0.08), transparent 64%),
+    var(--lx-obsidian);
+  color: var(--lx-text);
+}
+[data-shell="lux"] body { background: var(--lx-obsidian); }
+
+/* The console's scanline texture belongs to the gold look. */
+[data-shell="lux"] .au-scan { display: none; }
+
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+
+[data-shell="lux"] .au-nav {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 34%), var(--lx-ink);
+  border-right-color: var(--lx-border);
+}
+[data-shell="lux"] .au-brand { gap: 9px; }
+[data-shell="lux"] .au-status { color: var(--lx-muted); }
+[data-shell="lux"] .au-dot { background: var(--lx-success); box-shadow: 0 0 10px rgba(111, 220, 174, 0.7); }
+[data-shell="lux"] .au-nav-label { color: var(--lx-dim); }
+[data-shell="lux"] .au-nav-item { color: var(--lx-muted); }
+[data-shell="lux"] .au-nav-item:hover { color: var(--lx-text); background: rgba(160, 139, 255, 0.07); }
+[data-shell="lux"] .au-nav-item[aria-current="page"] {
+  color: var(--lx-text);
+  background: linear-gradient(90deg, rgba(108, 79, 214, 0.16), rgba(224, 106, 200, 0.055));
+  box-shadow: inset 2px 0 0 var(--lx-violet);
+}
+[data-shell="lux"] .au-nav-item[aria-current="page"] svg { stroke: var(--lx-violet); }
+[data-shell="lux"] .au-nav-item.small { color: var(--lx-muted); }
+
+[data-shell="lux"] .au-voice-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%), var(--lx-surface);
+  border-color: var(--lx-border);
+  box-shadow: 0 14px 34px rgba(7, 4, 16, 0.28);
+}
+[data-shell="lux"] .au-voice-card:hover { border-color: var(--lx-border-strong); }
+[data-shell="lux"] .au-avatar { background: rgba(108, 79, 214, 0.14); color: var(--lx-violet); border: 1px solid rgba(160, 139, 255, 0.18); }
+[data-shell="lux"] .au-chip { background: rgba(255, 255, 255, 0.045); color: var(--lx-muted); }
+[data-shell="lux"] .au-chip.holo { background: rgba(111, 216, 242, 0.08); color: var(--lx-cyan); }
+[data-shell="lux"] .au-chip.signal { background: rgba(111, 220, 174, 0.08); color: var(--lx-success); }
+
+/* ── Wordmark ──────────────────────────────────────────────────────────── */
+
+[data-shell="lux"] .au-logo-word {
+  background: linear-gradient(105deg, var(--lx-violet) 0%, #ded4ff 28%, #ffffff 46%, var(--lx-magenta) 72%, var(--lx-cyan) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px rgba(108, 79, 214, 0.2));
+}
+/* The click "morph" glowed gold in the original keyframes. */
+@keyframes lx-morph {
+  0% { transform: perspective(700px) rotateX(0) scale(1); letter-spacing: 0.2em; }
+  30% { transform: perspective(700px) rotateX(42deg) scale(1.14); letter-spacing: 0.42em;
+        filter: brightness(1.5) drop-shadow(0 0 18px rgba(160, 139, 255, 0.6)); }
+  65% { transform: perspective(700px) rotateX(-14deg) scale(0.95); letter-spacing: 0.14em; }
+  100% { transform: perspective(700px) rotateX(0) scale(1); letter-spacing: 0.2em; }
+}
+[data-shell="lux"] .au-logo-word.morphing {
+  animation: lx-morph 950ms cubic-bezier(0.2, 0.8, 0.2, 1), au-shine 7s linear infinite;
+}
+
+/* ── Player bar ────────────────────────────────────────────────────────── */
+
+[data-shell="lux"] .au-player {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent), var(--lx-ink);
+  border-top-color: var(--lx-border);
+  box-shadow: 0 -14px 40px rgba(5, 3, 12, 0.22);
+}
+[data-shell="lux"] .au-play {
+  background: linear-gradient(140deg, var(--lx-purple), var(--lx-magenta));
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(108, 79, 214, 0.28);
+}
+[data-shell="lux"] .au-progress { background: rgba(255, 255, 255, 0.07); }
+[data-shell="lux"] .au-progress > div { background: linear-gradient(90deg, var(--lx-violet), var(--lx-cyan)); }
+/* The now-playing cover and volume are inline-styled in Shell.jsx (gold icon
+   on brown, ivory slider); these take them into the palette here only. */
+[data-shell="lux"] .au-player .au-cover {
+  background: radial-gradient(120% 120% at 20% 10%, #5d3aa8, #2b1838 65%, var(--lx-ink)) !important;
+  border: 1px solid var(--lx-border);
+}
+[data-shell="lux"] .au-player .au-cover svg { stroke: #ffffff; opacity: 0.85; }
+[data-shell="lux"] .au-player input[type="range"] { accent-color: var(--lx-violet) !important; }
+
+/* ── Shared console buttons (as Session 022 set them) ──────────────────── */
+
+[data-shell="lux"] .au-btn {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: var(--lx-border-strong);
+  color: var(--lx-text);
+}
+[data-shell="lux"] .au-btn:hover { border-color: var(--lx-violet); }
+[data-shell="lux"] .au-btn.gold {
+  background: linear-gradient(120deg, var(--lx-purple), #8a55d8 55%, var(--lx-magenta));
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(108, 79, 214, 0.28);
+}
+[data-shell="lux"] .au-btn.gold:hover { filter: brightness(1.08); }
+
+[data-shell="lux"] :focus-visible { outline-color: var(--lx-violet); }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-shell="lux"] .au-logo-word, [data-shell="lux"] .au-logo-word.morphing { animation: none; }
+}
+
+/* ── Narrow windows (the shell's top-bar layout) ───────────────────────── */
+/* Two flaws of the original narrow shell, fixed in this layer only so the
+   classic look stays exactly as it was: the volume row is inline-styled
+   display:flex and escaped theme.css's display:none (it spilled below the
+   player), and two-word nav labels wrapped onto two lines. */
+@media (max-width: 900px) {
+  [data-shell="lux"] .au-player .au-player-right { display: none !important; }
+  [data-shell="lux"] .au-nav-item { white-space: nowrap; flex-shrink: 0; }
+  [data-shell="lux"] .au-nav { align-items: center; }
+}
