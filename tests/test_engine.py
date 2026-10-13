@@ -107,7 +107,7 @@ def make_stems(tmp_path, sr=44100):
     raw = {
         "vocal":    (0.3 * np.sin(2*np.pi*350*t)).astype(np.float32) * 0.3,
         "bass":     (0.6 * np.sin(2*np.pi*80*t)).astype(np.float32) * 0.4,
-        "drums":    (np.random.randn(len(t)) * np.exp(-((t%0.5)*8))).astype(np.float32) * 0.35,
+        "drums":    (np.random.default_rng(11).standard_normal(len(t)) * np.exp(-((t%0.5)*8))).astype(np.float32) * 0.35,
         "harmonic": (0.3*np.sin(2*np.pi*440*t)+0.3*np.sin(2*np.pi*880*t)).astype(np.float32) * 0.3,
     }
     paths = {}
