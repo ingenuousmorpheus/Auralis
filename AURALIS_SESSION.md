@@ -383,3 +383,93 @@ Remaining work:
 - Small items: a favicon (from `docs/icon.png`); the sidebar voice card should use the shared voice selection; the status strip's "Engine details" wraps to its own line at 1440 px.
 
 Next recommended phase: **Create in the luxury language** (presentation only). Its composition, voice selection, blueprint, rendering and project behaviour stay as they are. Checkpoint with the owner before My Music / Projects. ACE-Step, lyric phonemes and V5 stay parked until the owner decides on them.
+
+
+## Session 024 — lyric intelligibility diagnosis
+
+**Date:** 2026-10-13
+**Trigger:** the first full song generated in Auralis (3:11 master) sounds like the owner's trained voice and is in key and in tune, but the vocals are wordless, like ad-libs rather than the entered lyrics. Task: diagnose before adding features. No retraining, no new models, no expensive GPU work.
+
+### Verdict
+
+**The current guide singer cannot produce intelligible lyric-conditioned singing.** This is the main cause, and it is by design. `VocaliseSinger` (`auralis/voice/singing_provider.py`, `sings_words = False`) renders every note as one of six static vowel formant sets (a e i o u uh), plus three kinds of noise burst standing in for consonants. There are no real consonants, diphthongs, nasals, liquids or word endings. Seed-VC copies the *content* of its source, so it cannot add words the guide never contained. The pipeline already records `guide_sings_words: false` in each song's `song.json`; the UI does not surface it.
+
+A second, independent defect corrupts the words even before audio: **lyric lines are not mapped one-to-one onto melody phrases.**
+
+### Path traced (lyrics → master)
+
+1. **Create → `composer.brief.parse_lyrics`:** the lyrics are split into sections, then `blueprint.sections[].lyrics` holds the lines. Nothing is lost here.
+2. **`composer.arrange._melody`:** one phrase per bar (verse) or per two bars (chorus/bridge), so the number of phrases comes from the section length, not the line count.
+   - A phrase with a line gets about one note per estimated syllable, capped at 14.
+   - Phrases beyond the last line get a *random* 5–8 notes.
+   - Odd chorus phrases repeat the first phrase's hook notes, whatever their line's length.
+3. **`voice.guide.build_score`:** it re-splits the melody into phrases at rests and gives phrase *n* the line `lines[n % len(lines)]`, so lines **loop** when phrases outnumber lines. Syllables beyond the phrase's notes are dropped; notes beyond the syllables get no syllable.
+4. **`VocaliseSinger.sing`:** vowel formants plus noise onsets. No words.
+5. **Seed-VC conversion → Pitch Polish (key) → Vocal Finish → mix/master.**
+
+### Evidence
+
+All local and repeatable; scripts and audio are in the session scratch folder, not the repo. Words were scored by the cached faster-whisper `base` model (CPU), counting phrase words recognised in order. Pitch is per-note median error in cents.
+
+Test phrase: "take my hand and hold me close", 7 notes in D major (D4–G4), 90 BPM. It was converted with the existing Prinze Paired Studio voice, read-only: no retraining, nothing written to the voice or its history.
+
+| Stage | Words in order | Notes |
+|---|---|---|
+| Vocalise guide (what the song used) | **0/7** ("ah, oh, oh…") | every note within 2 cents |
+| … after Seed-VC | 0/7 | within 12 cents |
+| … after Pitch Polish / Vocal Finish | 0/7 | |
+| Windows TTS speaking the phrase (control) | 7/7 | not sung |
+| Prototype speech-to-singing guide (TTS words, formant-preserving shift onto each note, only the vowel stretched; Zira, target octave) | **7/7** | within about 120 cents (speech intonation) |
+| … after Seed-VC into the owner's voice | **6/7** ("take my *end* and hold me close": the soft /h/ was lost) | within about 110 cents |
+| … after Pitch Polish and Vocal Finish | 6/7 | no further loss |
+| Same prototype, male voice an octave down, Seed-VC +12 semitones | 7/7 guide → **3–4/7** | the large conversion shift damages words |
+| First naive prototype (plain phase-vocoder shift of about +20 semitones) | 1/7 | formants pulled up ("chipmunk") |
+| The produced song (`song.wav`, master) | Whisper judges 70% of it non-speech and loops a hallucinated phrase | consistent with wordless vocals |
+
+**Lyric plumbing** (generic invented lyric through the real composer, seeds 0–2; verses of 16 bars, choruses of 8 bars):
+- Verse lines were sung 1.5–4× over, out of order.
+- One chorus line per chorus was cut short by the hook repeat.
+- Only 15–16 of 20 lines were sung intact, and the guide sang about 285 syllables for a 176-syllable lyric.
+- The regression test shows a 4-line verse singing 112 syllables for 41 written, with its first word dropped.
+
+**Which stage degrades intelligibility:**
+- The guide singer: entirely.
+- Seed-VC: slightly (one weak consonant, /h/), and heavily when it has to shift pitch an octave.
+- Pitch Polish and Vocal Finish: no measurable loss.
+- Pitch Polish (key mode) did **not** pull speech-intonation errors of about 1 semitone onto the score's notes, so a word-capable guide must hit the notes itself, or correction must follow the score rather than the key.
+
+### Regression tests added
+
+`tests/test_lyric_intelligibility.py`: 3 pass and 2 are strict expected failures. Strict means pytest flags them once the fix lands, so the markers can come off.
+- `test_guide_singer_sings_the_words` **(xfail, strict):** the registry's guide singer must sing the phrase with at least 6 of 7 words recognised. Currently 0/7.
+- `test_each_lyric_line_is_sung_once_in_order` **(xfail, strict):** every entered line is sung once, complete, in order.
+- `test_guide_keeps_the_target_melody`: every note within 25 cents. Passes.
+- `test_the_word_meter_hears_real_words`: a Windows TTS control at 6/7 or better, so a failing gate means the singer, not the meter. Passes.
+- `test_the_phrase_lands_one_syllable_per_note`: passes.
+
+The recogniser and TTS tests skip cleanly where the local model or Windows speech is missing.
+
+### Proposed fix: smallest viable local solution (not implemented; needs owner approval)
+
+1. **A word-singing guide provider behind the existing seam** (`SingingProvider` / `REGISTRY.guide_singer()`, `sings_words = True`). No new architecture and no model download:
+   - each syllable or word is spoken by a local TTS engine
+   - a formant-preserving pitch change puts it on its note, flattened to the score's pitch (a per-frame method such as PSOLA in numpy, or the small MIT `pyworld` package)
+   - only the vowel is stretched to the note length; consonants stay crisp
+   - it sings in the target octave, so Seed-VC needs no large shift
+   - The prototype already reaches 7/7 in the guide and 6/7 in the owner's voice.
+   - Opt-in at first; vocalise stays the default until approved.
+2. **Fix lyric → note mapping** (`arrange._melody` + `guide.build_score`): one phrase per line, no looping, hook repeats only for repeated lines, no silent truncation. **Version it** (an arranger version stored in the blueprint) so existing projects re-render with the same melody.
+3. **Correct to the score, not just the key**, for word-sung guides, or guarantee the guide is already on the notes (item 1).
+4. **Surface `guide_sings_words`** in Create and the Song studio, so a wordless guide is never a surprise.
+
+**TTS engine choice:**
+- Windows SAPI voices are built in and fine for the owner's local use, but their terms for commercially released output are unclear.
+- espeak-ng is GPL-3, small, cross-platform, and robotic, but runs as a separate process like Seed-VC.
+- Either can feed Seed-VC.
+- Natural, expressive sung diction (Suno-like) needs a real singing model later, such as DiffSinger with a commercially licensed English voicebank (see `docs/MODEL_OPTIONS.md`). That is a larger step and stays parked.
+
+**Available today without changes:** record or pick a sung guide (My Voice → Record or My Music lead stems); real words convert intelligibly.
+
+### Gate
+
+Owner decision on items 1–4 before implementation. Item 2 changes melodies of new renders, so it needs the versioning decision.

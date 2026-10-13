@@ -3277,3 +3277,14 @@ Full entry in `AURALIS_SESSION.md` (Session 023). Summary:
 - Verified: build clean; voice/engine tests 29 passed; Playwright screenshots of every page at 1440/1280/1024/820 with no horizontal overflow; player, logo and shell-switch persistence checked.
 - **Correction:** Session 021's note that this file was missing from GitHub is wrong; it is tracked on `origin/main`.
 - Next: owner review, then Create in the luxury language.
+
+
+## Session 024 — 2026-10-13 — Lyric intelligibility diagnosis
+
+Full entry in `AURALIS_SESSION.md` (Session 024). Summary:
+- **Cause 1 (main, by design):** the vocalise guide sings vowels only. Measured 0/7 words before and after Seed-VC, with notes within 2 to 12 cents.
+- **Cause 2:** lyric lines loop or are cut when melody phrases outnumber lines, or when a chorus hook repeats. 15–16 of 20 lines were sung intact, and a 4-line verse sang 112 syllables for 41 written.
+- Seed-VC loses only a weak /h/ (6/7), but loses words badly with a ±12 semitone shift (3–4/7). Pitch Polish and Vocal Finish lose nothing.
+- **Prototype:** a TTS speech-to-singing guide (formant-preserving shift, vowel-only stretch) reached 7/7 in the guide and 6/7 in the owner's voice.
+- **Tests:** `tests/test_lyric_intelligibility.py` adds 3 passing tests and 2 strict xfails pinning both causes.
+- **Proposed fix (awaiting approval):** a word-singing guide provider behind `SingingProvider`, a versioned lyric→note mapping fix, score-driven pitch, and showing `guide_sings_words` in the UI.
