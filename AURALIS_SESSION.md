@@ -531,10 +531,19 @@ Constraints: Prinze Paired Studio data untouched (read-only conversion only), no
 
 **Fix 4, notices:** checked in the real app with Playwright. Both guide options are listed with their notices, and the choice is remembered and sent. The owner's existing song opens in Song Studio with "Wordless guide: this song was sung before word guides existed…".
 
-**Before/after voice conversion with the new guide: PENDING.**
-- Seed-VC needs about 6 GB of free commit memory. During this session, 2.5-5.9 GB was free: LM Studio held 7.5 GB, plus the owner's other Python apps. None of these were touched.
-- A watcher runs the comparison automatically once 7 GB is free: both guides, phrase and verse + chorus → Prinze Paired Studio (read-only) → score pitch → word recall and pitch at every stage.
-- Session 024's prototype of the same approach measured 7/7 guide → 6/7 converted (a weak /h/ lost) → 6/7 after polish and finish.
+**Before/after voice conversion with the new guide (measured 2026-10-14, when 9-12 GB was free):** converted into Prinze Paired Studio, read-only. Words in order, and notes within 25 cents of the *written* melody:
+
+| Stage | Phrase, word guide | Verse + chorus, word guide | Verse + chorus, vocalise | Notes within 25 c |
+|---|---|---|---|---|
+| Dry guide | 7/7 | 52/56 (92.9%) | 1/56 | 100% |
+| After Seed-VC | **6/7** | **49/56 (87.5%)** | 0/56 | 100% (median 7.5 c) |
+| After score pitch | 6/7 | 53/56 (94.6%) | 0/56 | 100% (median 2.5 c) |
+| After Vocal Finish | | **52/56 (92.9%)** | 1/56 | |
+
+- **Seed-VC:** it costs a few weak consonants: the /h/ of "hand" ("take my end"), and "the" heard as "through".
+- **Score pitch and Vocal Finish:** they cost no words. Differences of a word or two are recogniser noise.
+- **Pitch:** it stays on the written melody at every stage.
+- **Evaluation flaw found and corrected:** the first overnight run measured the verse + chorus against a different melody. `arrange` seeds from the blueprint's random id, and the evaluation script rebuilt the blueprint per run. That run's pitch numbers (about a 197-cent median) were invalid and are discarded. The table comes from a rerun with the blueprint id pinned, so guide, conversion, pitch and measurement share one melody. Repo tests build and measure within one call, so they were not affected.
 
 **Tests:**
 - `tests/test_lyric_intelligibility.py`: 13 pass + 1 strict xfail. The xfail is the *default* guide still being vocalise, by owner decision.
@@ -550,7 +559,11 @@ Constraints: Prinze Paired Studio data untouched (read-only conversion only), no
 3. verse + chorus, vocalise
 4. verse + chorus, word guide
 
-Converted-voice samples will be added when the conversion runs.
+In your voice (Prinze Paired Studio, read-only):
+5. phrase, word guide, converted and score-pitched
+6. verse + chorus, vocalise, converted and finished
+7. verse + chorus, word guide, converted and finished
+8. verse + chorus, word guide, raw conversion
 
 ### Outstanding limitations
 
@@ -565,11 +578,11 @@ Converted-voice samples will be added when the conversion runs.
 
 ### Gate
 
-Owner listening approval of the word guide, dry now and converted when memory allows, before it becomes the default. The `test_guide_singer_sings_the_words` xfail flips when it does.
+Owner listening approval of the word guide (dry and converted samples ready) before it becomes the default. The `test_guide_singer_sings_the_words` xfail flips when it does.
 
 ### Next recommended
 
-1. Finish the conversion comparison: close LM Studio for a few minutes, or the watcher runs it when memory frees.
+1. ~~Finish the conversion comparison~~: done 2026-10-14 (table above).
 2. Owner listening review.
 3. If approved: make the word guide the default for songs with lyrics, keeping vocalise selectable, and remove the xfail.
 4. Then the licence review, or a licence-clean engine (espeak-ng, or a commercially licensed singing voicebank) for release.

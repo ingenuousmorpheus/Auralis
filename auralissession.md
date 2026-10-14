@@ -3297,5 +3297,5 @@ Full entry in `AURALIS_SESSION.md` (Session 025). Summary:
 - `ae47103`: melody v2 sings each line once, in order (20/20 lines, 176/176 syllables). v1 songs are byte-identical.
 - `ea8d555`: experimental word guide (dry: 7/7 phrase, 94.6% of a verse + chorus, 100% of notes within 25 cents of the written melody) and `pitch_to_score`.
 - `181262c`: guide choice and notices in Create and Song Studio.
-- **Pending:** the before/after Seed-VC comparison with the new guide. It needs about 6 GB free; LM Studio held 7.5 GB.
+- **Seed-VC comparison (2026-10-14, memory freed):** word guide verse + chorus 92.9% → 87.5% after conversion → 92.9% after Vocal Finish; 100% of notes within 25 cents throughout. Phrase 7/7 → 6/7. Vocalise 0-1/56. The first overnight run's pitch numbers were invalid (a different melody per run because the blueprint id was random) and were rerun with the id pinned.
 - Samples in git-excluded `samples/session-025/`. Vocalise stays the default until the owner approves.
