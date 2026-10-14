@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { GuideChoice, rememberedGuide } from "./GuideChoice.jsx";
 import AtlasPanel from "./AtlasPanel.jsx";
 import BlueprintView from "./BlueprintView.jsx";
 import SongStudio from "./SongStudio.jsx";
@@ -50,6 +51,7 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
   const [picked, setPicked] = useState([]);
   const [idea, setIdea] = useState("");
   const [lyrics, setLyrics] = useState("");
+  const [guide, setGuide] = useState(rememberedGuide);
   const [styles, setStyles] = useState("");
   const [songs, setSongs] = useState([]);
   const [voice, setVoice] = useState(null);
@@ -122,7 +124,7 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
     setCreating("song"); setNotice(""); setSongStatus(null); setProjectId(null);
     try {
       const r = await apiJson(`${API}/composer/song`, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...requestBody(), profile_id: useVoice && voice ? voice.id : null, production: "full", quality: "studio" }) });
+        body: JSON.stringify({ ...requestBody(), profile_id: useVoice && voice ? voice.id : null, production: "full", quality: "studio", guide_singer: guide || null }) });
       setSongJob(r.job_id);
       setView("making");
     } catch (e) { setNotice(`Could not start the song: ${e.message}`); setCreating(false); }
@@ -243,6 +245,8 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
       </div>
 
       <div style={{ padding: "14px 20px 18px", borderTop: "1px solid var(--hairline)" }}>
+        {useVoice && voice && <div style={{ marginBottom: 10 }}>
+          <GuideChoice API={API} value={guide} onChange={setGuide} hasLyrics={mode === "advanced" && !!lyrics.trim()} /></div>}
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
           <button className="au-btn gold big" onClick={create} disabled={creating} title="Write an editable blueprint first">
             <Icon name="create" size={18} width={2.4} />{creating === "blueprint" ? "Writing…" : blueprint ? "New blueprint" : "Create"}</button>

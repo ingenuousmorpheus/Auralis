@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiJson } from "./ui.jsx";
+import { GuideNotice } from "./GuideChoice.jsx";
 
 /* Song studio (AU-10, roadmap Screen 4): a finished song's stems from its
    project, each with play, level, mute and solo; Remix rebuilds the master
@@ -53,6 +54,8 @@ export default function SongStudio({ API, projectId, onEditBlueprint }) {
   };
   if (!project) return <div className="vp-empty">{error || "Loading the song…"}</div>;
   const masters = project.assets.filter(a => a.kind === "master").slice().reverse();
+  // what sang the guide (Session 025): recorded on the lead vocal and the first master
+  const sungBy = (project.assets.find(a => a.metadata?.part === "lead_vocal") || project.assets.find(a => a.metadata?.guide_singer))?.metadata;
   const running = status && status.stage !== "done" && status.stage !== "error";
   const anySolo = Object.values(levels).some(v => v.solo);
   const asset = id => `${API}/projects/${projectId}/assets/${id}`;
@@ -67,6 +70,9 @@ export default function SongStudio({ API, projectId, onEditBlueprint }) {
       {onEditBlueprint && <button className="au-btn" onClick={onEditBlueprint}>Edit blueprint</button>}
     </div>
     {error && <div role="alert" className="bp-alert warn">{error}</div>}
+    {sungBy?.guide_notice && <GuideNotice text={sungBy.guide_notice} />}
+    {sungBy && sungBy.part === "lead_vocal" && sungBy.guide_singer == null && <GuideNotice
+      text="Wordless guide: this song was sung before word guides existed, by the vocalise guide. Its vocal follows the melody and lyric rhythm on vowels only; it does not sing the words of your lyrics." />}
 
     {masters.length > 0 && <div className="bp-panel">
       <div className="au-caption">Masters</div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { GuideChoice, GuideNotice, rememberedGuide } from "./GuideChoice.jsx";
 import "./Blueprint.css";
 import SaveToProject from "./SaveToProject.jsx";
 import { apiJson, fmtTime } from "./ui.jsx";
@@ -289,6 +290,7 @@ function SingPanel({ API, bp, renderJob }) {
   const [voice, setVoice] = useState("");
   const [quality, setQuality] = useState("studio");
   const [production, setProduction] = useState("full");
+  const [guide, setGuide] = useState(rememberedGuide);
   const [backingDb, setBackingDb] = useState(4);
   const [partLevels, setPartLevels] = useState({});
   const [job, setJob] = useState(null);
@@ -323,7 +325,7 @@ function SingPanel({ API, bp, renderJob }) {
     try {
       const r = await apiJson(`${API}/composer/sing`, { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ blueprint: bp, render_job_id: renderJob, profile_id: voice, quality, production,
-          backing_db: backingDb, backing_levels: partLevels }) });
+          backing_db: backingDb, backing_levels: partLevels, guide_singer: guide || null }) });
       setJob(r.job_id);
     } catch (e) { setError(e.message); }
   };
@@ -367,9 +369,9 @@ function SingPanel({ API, bp, renderJob }) {
         })}
       </div>
     </details>}
+    <GuideChoice API={API} value={guide} onChange={setGuide} hasLyrics={sungLines} />
     <div style={{ fontSize: 12, color: "var(--steel)" }}>
-      The built-in guide singer performs the melody{sungLines ? ", the rhythm of your lyrics and their vowels" : ""}; your voice model supplies the timbre.
-      {sungLines && " It doesn't pronounce clear words yet: that needs a lyric-capable singing engine (planned)."} Close big apps first: the voice engine needs memory.</div>
+      The guide singer performs the melody; your voice model supplies the timbre. Close big apps first: the voice engine needs memory.</div>
     {error && <div role="alert" className="bp-alert warn">{error}</div>}
     {running && <div role="status">
       <div style={{ fontSize: 12, color: "var(--steel)", marginBottom: 6 }}>{status.stage} · {Math.round(status.pct)}%</div>
@@ -377,6 +379,9 @@ function SingPanel({ API, bp, renderJob }) {
         <div style={{ width: `${status.pct}%`, height: "100%", background: "var(--holo)", transition: "width 0.3s" }} /></div>
     </div>}
     {done && <>
+      {done.guide_notice && <GuideNotice text={done.guide_notice} />}
+      {done.pitch_accuracy?.within_25_cents_pct != null && <div style={{ fontSize: 12, color: "var(--steel)" }}>
+        On the written melody: {done.pitch_accuracy.within_25_cents_pct}% of notes within 25 cents (median {done.pitch_accuracy.median_abs_cents} cents).</div>}
       {done.parts_why?.length > 0 && <Why lines={done.parts_why} />}
       <div style={{ fontSize: 12, color: "var(--steel)" }}>{done.profile_name} · {done.notes_sung} notes · {done.notes_corrected ?? 0} tuned
         {Object.keys(done.backing_stems || {}).length > 0 && <> · {Object.keys(done.backing_stems).length} backing parts · {done.conversion_calls} engine {done.conversion_calls === 1 ? "run" : "runs"}</>}

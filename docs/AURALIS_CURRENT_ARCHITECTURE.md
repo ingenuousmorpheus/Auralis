@@ -192,6 +192,33 @@ Privacy properties the code enforces:
   - Vocals up to 6 minutes are converted in one Seed-VC call. Longer ones are cut in the middle of rests into pieces of about 4 minutes (`plan_chunks`).
 - **`SeedVCProvider.convert`** now decodes the subprocess output as UTF-8 with replacement. Seed-VC's progress bars used to crash the output reader under the Windows code page, which is why failures surfaced as "Unknown Seed-VC error" (gap 2, now fixed).
 
+### Lyric intelligibility (Sessions 024-025)
+
+- **Melody v2** (`composer/arrange._melody_v2`, `blueprint.melody_version = 2` on new blueprints):
+  - one phrase per lyric line, exactly one note per syllable (`voice.guide.syllabify`, the count the guide uses)
+  - the section's bars are shared between its lines, with a 2-beat rest after roomy lines (room for ad-libs) and less in dense sections
+  - a line repeated within the same section type reuses its melody (the hook)
+  - `arrangement["melody_lyrics"]` maps each sung note to `[beat, section, line, syllable]`; `guide.build_score(..., lyric_map)` uses it instead of guessing phrases at rests
+  - blueprints without `melody_version` (everything saved before Session 025) take the untouched v1 path: melody, score and every other track byte-identical (fixture fingerprint test)
+- **Guide notes carry their word** (`GuideNote.word`, `word_pos`, `word_len`; `guide.syllabify_words`), so a word-singing guide can speak a word once and spread it over its notes.
+- **Word guide, experimental** (`voice/word_singer.py`; model `word-guide`, `ModelSpec.experimental = True`, opt-in per song; vocalise stays the default):
+  - each word is spoken by a Windows SAPI voice (built in; Zira by default) in one PowerShell call; weak forms respelled for speech only ("the" → "thuh" before a consonant, "a" → "uh")
+  - LPC analysis per 23 ms frame (envelope, loudness, voicing from pyin plus normalised autocorrelation, because pyin misses short words); multi-syllable words split at loudness dips between vowel nuclei
+  - resynthesis on the score: voiced frames re-excited by a glottal source at the written pitch (40 ms glide, vibrato on long notes); unvoiced frames keep their own noise (consonants); only the steady vowel is stretched; the onset consonant starts up to 120 ms before its note
+  - wordless notes (ad-libs, wordless sections) are vocalised, not dropped
+  - licence: speech-voice output is personal, local use only until reviewed; every song sung with it records `personal_use_only: true`
+- **Melody-targeted pitch** (`voice/pitch.pitch_to_score`):
+  - each note is tuned toward the note written for it (strength 0.9, deadband 8 cents, at most 300 cents), not to the nearest key tone
+  - only the band below 5.2 kHz is moved (consonant hiss untouched), with a formant-preserving shift (LPC envelope kept, the residual moved)
+  - tracker octave slips are folded; before/after accuracy is re-measured against the score
+  - `sing_song` uses it for guides that sing words (`pitch_mode: "score"`); vocalise keeps `pitch_polish` in the key (`pitch_mode: "key"`)
+- **Honest notices:**
+  - `sing_song` records `guide_singer`, `guide_singer_name`, `guide_sings_words`, `guide_experimental`, `guide_notice`, `personal_use_only`, `melody_version` and `pitch_accuracy`
+  - `assemble.save_song_to_project` copies the guide fields onto the lead vocal and master assets
+  - `frontend/src/GuideChoice.jsx` (Create's Make the whole song, the blueprint Sing panel) chooses the guide (remembered in `localStorage auralis.guide`) and warns whenever the guide cannot sing the lyrics
+  - Song Studio shows the song's own notice; songs without one (sung before Session 025, all vocalise) get the wordless notice
+- **API:** `guide_singer` (optional) on `POST /composer/sing` and `POST /composer/song`; an unknown or wrong-kind or unavailable guide is a 422 before any job starts.
+
 ### Engines and model lifecycle (Session 017)
 
 `auralis/models/`:
@@ -381,6 +408,7 @@ outputs become durable.
 | `frontend/src/VoicePage.jsx` + `VoicePage.css` | **My Voice, luxury redesign (Session 020, `docs/AURALIS_LUXURY_UI_DESIGN.md`).** Page header (Local · Private) → **selected-voice hero** (voice art, READY / Training / Engine not installed / Checking state, model badge, description, range and calibration tags, Switch voice, Train / improve, Manage voice, New voice; the sample as a decoded waveform player, singing learned, range, readiness, sample rate, the first readiness note as *Next step*) → tabs *Convert* / *My voices* / *New voice* → **Convert workbench**: *Input* (Audio files: drop up to 5, each with a decoded waveform, duration and size; Record: a mic guide take added to the inputs; My Music: V4 lead-vocal stems), quality, pitch shift, one-at-a-time queue with Queued / backend stage + % / Complete / Failed / Cancelled and cancel; *Output* (Converted vocals for this voice, All history): result cards with waveform player, A/B that keeps the playback position, favourite (rating 1), download, and a menu (not right, save to project, delete) → **Voice tools** (conversion; pitch & key → Pitch Polish in Studio tools; doubles, harmonies, ad-libs → Create; vocal chain) → **local status** (voice engine, GPU and memory from `/models`, privacy). *My voices* cards: state, singing / range / readiness / takes, studio-training progress to 10 min, readiness notes, sample player, Use / Add more takes / Train or retrain, rename and delete in a menu; the classic Studio tools stay under them. Same endpoints as before; no new backend |
 | `frontend/src/Lux.jsx` + `lux.css` | **Luxury design layer (Session 020).** Tokens (`--lx-*`: obsidian, plum, violet, magenta, cyan, success/warning/danger, glass surfaces) and primitives meant for reuse by the other pages: `lx-atmosphere`, `lx-glass`, buttons, badges (ready / busy / warn / fail / violet), tabs, segmented choice, tags, inputs, tool cards, stats, progress, status strip, popover `Menu`. `WavePlayer` (waveform with playhead, click/arrow-key seek, one player at a time, keeps position when `src` changes for A/B) and `decodePeaks` (browser-side peaks for files and URLs without a peaks endpoint). Reduced motion respected |
 | `frontend/src/shell-lux.css` | **Luxury shell (Sessions 022-023).** Sidebar, wordmark (incl. click morph), player bar (cover, volume, progress), voice card and console buttons in the `--lx-*` palette, scoped to `<html data-shell="lux">`; `theme.css` keeps the original gold shell. `App.jsx` chooses: default `lux`, `?shell=classic\|lux` (remembered in `localStorage auralis.shell`), build default `VITE_SHELL`. Also fixes two narrow-window shell flaws in lux only (volume row spilling below the player; wrapping nav labels) |
+| `frontend/src/GuideChoice.jsx` | **Guide singer choice and notices (Session 025).** `GuideChoice` lists the installed guide singers from `/models` (Vocalise; Word guide, experimental), remembers the choice and shows `GuideNotice`: a warning when the guide cannot sing the lyrics, the experimental/personal-use note for the word guide. Used by Create (Make the whole song) and the blueprint's Sing panel; Song Studio shows the song's recorded notice |
 | `frontend/src/VoiceCapture.jsx` | *New voice* / *Record more* wizard: voice name, singer, consent (+ optional spoken consent clip), guided take with live meter, clipping warning, timer and prompts, playback and waveform, *Check the take*, *Save voice*. A file can be used instead of the mic |
 | `frontend/src/recorder.js` | Microphone capture: AudioWorklet (ScriptProcessor fallback) with echo cancellation, noise suppression and auto gain **off**; 16-bit mono WAV encoded in the browser, so the backend needs no ffmpeg. Stop/cancel are idempotent |
 | `frontend/src/VoiceStudio.jsx` | The classic "My Voice Studio", now shown inside *My voices → Studio tools*: engine status/install, (1) create profile with consent, (2) Studio Voice dataset + paired calibration + readiness + training depth, (3) convert guide, then pitch polish / one-click auto-polish with A/B players |
