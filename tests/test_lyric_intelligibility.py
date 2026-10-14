@@ -26,6 +26,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+NL = chr(10)
 PHRASE = "take my hand and hold me close"
 WORDS = PHRASE.split()
 MIDI = [62, 64, 66, 67, 66, 64, 62]            # D major, one note per word
@@ -131,23 +132,115 @@ def test_the_phrase_lands_one_syllable_per_note():
     assert [n.midi for n in score] == MIDI
 
 
-@pytest.mark.xfail(strict=True, reason="Session 024: with more melody phrases than lyric lines, build_score loops "
-                                       "the lines and a repeated chorus hook has the wrong note count, so lines "
-                                       "are repeated out of order or cut short.")
-def test_each_lyric_line_is_sung_once_in_order():
-    """Every entered line must be sung in full, once, in its order (per section)."""
+def _sung_by_section(bp, seed=0):
     from auralis.composer.arrange import arrange
-    from auralis.composer.blueprint import build_blueprint
-    from auralis.voice.guide import build_score, syllabify
+    from auralis.voice.guide import build_score
 
-    bp = build_blueprint("slow 90s R&B ballad", LYRICS, seed=0)
-    score = build_score(bp, arrange(bp, seed=0)["tracks"]["melody"])
+    arr = arrange(bp, seed=seed)
+    score = build_score(bp, arr["tracks"]["melody"], arr.get("melody_lyrics"))
     spb = 60.0 / bp["tempo"]
+    out = []
     for s in bp["sections"]:
-        lines = s.get("lyrics") or []
-        if not lines:
-            continue
         a, b = (s["start_bar"] - 1) * 4 * spb, (s["start_bar"] - 1 + s["bars"]) * 4 * spb
-        sung = [n.syllable for n in score if a <= n.start < b and n.syllable]
+        out.append((s, [n for n in score if a - 1e-3 <= n.start < b - 1e-3]))   # starts are rounded to 0.1 ms
+    return out
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3])
+def test_each_lyric_line_is_sung_once_in_order(seed):
+    """Every entered line is sung in full, once, in its order (per section):
+    no missing words, no repeats, no extra syllables (melody v2)."""
+    from auralis.composer.blueprint import build_blueprint
+    from auralis.voice.guide import lyric_lines, syllabify
+
+    bp = build_blueprint("slow 90s R&B ballad", LYRICS, seed=seed)
+    assert bp["melody_version"] == 2
+    checked = 0
+    for s, notes in _sung_by_section(bp, seed):
+        lines = lyric_lines(s)
+        if not lines:
+            assert all(not n.syllable for n in notes), "a section without lyrics must not invent words"
+            continue
+        sung = [n.syllable for n in notes]
         wanted = [syl for line in lines for syl in syllabify(line)]
         assert sung == wanted, f"{s['type']}: sang {len(sung)} syllables for {len(wanted)} written"
+        ends = [i for i, n in enumerate(notes) if n.phrase_end]
+        assert len(ends) == len(lines), "one phrase end per line (breath after each line)"
+        assert all(a.start + a.duration <= b.start + 1e-6 for a, b in zip(notes, notes[1:])), "notes overlap"
+        checked += 1
+    assert checked >= 2
+
+
+DENSE_LINE = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+MANY_LINES = NL.join(f"line {w} goes on and on and on tonight" for w in "abcdefghijklmnop")
+
+
+@pytest.mark.parametrize("lyrics", [DENSE_LINE, MANY_LINES, "just two words" + NL + "and a few more"],
+                         ids=["15-syllable line", "16 dense lines", "2 sparse lines"])
+def test_dense_and_sparse_sections_keep_every_syllable(lyrics):
+    """No 14-syllable cap, no truncation when lines are many, no padding when they are few."""
+    from auralis.composer.blueprint import build_blueprint
+    from auralis.voice.guide import syllabify
+
+    bp = build_blueprint("ballad", "[Verse]" + NL + lyrics, seed=0)
+    found = False
+    for s, notes in _sung_by_section(bp):
+        if s.get("lyrics"):
+            found = True
+            assert [n.syllable for n in notes] == [x for line in s["lyrics"] for x in syllabify(line)]
+            section_end = (s["start_bar"] - 1 + s["bars"]) * 4 * 60 / bp["tempo"]
+            assert notes[-1].start + notes[-1].duration <= section_end + 1e-6
+    assert found
+
+
+def test_repeated_chorus_lines_reuse_the_hook_with_exact_counts():
+    from auralis.composer.blueprint import build_blueprint
+
+    bp = build_blueprint("ballad", LYRICS, seed=0)
+    choruses = [notes for s, notes in _sung_by_section(bp) if s["type"] == "chorus" and notes]
+    first = choruses[0]
+    # lines 1 and 3 are the same words: same melody shape, shifted in time
+    by_line, cur = [], []
+    for n in first:
+        cur.append(n)
+        if n.phrase_end:
+            by_line.append(cur)
+            cur = []
+    assert [n.syllable for n in by_line[0]] == [n.syllable for n in by_line[2]]
+    assert [n.midi for n in by_line[0]] == [n.midi for n in by_line[2]]
+
+
+def test_saved_v1_songs_render_exactly_as_before():
+    """A blueprint saved before melody v2 (no `melody_version`) keeps its melody,
+    its guide score and every other track, byte for byte (fingerprints taken
+    from the pre-v2 code, Session 025)."""
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from auralis.composer.arrange import arrange
+    from auralis.voice.guide import build_score
+
+    bp = json.loads((Path(__file__).parent / "fixtures_legacy_blueprint.json").read_text())
+    assert "melody_version" not in bp
+    arr = arrange(bp, seed=0)
+    score = build_score(bp, arr["tracks"]["melody"], arr.get("melody_lyrics"))
+    h = lambda o: hashlib.sha256(json.dumps(o, sort_keys=True).encode()).hexdigest()[:16]
+    assert arr["melody_version"] == 1 and arr["melody_lyrics"] is None
+    assert h(arr["tracks"]["melody"]) == "fd9dbdea0e9cf4c0"
+    assert h([n.to_dict() for n in score]) == "de2e449f5f078ec9"
+    assert h({k: v for k, v in arr["tracks"].items() if k != "melody"}) == "b5015d6c97e385b1"
+
+
+def test_v2_changes_only_the_melody_and_survives_revision():
+    from auralis.composer.arrange import arrange
+    from auralis.composer.blueprint import build_blueprint, revise
+
+    bp = build_blueprint("ballad", LYRICS, seed=0)
+    v1 = dict(bp)
+    v1.pop("melody_version")
+    a2, a1 = arrange(bp, seed=0), arrange(v1, seed=0)
+    for k in a2["tracks"]:
+        if k != "melody":
+            assert a2["tracks"][k] == a1["tracks"][k], f"{k} changed with the melody version"
+    assert revise(bp, {"tempo": bp["tempo"] + 4})["melody_version"] == 2

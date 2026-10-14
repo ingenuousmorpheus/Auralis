@@ -69,7 +69,7 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
     seed = render.get("seed", seed) if render else seed
     report("writing the guide score", 2)
     arrangement = arrange(blueprint, seed=seed)                    # same seed → same melody as the render
-    score = build_score(blueprint, arrangement["tracks"]["melody"])
+    score = build_score(blueprint, arrangement["tracks"]["melody"], arrangement.get("melody_lyrics"))
     if not score:
         raise ValueError("This blueprint has no sung sections (every lead vocal is off).")
     total = float(render.get("duration_seconds") or blueprint["duration_seconds"] + 6) if render else \

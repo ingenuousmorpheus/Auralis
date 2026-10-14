@@ -18,7 +18,8 @@ from test_full_song import _short
 
 
 def _score(bp, seed=0):
-    return build_score(bp, arrange(bp, seed=seed)["tracks"]["melody"])
+    arr = arrange(bp, seed=seed)
+    return build_score(bp, arr["tracks"]["melody"], arr.get("melody_lyrics"))
 
 
 def _section(bp, t):

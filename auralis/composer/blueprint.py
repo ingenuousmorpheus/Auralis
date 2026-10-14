@@ -40,6 +40,9 @@ from .chords import ChordError, key_name, note_name, parse_key, realise, split_p
 from .validation import SECTION_TYPES, validate_blueprint
 
 BLUEPRINT_VERSION = 1
+# Melody writer version stamped on new blueprints (composer.arrange). Blueprints
+# without it are v1 and re-render exactly as when they were saved.
+MELODY_VERSION = 2
 DEFAULT_LENGTH = 200                 # seconds, a typical R&B single
 DEFAULT_VOICE = (48.0, 72.0)         # C3–C5 when there is no voice profile or DNA melody
 ROLES = ["drums", "bass", "keys", "pad", "lead_vocal", "backing_vocals", "fx", "atmos"]
@@ -512,6 +515,7 @@ def build_blueprint(prompt: str = "", lyrics: str = "", *, dna: dict | None = No
     vocal_patterns = atlas_candidates(era, vocal=brief["vocal"], n=6, atlas=atlas)["vocal"]
     bp = {
         "blueprint_version": BLUEPRINT_VERSION,
+        "melody_version": MELODY_VERSION,
         "id": uuid.uuid4().hex[:12],
         "revision": 1,
         "created_at": _now(), "updated_at": _now(),

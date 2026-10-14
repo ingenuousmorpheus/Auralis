@@ -72,15 +72,37 @@ def onset_of(syllable: str) -> str:
     return "soft"                                   # m n l r w v
 
 
-def build_score(blueprint: dict, melody: list[tuple]) -> list[GuideNote]:
-    """Melody notes (beats) + section lyrics → timed guide notes with syllables."""
+def lyric_lines(section: dict) -> list[str]:
+    """The section's lyric lines that have something to sing (blank or
+    punctuation-only lines are not phrases). Shared by the melody writer and the
+    guide score so both count the same lines."""
+    return [line for line in (section.get("lyrics") or []) if syllabify(line)]
+
+
+def build_score(blueprint: dict, melody: list[tuple], lyric_map: list | None = None) -> list[GuideNote]:
+    """Melody notes (beats) + section lyrics → timed guide notes with syllables.
+
+    ``lyric_map`` (melody v2, from ``composer.arrange``) says exactly which line
+    and syllable each note carries, so every line is sung once, in order. Without
+    it (v1 songs, demo sections) syllables are laid onto phrases found at rests,
+    as before."""
     spb = 60.0 / float(blueprint["tempo"])
     notes = sorted(melody)
+    by_beat = {round(b, 4): (si, li, k) for b, si, li, k in (lyric_map or [])}
     out: list[GuideNote] = []
-    for s in blueprint["sections"]:
+    for section_index, s in enumerate(blueprint["sections"]):
         start_b, end_b = (s["start_bar"] - 1) * 4.0, (s["start_bar"] - 1 + s["bars"]) * 4.0
         sec = [n for n in notes if start_b <= n[0] < end_b]
         if not sec:
+            continue
+        mapped = [by_beat.get(round(n[0], 4)) for n in sec]
+        if by_beat and all(m and m[0] == section_index for m in mapped):
+            lines = [syllabify(line) for line in lyric_lines(s)]
+            for (beat, length, pitch, vel), (_, li, k) in zip(sec, mapped):
+                syl = lines[li][k]
+                out.append(GuideNote(
+                    start=round(beat * spb, 4), duration=round(length * spb, 4), midi=int(pitch), velocity=int(vel),
+                    syllable=syl, vowel=vowel_of(syl), onset=onset_of(syl), phrase_end=k == len(lines[li]) - 1))
             continue
         # phrases = runs of notes separated by a rest of at least half a beat
         phrases, cur = [], [sec[0]]

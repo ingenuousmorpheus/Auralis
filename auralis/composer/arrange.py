@@ -225,7 +225,16 @@ def arrange(blueprint: dict, seed: int = 0) -> dict:
         if s["type"] == "outro":
             tracks["fx"].append((start, 8.0, FX_DOWN, _vel("light", energy)))
 
-    tracks["melody"] = _melody(blueprint, tonic, mode, rng)
+    # Melody v1 (no `melody_version`: every song saved before Session 025) is kept
+    # byte-for-byte so old projects re-render the same tune. v2 sings each lyric
+    # line once, in order, one note per syllable, and records which syllable
+    # each note carries (`melody_lyrics`) instead of leaving the guide to guess.
+    melody_version = int(blueprint.get("melody_version") or 1)
+    lyric_map = None
+    if melody_version >= 2:
+        tracks["melody"], lyric_map = _melody_v2(blueprint, tonic, mode, rng)
+    else:
+        tracks["melody"] = _melody(blueprint, tonic, mode, rng)
     demo = blueprint.get("demo")
     if demo and demo.get("line"):                       # AU-13: the demo's own melody, kept in its sections
         line = [tuple(n) for n in demo["line"]]
@@ -239,9 +248,12 @@ def arrange(blueprint: dict, seed: int = 0) -> dict:
         for d, e in demo_spans:
             keep += [(d + b, l, p, v) for b, l, p, v in line if d + b >= 0 and d + b < e]
         tracks["melody"] = sorted(keep)
+        if lyric_map:                                  # the demo's own notes carry no written syllables
+            lyric_map = [m for m in lyric_map if sections[m[1]]["type"] != demo["role"]]
     for k in tracks:
         tracks[k].sort()
     return {
+        "melody_version": melody_version, "melody_lyrics": lyric_map,
         "tempo": tempo, "key": blueprint["key"], "meter": "4/4", "seed": seed,
         "total_beats": blueprint["total_bars"] * 4, "feel": feel, "bass_style": bass_style,
         "swing": _swing(groove), "offsets_ms": groove.get("offsets_ms") or {},
@@ -332,3 +344,110 @@ def _melody(bp, tonic, mode, rng):
             for (off, d, pitch, vel) in phrase:
                 notes.append((p_start + off, d, pitch, vel))
     return notes
+
+
+# ── Melody v2: one phrase per lyric line ────────────────────────────────────
+
+def _phrase_line(pool, idx, top, lo, n, step, p_start, start, span, chords, tonic, mode, rng,
+                 is_chorus):
+    """n notes, `step` beats apart, from `p_start`: chord tones on strong beats,
+    steps between, the section's contour. Always exactly n notes."""
+    phrase = []
+    t = p_start
+    for i in range(n):
+        progress = i / max(1, n - 1)
+        target = top if (is_chorus and 0.3 < progress < 0.7) else (lo + top) // 2
+        strong = abs(t - round(t)) < 1e-9
+        c = next((c for c in reversed(chords) if (c["bar"] - 1) * 4 + (c["beat"] - 1) <= t - start), None)
+        if strong and c:
+            got = _chord_pcs(c, tonic, mode)
+            tones = [p for p in pool if got and p % 12 in got[1]]
+            if tones:
+                cand = min(tones, key=lambda p: abs(p - pool[idx]) + 0.3 * abs(p - target))
+                idx = pool.index(cand)
+        else:
+            direction = 1 if pool[idx] < target else -1
+            if rng.random() < 0.25:
+                direction = -direction
+            idx = max(0, min(len(pool) - 1, idx + direction))
+        end = p_start + span
+        d = min(step * (2 if i == n - 1 else 1), max(step, end - t))
+        phrase.append((t, d * 0.98, pool[idx], 90 if strong else 78))
+        t += step
+    return phrase, idx
+
+
+def _melody_v2(bp, tonic, mode, rng):
+    """Like ``_melody``, but a section with lyrics gets exactly one phrase per line,
+    in order, with exactly one note per syllable (``voice.guide.syllabify``, the
+    same count the guide singer uses). The section's bars are shared evenly
+    between its lines; a line that repeats within the same section type reuses
+    its first melody (the hook), so repeats stay musical and counts stay exact.
+    Sections without lyrics keep wordless phrases, as in v1.
+
+    Returns (notes, lyric_map) where lyric_map rows are
+    [start_beat, section_index, line_index, syllable_index] for every sung syllable."""
+    from ..voice.guide import lyric_lines, syllabify
+
+    scale = SCALES[mode]
+    notes, lyric_map = [], []
+    cells = {}                                                     # (section type, line) → its phrase
+    hook_cell = None
+    for si, s in enumerate(bp["sections"]):
+        v = s.get("vocal")
+        if not v or s.get("arrangement", {}).get("lead_vocal", "off") == "off":
+            continue
+        lo, hi, peak = int(v["low_midi"]), int(v["high_midi"]), int(v["peak_midi"])
+        pool = [p for p in range(lo, hi + 1) if (p - tonic) % 12 in scale]
+        if len(pool) < 3:
+            continue
+        start = (s["start_bar"] - 1) * 4.0
+        bars = int(s["bars"])
+        chords = s.get("chords") or []
+        is_chorus = s["type"] == "chorus"
+        top = peak if is_chorus or s["type"] == "bridge" else min(peak, pool[len(pool) * 2 // 3])
+        idx = min(range(len(pool)), key=lambda i: abs(pool[i] - (lo + top) // 2))
+        lines = lyric_lines(s)
+        if lines:
+            slot = bars * 4.0 / len(lines)
+            # rest after each line: 2 beats once a line has 6+ (room for an ad-lib, as v1 left),
+            # shrinking for dense sections so every syllable still fits
+            breath = 2.0 if slot >= 6 else 1.0 if slot >= 4 else 0.5 if slot >= 2 else 0.25
+            span = max(slot - breath, slot * 0.75)
+            for li, line in enumerate(lines):
+                p_start = start + li * slot
+                n = len(syllabify(line))
+                key = (s["type"], " ".join(syllabify(line)))
+                if key in cells:
+                    phrase = [(p_start + off, d, p, vel) for off, d, p, vel in cells[key]]
+                else:
+                    pickup = 0.5 if rng.random() < 0.5 and span - 0.5 >= n * 0.25 else 0.0
+                    room = span - pickup
+                    step = room / n
+                    grid = int(step * 8) / 8                             # down to the 32nd-note grid: always fits
+                    step = min(1.0, grid) if grid >= 0.125 else step
+                    phrase, idx = _phrase_line(pool, idx, top, lo, n, step, p_start + pickup, start, span - pickup,
+                                               chords, tonic, mode, rng, is_chorus)
+                    cells[key] = [(b - p_start, d, p, vel) for b, d, p, vel in phrase]
+                for k, note in enumerate(phrase):
+                    notes.append(note)
+                    lyric_map.append([round(note[0], 4), si, li, k])
+            continue
+        # wordless section: v1's phrasing (one phrase per 1–2 bars, 5–8 notes, chorus hook repeats)
+        phrase_bars = 2 if s["type"] in ("chorus", "bridge") else 1
+        for ph in range(max(1, bars // phrase_bars)):
+            p_start = start + ph * phrase_bars * 4
+            if is_chorus and hook_cell and ph % 2 == 1:
+                notes.extend((p_start + off, d, p, vel) for off, d, p, vel in hook_cell)
+                continue
+            n = rng.randint(5, 8 if is_chorus else 7)
+            span = phrase_bars * 4 - 1.0
+            pickup = 0.5 if rng.random() < 0.5 else 0.0
+            step = max(0.25, min(1.0, round((span - pickup) / n * 4) / 4))
+            n = min(n, int((span - pickup) / step))
+            phrase, idx = _phrase_line(pool, idx, top, lo, n, step, p_start + pickup, start, span - pickup,
+                                       chords, tonic, mode, rng, is_chorus)
+            if is_chorus and hook_cell is None:
+                hook_cell = [(b - p_start, d, p, vel) for b, d, p, vel in phrase]
+            notes.extend(phrase)
+    return notes, lyric_map
