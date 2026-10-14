@@ -33,6 +33,19 @@ def _pitch_key(blueprint_key: str) -> str:
     return f"{KEY_NAMES[tonic]} {mode}"
 
 
+def guide_notice(singer, has_lyrics: bool) -> str | None:
+    """What the listener must be told about the guide (never imply a wordless guide sang the lyrics)."""
+    if not has_lyrics:
+        return None
+    if not singer.sings_words:
+        return ("Wordless guide: the vocal follows your melody and lyric rhythm on vowels only. "
+                "It does not sing the words of your lyrics.")
+    if getattr(singer.spec, "experimental", False):
+        return ("Experimental word guide: the lyrics are sung as words, plainly. Personal, local use only "
+                "until the speech voice's licence is reviewed.")
+    return None
+
+
 def plan_chunks(spans: list[tuple[float, float]], total: float) -> list[tuple[float, float]]:
     """Cut points for conversion: whole vocal when short, else ≤ ~4 min pieces split in rests."""
     if not spans:
@@ -124,10 +137,19 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
     # Long vocals: track pitch at 22.05 kHz (2.4x faster; measured 94% vs 96% of notes within
     # 25 cents of the score after polish, same median). Short ones keep full-rate tracking.
     track_sr = 22050 if sung_seconds > 120 else None
-    pitch_result = pitch_polish(converted_path, polished_path, style=pitch_style, track_sr=track_sr,
-                                instrumental_path=None, key_override=_pitch_key(blueprint["key"]),
-                                report_path=os.path.join(out_dir, "pitch_polish.json"),
-                                progress=lambda s, p: report(f"pitch polish: {s}", 62 + p * 0.1))
+    if singer.sings_words:
+        # A word-singing guide comes from speech, so tune to the notes *written* for it
+        # (Session 025), formant-preserving, consonants untouched. Vocalise keeps key polish.
+        from .pitch import pitch_to_score
+
+        pitch_result = pitch_to_score(converted_path, polished_path, score,
+                                      report_path=os.path.join(out_dir, "pitch_polish.json"),
+                                      progress=lambda s, p: report(f"pitch to melody: {s}", 62 + p * 0.1))
+    else:
+        pitch_result = pitch_polish(converted_path, polished_path, style=pitch_style, track_sr=track_sr,
+                                    instrumental_path=None, key_override=_pitch_key(blueprint["key"]),
+                                    report_path=os.path.join(out_dir, "pitch_polish.json"),
+                                    progress=lambda s, p: report(f"pitch polish: {s}", 62 + p * 0.1))
     finished_path = os.path.join(out_dir, "04_finished_vocal.wav")
     preview_path = os.path.join(out_dir, "vocal_over_instrumental.wav") if instrumental else None
     report("vocal finish", 73)
@@ -146,6 +168,12 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
         "pitch_tracking_hz": track_sr or 44100,
         "song_mix_path": None, "song_master_path": None,
         "guide_sings_words": singer.sings_words, "guide_singer": singer.spec.id,
+        "guide_singer_name": singer.spec.name, "guide_experimental": bool(getattr(singer.spec, "experimental", False)),
+        "guide_notice": guide_notice(singer, any(n.syllable for n in score)),
+        "personal_use_only": singer.spec.id == "word-guide",
+        "melody_version": arrangement.get("melody_version", 1),
+        "pitch_mode": pitch_result.get("mode", "key"),
+        "pitch_accuracy": pitch_result.get("after"),
         "production": production, "parts": plan["counts"], "parts_why": plan["why"],
         "conversion_calls": calls, "backing_stems": {}, "backing_path": None,
     }

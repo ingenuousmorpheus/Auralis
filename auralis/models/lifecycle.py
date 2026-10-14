@@ -51,6 +51,7 @@ class ModelSpec:
     commit_gb: float = 0.0          # typical system commit memory while running
     min_commit_gb: float = 0.0      # below this free commit, loading is known to fail
     notes: str = ""
+    experimental: bool = False      # works but is not yet accepted for general use (shown as such)
 
     def to_dict(self):
         return asdict(self)

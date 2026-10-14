@@ -332,3 +332,117 @@ def _render_edits(audio: np.ndarray, sr: int, edits: list[NoteEdit]) -> np.ndarr
             envelope[-fade_out:] = np.cos(np.linspace(0, np.pi / 2, fade_out)) ** 2
         output[start:stop] = segment * (1.0 - envelope) + shifted * envelope
     return output.astype(np.float32)
+
+
+# ── melody-targeted correction (Session 025) ─────────────────────────────────
+
+SCORE_STRENGTH = 0.9       # how far towards the written note (1.0 = exactly)
+SCORE_DEADBAND = 8         # cents: closer than this is left alone
+SCORE_MAX = 300            # cents: never move a note more than this
+
+
+def _formant_preserving_shift(segment: np.ndarray, sr: int, semitones: float) -> np.ndarray:
+    """Shift pitch, keep the vocal tract: move the LPC residual, re-apply each frame's
+    own envelope. A plain shift moves the formants with the pitch (vowels drift)."""
+    from scipy.signal import lfilter
+
+    if abs(semitones) < 1e-3 or len(segment) < 2048:
+        return segment.astype(np.float32)
+    order = 2 + sr // 1000
+    n, hop = 2048, 512
+    win = np.hanning(n)
+    pad = np.pad(segment.astype(np.float64), (n, n))
+    starts = range(0, len(pad) - n, hop)
+    envelopes, residual, norm = [], np.zeros(len(pad)), np.zeros(len(pad))
+    rng = np.random.default_rng(0)
+    for s in starts:
+        frame = pad[s:s + n] * win + 1e-7 * rng.standard_normal(n)
+        a = librosa.lpc(frame, order=order)
+        if not np.all(np.isfinite(a)):
+            a = np.r_[1.0, np.zeros(order)]
+        envelopes.append(a)
+        residual[s:s + n] += lfilter(a, [1.0], frame) * win
+        norm[s:s + n] += win ** 2
+    residual /= np.maximum(norm, 1e-6)
+    residual = librosa.effects.pitch_shift(residual, sr=sr, n_steps=semitones, res_type="soxr_hq")
+    out = np.zeros(len(pad))
+    for a, s in zip(envelopes, starts):
+        out[s:s + n] += lfilter([1.0], a, residual[s:s + n] * win) * win
+    out = out[n:n + len(segment)] / np.maximum(norm[n:n + len(segment)], 1e-6)
+    gain = np.sqrt(np.mean(segment ** 2)) / max(1e-9, np.sqrt(np.mean(out ** 2)))
+    return (out * gain).astype(np.float32)
+
+
+def _score_accuracy(mono: np.ndarray, sr: int, score) -> dict:
+    """Per written note: the sung median pitch against it, in cents."""
+    track_sr = 22050 if sr > 22050 else sr
+    audio = librosa.resample(mono, orig_sr=sr, target_sr=track_sr) if track_sr != sr else mono
+    times, f0, prob = _track_pitch(audio.astype(np.float32), track_sr)
+    out = []
+    for note in score:
+        a, d = float(note.start), float(note.duration)
+        sel = (times >= a + 0.15 * d) & (times <= a + 0.85 * d) & np.isfinite(f0) & (prob >= 0.3)
+        if sel.sum() < 3:
+            out.append(None)
+            continue
+        cents = (float(np.median(librosa.hz_to_midi(f0[sel]))) - note.midi) * 100
+        out.append(cents - 1200 * round(cents / 1200))           # an octave slip of the tracker is not a sung error
+    measured = [abs(c) for c in out if c is not None]
+    return {"cents": out, "notes_measured": len(measured), "notes": len(out),
+            "median_abs_cents": round(float(np.median(measured)), 1) if measured else None,
+            "within_25_cents_pct": round(100 * float(np.mean([c <= 25 for c in measured])), 1) if measured else None,
+            "within_50_cents_pct": round(100 * float(np.mean([c <= 50 for c in measured])), 1) if measured else None}
+
+
+def pitch_to_score(vocal_path: str, output_path: str, score, report_path: str | None = None,
+                   strength: float = SCORE_STRENGTH, progress=None) -> dict:
+    """Tune each sung note to the note *written* for it (the guide score), not to
+    the nearest note of the key. Only the tonal band is moved (consonant hiss above
+    5.2 kHz is untouched) and the move keeps the formants (vowels stay vowels).
+    Used for word-singing guides, whose spoken-word source can drift off the melody."""
+    vocal, sr = sf.read(vocal_path, always_2d=True, dtype="float32")
+    mono = np.mean(vocal, axis=1).astype(np.float32)
+    if progress:
+        progress("measuring each note against the melody", 10)
+    before = _score_accuracy(mono, sr, score)
+    output = mono.copy()
+    pad = int(sr * 0.03)
+    sos = butter(4, min(5200, sr * 0.42), btype="lowpass", fs=sr, output="sos")
+    edits = []
+    for note, cents in zip(score, before["cents"]):
+        if cents is None:
+            continue
+        raw = -cents
+        if abs(raw) <= SCORE_DEADBAND:
+            continue
+        applied = float(np.clip(raw * strength, -SCORE_MAX, SCORE_MAX))
+        core_start = max(0, int(note.start * sr))
+        core_stop = min(len(mono), int((note.start + note.duration) * sr))
+        start, stop = max(0, core_start - pad), min(len(mono), core_stop + pad)
+        if stop - start < 2048:
+            continue
+        segment = mono[start:stop]
+        tonal = sosfiltfilt(sos, segment).astype(np.float32)
+        shifted = _formant_preserving_shift(tonal, sr, applied / 100.0) + (segment - tonal)
+        env = np.ones(stop - start, dtype=np.float32)
+        fi, fo = core_start - start, stop - core_stop
+        if fi > 0:
+            env[:fi] = np.sin(np.linspace(0, np.pi / 2, fi)) ** 2
+        if fo > 0:
+            env[-fo:] = np.cos(np.linspace(0, np.pi / 2, fo)) ** 2
+        output[start:stop] = segment * (1 - env) + shifted * env
+        edits.append({"start": round(note.start, 3), "midi": note.midi, "syllable": note.syllable,
+                      "measured_cents": round(cents, 1), "applied_cents": round(applied, 1)})
+    if progress:
+        progress("re-measuring", 80)
+    rendered = apply_true_peak_ceiling(output[:, np.newaxis], sr, -1.0)
+    sf.write(output_path, rendered, sr, subtype="PCM_24")
+    after = _score_accuracy(np.asarray(rendered[:, 0], np.float32), sr, score)
+    report = {"output_path": output_path, "mode": "score", "notes": len(score), "notes_corrected": len(edits),
+              "before": {k: v for k, v in before.items() if k != "cents"},
+              "after": {k: v for k, v in after.items() if k != "cents"}, "edits": edits}
+    if report_path:
+        with open(report_path, "w", encoding="utf-8") as handle:
+            json.dump(report, handle, indent=2)
+    report["report_path"] = report_path
+    return report

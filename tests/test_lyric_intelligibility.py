@@ -62,8 +62,9 @@ def _words_in_order(model, path) -> tuple[int, str]:
 
 # ── the gate ─────────────────────────────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="Session 024: the vocalise guide sings vowels, not words (0/7 measured). "
-                                       "Needs a lyric-capable guide singer; see AURALIS_SESSION.md Session 024.")
+@pytest.mark.xfail(strict=True, reason="The default guide is still vocalise (vowels, not words; 0/7 measured, "
+                                       "Session 024). The experimental word guide passes this gate "
+                                       "(tests/test_word_guide.py); it becomes the default only on owner approval.")
 def test_guide_singer_sings_the_words(tmp_path):
     """The guide singer the pipeline uses must sing a short phrase intelligibly."""
     from auralis.models import REGISTRY
@@ -228,7 +229,9 @@ def test_saved_v1_songs_render_exactly_as_before():
     h = lambda o: hashlib.sha256(json.dumps(o, sort_keys=True).encode()).hexdigest()[:16]
     assert arr["melody_version"] == 1 and arr["melody_lyrics"] is None
     assert h(arr["tracks"]["melody"]) == "fd9dbdea0e9cf4c0"
-    assert h([n.to_dict() for n in score]) == "de2e449f5f078ec9"
+    v1_fields = ("start", "duration", "midi", "velocity", "syllable", "vowel", "onset", "phrase_end")
+    assert h([{k: n.to_dict()[k] for k in v1_fields} for n in score]) == "de2e449f5f078ec9"
+    assert all(n.word == "" and n.word_pos == 0 and n.word_len == 1 for n in score)   # v2-only fields stay default
     assert h({k: v for k, v in arr["tracks"].items() if k != "melody"}) == "b5015d6c97e385b1"
 
 

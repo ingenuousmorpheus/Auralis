@@ -40,8 +40,11 @@ def save_song_to_project(store, name: str, blueprint: dict, render: dict, song: 
     add(render.get("midi_path"), "generated", "midi", "arrangement.mid")
     add(render.get("melody_guide_path"), "generated", "melody_guide", "melody_guide.wav")
     if song:
+        # what sang the guide travels with the vocals and the master, so Song Studio can say so
+        guide = {k: song.get(k) for k in ("guide_singer", "guide_singer_name", "guide_sings_words",
+                                          "guide_notice", "personal_use_only")}
         add(song.get("finished_path"), "vocal", "lead_vocal", "lead_vocal.wav",
-            {"voice": song.get("profile_name")})
+            {"voice": song.get("profile_name"), **guide})
         add(song.get("backing_path"), "vocal", "backing_vocals", "backing_vocals.wav",
             {"voice": song.get("profile_name")})
         for part, path in (song.get("backing_stems") or {}).items():
@@ -49,7 +52,7 @@ def save_song_to_project(store, name: str, blueprint: dict, render: dict, song: 
         add(song.get("guide_path"), "generated", "guide_vocal", "guide_vocal.wav")
         add(song.get("song_mix_path"), "mix", "song_mix", "song_pre_master.wav")
         add(song.get("song_master_path"), "master", "song_master", "song.wav",
-            {"after_lufs": song.get("after_lufs")})
+            {"after_lufs": song.get("after_lufs"), **guide})
     else:
         add(render.get("mix_path"), "mix", "instrumental_mix", "instrumental_pre_master.wav")
         add(render.get("master_path"), "master", "instrumental_master", "instrumental.wav",

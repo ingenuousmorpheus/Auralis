@@ -17,7 +17,7 @@ import json
 import os
 from pathlib import Path
 
-from .builtin import ACEStepSections, DiffSingerGuide, SeedVCConverter, VocaliseGuide
+from .builtin import ACEStepSections, DiffSingerGuide, SeedVCConverter, VocaliseGuide, WordGuide
 from .lifecycle import ModelManager
 
 KINDS = ("voice_converter", "guide_singer", "section_generator")
@@ -33,7 +33,7 @@ class Registry:
     def __init__(self, manager: ModelManager, config_path: str | Path | None = None, providers=None):
         self.manager = manager
         self.config_path = Path(config_path) if config_path else _config_path()
-        for p in providers if providers is not None else (SeedVCConverter(), VocaliseGuide(),
+        for p in providers if providers is not None else (SeedVCConverter(), VocaliseGuide(), WordGuide(),
                                                            ACEStepSections(), DiffSingerGuide()):
             manager.register(p)
         self.choices = dict(DEFAULTS)

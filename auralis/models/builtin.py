@@ -80,6 +80,34 @@ class VocaliseGuide(GuideSinger):
         return VocaliseSinger().sing(score, total_seconds, seed=seed)
 
 
+class WordGuide(GuideSinger):
+    """Session 025, experimental: sings the lyrics' words (TTS speech re-sung on the
+    score's notes; ``voice/word_singer.py``). Opt-in per song; vocalise stays the default."""
+
+    spec = ModelSpec(id="word-guide", kind="guide_singer", name="Word guide (experimental)",
+                     licence="Auralis code MIT; words from Windows speech voices: personal, local use only "
+                             "until their licence for distributing generated audio is reviewed",
+                     heavy=False, experimental=True,
+                     notes="Sings the actual words of your lyrics on the melody, plainly. Seed-VC then makes it "
+                           "your voice. Windows only. Not for commercial release yet (speech-voice licence).")
+    sings_words = True
+    languages = ("en",)
+    _voices: list | None = None
+
+    def is_installed(self) -> bool:
+        if WordGuide._voices is None:
+            from ..voice.word_singer import available_voices
+
+            WordGuide._voices = available_voices()
+        return bool(WordGuide._voices)
+
+    def sing(self, score, total_seconds, seed=0):
+        from ..voice.word_singer import WordSinger
+
+        voice = next((v for v in (WordGuide._voices or []) if "Zira" in v), None)
+        return WordSinger(voice or "Microsoft Zira Desktop").sing(score, total_seconds, seed=seed)
+
+
 # ── planned: resident workers in their own venv ─────────────────────────────
 
 class _WorkerModel:

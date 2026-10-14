@@ -286,6 +286,24 @@ class SingRequest(BaseModel):
     production: str = "full"            # lead | doubles | harmony | full (capped per section by the blueprint)
     backing_levels: dict[str, float] = {}   # per backing part, dB relative to the producer default
     backing_db: float = Field(4.0, ge=-12, le=12)   # the whole backing stack against its mix role
+    guide_singer: str | None = None     # None: the engine chosen in Studio (vocalise by default); "word-guide" (experimental)
+
+
+def _guide_singer(model_id: str | None):
+    """The guide singer asked for, checked before a job starts (None: the registry's choice)."""
+    if not model_id:
+        return None
+    from ..models import MODELS
+
+    try:
+        model = MODELS.get(model_id)
+    except KeyError:
+        raise HTTPException(422, f"Unknown guide singer: {model_id}")
+    if model.spec.kind != "guide_singer":
+        raise HTTPException(422, f"{model.spec.name} is not a guide singer.")
+    if not model.is_installed():
+        raise HTTPException(422, f"{model.spec.name} is not available on this computer.")
+    return model
 
 
 SING_FILES = {"song": "song_master_path", "song_mix": "song_mix_path", "vocal": "finished_path",
@@ -311,6 +329,7 @@ def _run_sing(job_id: str, req: SingRequest, render: dict | None):
 
         result = sing_song(req.blueprint, render, profile, os.path.join(job["work"], "song"), convert,
                            quality=req.quality, master=req.master, production=req.production,
+                           singer=_guide_singer(req.guide_singer),
                            backing_levels={k: max(-18.0, min(12.0, float(v))) for k, v in req.backing_levels.items()},
                            backing_db=req.backing_db,
                            progress=lambda stage, pct: job.update(stage=stage, pct=pct))
@@ -338,6 +357,7 @@ async def sing(req: SingRequest):
         raise HTTPException(422, "Production must be lead, doubles, harmony or full.")
     if not validate_blueprint(req.blueprint)["ok"]:
         raise HTTPException(422, "Fix the blueprint's errors first.")
+    _guide_singer(req.guide_singer)
     try:
         VOICE_STORE.get(req.profile_id)
     except FileNotFoundError as exc:
@@ -384,6 +404,7 @@ class SongRequest(BlueprintRequest):
     production: str = "full"
     quality: str = "studio"
     project_name: str | None = None
+    guide_singer: str | None = None         # as in SingRequest
 
 
 def _run_song(job_id: str, req: SongRequest):
@@ -416,7 +437,8 @@ def _run_song(job_id: str, req: SongRequest):
                 convert_with_voice(profile, src, dst, quality=quality, label="make a song",
                                    on_stage=lambda st: job.update(stage=st))
             song = sing_song(blueprint, render, profile, os.path.join(work, "vocals"), convert,
-                             quality=req.quality, production=req.production, progress=step(45, 94))
+                             quality=req.quality, production=req.production, progress=step(45, 94),
+                             singer=_guide_singer(req.guide_singer))
         job.update(stage="saving the song into a new project", pct=95.0)
         saved = save_song_to_project(PROJECT_STORE, (req.project_name or blueprint["title"])[:64] or "New song",
                                      blueprint, render, song)
@@ -443,6 +465,7 @@ async def make_song(req: SongRequest):
 
     if req.production not in ("lead", "doubles", "harmony", "full") or req.quality not in ("fast", "studio", "ultra"):
         raise HTTPException(422, "Production must be lead/doubles/harmony/full and quality fast/studio/ultra.")
+    _guide_singer(req.guide_singer)
     if req.profile_id:
         try:
             VOICE_STORE.get(req.profile_id)

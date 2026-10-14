@@ -25,6 +25,9 @@ class GuideNote:
     vowel: str              # one of VOWELS
     onset: str              # leading consonant class: "", "hiss", "stop", "soft"
     phrase_end: bool
+    word: str = ""          # the whole word this syllable belongs to (melody v2), for word-singing guides
+    word_pos: int = 0       # syllable index inside that word
+    word_len: int = 1       # syllables in that word
 
     def to_dict(self):
         return asdict(self)
@@ -40,6 +43,16 @@ def syllabify(line: str) -> list[str]:
             last = parts.pop()
             parts[-1] += last                        # silent final e: "love", not "lo-ve"
         out.extend(parts or [word])
+    return out
+
+
+def syllabify_words(line: str) -> list[tuple[str, str, int, int]]:
+    """(syllable, word, index in word, syllables in word) for each syllable of a
+    line, in the same order and count as ``syllabify(line)``."""
+    out = []
+    for word in re.findall(r"[a-zA-Z']+", line.lower()):
+        parts = syllabify(word)
+        out.extend((syl, word, i, len(parts)) for i, syl in enumerate(parts))
     return out
 
 
@@ -97,12 +110,13 @@ def build_score(blueprint: dict, melody: list[tuple], lyric_map: list | None = N
             continue
         mapped = [by_beat.get(round(n[0], 4)) for n in sec]
         if by_beat and all(m and m[0] == section_index for m in mapped):
-            lines = [syllabify(line) for line in lyric_lines(s)]
+            lines = [syllabify_words(line) for line in lyric_lines(s)]
             for (beat, length, pitch, vel), (_, li, k) in zip(sec, mapped):
-                syl = lines[li][k]
+                syl, word, pos, n_syl = lines[li][k]
                 out.append(GuideNote(
                     start=round(beat * spb, 4), duration=round(length * spb, 4), midi=int(pitch), velocity=int(vel),
-                    syllable=syl, vowel=vowel_of(syl), onset=onset_of(syl), phrase_end=k == len(lines[li]) - 1))
+                    syllable=syl, vowel=vowel_of(syl), onset=onset_of(syl), phrase_end=k == len(lines[li]) - 1,
+                    word=word, word_pos=pos, word_len=n_syl))
             continue
         # phrases = runs of notes separated by a rest of at least half a beat
         phrases, cur = [], [sec[0]]
