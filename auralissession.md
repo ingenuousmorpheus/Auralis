@@ -3288,3 +3288,14 @@ Full entry in `AURALIS_SESSION.md` (Session 024). Summary:
 - **Prototype:** a TTS speech-to-singing guide (formant-preserving shift, vowel-only stretch) reached 7/7 in the guide and 6/7 in the owner's voice.
 - **Tests:** `tests/test_lyric_intelligibility.py` adds 3 passing tests and 2 strict xfails pinning both causes.
 - **Proposed fix (awaiting approval):** a word-singing guide provider behind `SingingProvider`, a versioned lyric→note mapping fix, score-driven pitch, and showing `guide_sings_words` in the UI.
+
+
+## Session 025 — 2026-10-13/14 — Lyric intelligibility fixes 1-4
+
+Full entry in `AURALIS_SESSION.md` (Session 025). Summary:
+- Pushed `e5dde00` and `456dfc3` first (authorised), then fixed a loudness test flake (`1aabbe1`).
+- `ae47103`: melody v2 sings each line once, in order (20/20 lines, 176/176 syllables). v1 songs are byte-identical.
+- `ea8d555`: experimental word guide (dry: 7/7 phrase, 94.6% of a verse + chorus, 100% of notes within 25 cents of the written melody) and `pitch_to_score`.
+- `181262c`: guide choice and notices in Create and Song Studio.
+- **Pending:** the before/after Seed-VC comparison with the new guide. It needs about 6 GB free; LM Studio held 7.5 GB.
+- Samples in git-excluded `samples/session-025/`. Vocalise stays the default until the owner approves.

@@ -473,3 +473,103 @@ The recogniser and TTS tests skip cleanly where the local model or Windows speec
 ### Gate
 
 Owner decision on items 1–4 before implementation. Item 2 changes melodies of new renders, so it needs the versioning decision.
+
+
+## Session 025 — lyric intelligibility fixes 1-4 (owner-approved)
+
+**Date:** 2026-10-13/14
+**Scope:** implement the four approved fixes from Session 024 in small, verified stages:
+1. mapping
+2. experimental word guide
+3. melody-targeted pitch
+4. notices
+
+Constraints: Prinze Paired Studio data untouched (read-only conversion only), no model downloads, private lyrics outside Git, no commercial use of Windows-TTS vocals, nothing pushed without authorisation.
+
+**Pushed first (authorised):** `e5dde00` and `456dfc3`. `origin/main` = `456dfc3` = local at that point.
+- Privacy scan of both commits: no audio, lyrics, models or credentials. The voice profile's name was already public.
+- Full suite: 253 passed, plus 1 order-dependent flake (`test_full_pipeline`, unseeded drum noise). It passed alone and was fixed separately in `1aabbe1`.
+
+### Commits (local, not pushed)
+
+- `1aabbe1` Tests: seed the full-pipeline drum stem. The loudness flake is fixed: identical stem and -14.0 LUFS under six global RNG states.
+- `ae47103` **Fix 1: lyrics → melody, versioned.**
+  - **New blueprints:** they carry `melody_version: 2`.
+    - one phrase per lyric line, exactly one note per syllable
+    - the bars are shared between lines, with a 2-beat rest after roomy lines
+    - repeated lines reuse their melody within the same section type
+    - an explicit note → (line, syllable) map: `arrangement["melody_lyrics"]`, consumed by `build_score`
+  - **Saved blueprints** (no `melody_version`) run the untouched v1 code: melody, score and other tracks are byte-identical (fixture fingerprint).
+- `ea8d555` **Fixes 2 + 3: experimental word guide and melody-targeted pitch.** Opt-in; vocalise stays the default. Details in `docs/AURALIS_CURRENT_ARCHITECTURE.md`, "Lyric intelligibility (Sessions 024-025)".
+- `181262c` **Fix 4: guide choice and honest notices** in Create (Make the whole song and the blueprint Sing panel) and in Song Studio. Songs made before this phase show the wordless notice.
+
+### Results
+
+**Fix 1, mapping** (generic lyric through the real composer, seeds 0-2):
+- 20/20 lines intact and 176/176 syllables. Before: 15-16/20, with 285 syllables sung for 176 written.
+- An ad-lib regression was found and fixed during the stage: v2 first left only a 1-beat rest, and ad-libs disappeared in 14/40 random songs. With the 2-beat rest: 40/40, same as v1.
+
+**Fix 2, word guide** (dry guide, Whisper `base` word recall in order, pyin against the *written* notes):
+
+| Material | Guide | Words in order | Notes within 25 cents |
+|---|---|---|---|
+| Phrase (7 words) | vocalise | 0/7 | 100% |
+| Phrase | **word guide** | **7/7** | **100%** |
+| Verse + chorus (56 words, 71 notes, melody v2) | vocalise | 0/56 | 100% |
+| Verse + chorus | **word guide** | **53/56 (94.6%)** | **100%** (median 2.5 cents) |
+
+- Two fixes along the way:
+  - pyin marked the start of short words unvoiced, so "take" and "my" kept the speech pitch, about 10 semitones low. A periodicity measure was added.
+  - "the" spoken alone was heard as "they". Weak forms are now respelled for the speech voice.
+- Remaining misses: "the" sometimes heard as "through", and the end of "river bends" is soft.
+- Speed: 11 s to sing the 45 s verse + chorus.
+
+**Fix 3, score pitch** (`pitch_to_score`):
+- notes detuned 60-140 cents (some towards a neighbouring scale tone) return to the written notes: at least 85% within 25 cents, median 20 cents or less
+- the vowel envelope is unchanged (MFCC correlation above 0.9 per note)
+- words recognised after correction ≥ before (tests)
+
+**Fix 4, notices:** checked in the real app with Playwright. Both guide options are listed with their notices, and the choice is remembered and sent. The owner's existing song opens in Song Studio with "Wordless guide: this song was sung before word guides existed…".
+
+**Before/after voice conversion with the new guide: PENDING.**
+- Seed-VC needs about 6 GB of free commit memory. During this session, 2.5-5.9 GB was free: LM Studio held 7.5 GB, plus the owner's other Python apps. None of these were touched.
+- A watcher runs the comparison automatically once 7 GB is free: both guides, phrase and verse + chorus → Prinze Paired Studio (read-only) → score pitch → word recall and pitch at every stage.
+- Session 024's prototype of the same approach measured 7/7 guide → 6/7 converted (a weak /h/ lost) → 6/7 after polish and finish.
+
+**Tests:**
+- `tests/test_lyric_intelligibility.py`: 13 pass + 1 strict xfail. The xfail is the *default* guide still being vocalise, by owner decision.
+- `tests/test_word_guide.py`: 10 pass, 1 opt-in live Seed-VC test (`AURALIS_LIVE_VOICE=<voice name>`).
+- Full suite on the committed code: 273 passed (+ the fingerprint test fixed and re-run), 1 skipped, 1 xfail.
+- vite build clean.
+
+### Listening samples (local, git-excluded)
+
+`samples/session-025/` (generic invented lyrics):
+1. phrase, current vocalise guide
+2. phrase, word guide
+3. verse + chorus, vocalise
+4. verse + chorus, word guide
+
+Converted-voice samples will be added when the conversion runs.
+
+### Outstanding limitations
+
+- **Sound:** the word guide is plain and robotic. Each word is spoken alone (no linking between words, no expressive delivery). It makes the words understandable; it is not a performance.
+- **Licence and platform:** Windows only (SAPI voices). Their licence for distributing generated audio is unreviewed, so songs sung with it are personal, local use only (`personal_use_only: true`). No commercial use until reviewed.
+- **Backing parts:** doubles and harmonies are sung with words by the word guide, but only the lead gets score pitch correction.
+- **Lyric text:** digits in lyrics ("24/7") are dropped by `syllabify`; this predates this session.
+- **Demo sections:** a demo-to-song section keeps the demo's own melody and the old syllable assignment.
+- **Song Studio:** it cannot reopen an older project (it opens only right after making a song). This predates this session.
+- **Measurement:** words are judged by Whisper `base`, a proxy for a listener. The owner's ears decide.
+- **Suite time:** the full suite now takes about 47 minutes, because the word-guide tests use speech recognition.
+
+### Gate
+
+Owner listening approval of the word guide, dry now and converted when memory allows, before it becomes the default. The `test_guide_singer_sings_the_words` xfail flips when it does.
+
+### Next recommended
+
+1. Finish the conversion comparison: close LM Studio for a few minutes, or the watcher runs it when memory frees.
+2. Owner listening review.
+3. If approved: make the word guide the default for songs with lyrics, keeping vocalise selectable, and remove the xfail.
+4. Then the licence review, or a licence-clean engine (espeak-ng, or a commercially licensed singing voicebank) for release.
