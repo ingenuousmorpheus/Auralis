@@ -3339,3 +3339,12 @@ Full entry in `AURALIS_SESSION.md`. Imported one unique live recording covering 
 Owner authorized GitHub publication and continuation. Reviewed six earlier pending Session 025 commits; normal fast-forward publication will include those plus the Plugin Library and experimental Match the demo work. README documents both tools and current limits. Detailed personal plugin inventory retained locally; published docs use aggregate results. Recordings, model files and recognition transcripts remain excluded. Final verification/push result appended below.
 - Final Session 029 validation: **107 targeted tests passed** (11 dependency/short-audio warnings; 283.09 s), frontend build passed (51 modules), staged diff check and publication privacy scan passed. Import complete: 201 clips / 23:13, readiness 84; originals and checkpoint/reference/config unchanged. No retraining.
 - GitHub publication succeeded: implementation commit `78694c0` pushed to `origin/main` (from `456dfc3`, including six earlier pending commits). Normal fast-forward, no force/merge. Follow-up continuity note records success; private recordings/datasets/models/transcripts remain local. Existing checkpoint unchanged; newly imported data has not been retrained.
+
+
+## Session 030 — 2026-10-17 — Verification of main, numbers in lyrics, small fixes
+
+Full entry in `AURALIS_SESSION.md` (Session 030). Summary:
+- Full suite on published `main` (`13f9fed`, after Sessions 026-029): 313 passed, 1 skipped, 1 xfail.
+- Melody v3 sings digits as words ("24/7" → "twenty four seven"); v1 and v2 songs are byte-identical (fixtures).
+- The sidebar voice card follows the shared voice selection; the favicon fixes the app's only console error.
+- The owner gates are unchanged: word-guide default, retraining, plugin trials.

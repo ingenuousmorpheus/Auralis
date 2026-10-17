@@ -715,3 +715,41 @@ Owner listening approval of the word guide (dry and converted samples ready) bef
 ### Session 029 GitHub outcome
 - Implementation commit `78694c0` (`Add local plugin discovery and demo vocal matching`) successfully pushed to `origin/main`, advancing GitHub from `456dfc3` through the six pending Session 025 commits and the verified new work. Normal fast-forward push, no force and no PR merge.
 - This follow-up continuity entry records the successful publication. Local training recordings, dataset/model assets, transcripts and detailed private reports were excluded; the Prinze import remains local. Current trained model is still the existing 1,000-step checkpoint; new data awaits a future explicitly requested retraining run.
+
+
+## Session 030 — 2026-10-17 — Verification of main, numbers in lyrics, small fixes
+
+**Owner instruction:** "continue". No new decision was given on the open gates (word guide as default, retraining the imported Prinze data, plugin trials), so they stay open. This session did only decision-free work.
+
+**Starting state:**
+- `main` = `origin/main` = `13f9fed`, clean.
+- Sessions 026-029 (plugin discovery, Match the demo, the Prinze dataset import, publication) were read first. They had run targeted test subsets only.
+
+### Verification of the published main
+
+- Full suite on `13f9fed`, frozen snapshot: **313 passed**, 1 skipped (the opt-in live-voice test), 1 xfail (the default guide is still vocalise). 19 min 54 s.
+- Sessions 026-029 introduced no regressions.
+
+### Changed
+
+1. **Melody v3: numbers in lyrics are sung as words.**
+   - v2 counted syllables from letters only, so "I was 19 in 1999" was sung "i was in", "my 2nd chance" as "my nd chance", and "24/7" lost both numbers.
+   - `voice.guide.spell_numbers` reads them as a singer would: "twenty four seven", "nineteen ninety nine", "second", "ninety nine", "twenty first", "one hundred". It covers up to 9999; longer digit runs are read digit by digit.
+   - It applies only from `melody_version` 3, now stamped on new blueprints. v1 and v2 songs keep their saved behaviour. This is proven by a v2 fixture with digit lyrics, fingerprinted with the published v2 code (13f9fed) and identical under the new code.
+   - Known reading: "911" becomes "nine hundred eleven", and "2010" becomes "two thousand ten".
+2. **The sidebar voice card follows the shared voice selection**: your remembered choice > trained > studio dataset > first, the same as My Voice and Create. It updates live when the voice changes in My Voice. Before, it always showed "trained or first".
+3. **Favicon** (`frontend/public/favicon.png`, 64 px from `docs/icon.png`). The only console error the app had is gone.
+
+### Verification of the changes
+
+- `test_lyric_intelligibility` + `test_word_guide`: **32 passed**, 1 xfail.
+- The new tests are number spelling (7 cases), v3 sings every number as words, and saved v2 songs with numbers are byte-identical.
+- Full suite on the changed code (frozen snapshot): **322 passed**, 1 skipped, 1 xfail, 19 min 35 s.
+- Real app (Playwright, 1440 px): favicon 200; **no console errors or failed requests** across Create, My Music, Artist DNA, Studio, My Voice and Projects; the sidebar card shows the remembered voice.
+- vite build clean.
+
+### Still waiting for the owner (unchanged)
+
+- **Word guide as the default for songs with lyrics:** the listening gate. Dry and converted samples are in `samples/session-025/`; measured 92.9% of words after Seed-VC and Vocal Finish.
+- **Retraining Prinze Paired Studio** with the 64 clips imported in Session 029 (now 23:13 of singing). This is GPU-heavy and needs an explicit request.
+- **Plugin compatibility and listening trials** (Session 026), and Match the demo listening (Sessions 027-028).

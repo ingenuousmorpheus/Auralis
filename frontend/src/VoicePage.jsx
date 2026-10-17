@@ -17,7 +17,10 @@ const MAX_FILES = 5;
 const STUDIO_MINUTES = 10;
 
 function load(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
-function keep(key, value) { try { localStorage.setItem(key, value); } catch { /* private mode */ } }
+function keep(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* private mode */ }
+  if (key === "auralis.voice") window.dispatchEvent(new Event("auralis-voice"));   // the sidebar card follows
+}
 function ago(iso) {
   if (!iso) return "";
   const s = (Date.now() - new Date(iso).getTime()) / 1000;

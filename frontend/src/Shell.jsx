@@ -14,11 +14,19 @@ export function Sidebar({ API, page, go, tools }) {
   const [morphing, setMorphing] = useState(false);
   const [voice, setVoice] = useState(null);
 
+  // The same voice My Voice and Create use: your remembered choice, else the strongest ready
+  // voice (trained > studio dataset > first). Follows changes made in My Voice.
   useEffect(() => {
-    apiJson(`${API}/voice/profiles`).then(list => {
-      const trained = list.find(p => p.training_status === "trained");
-      setVoice(trained || list[0] || null);
-    }).catch(() => setVoice(null));
+    let list = [];
+    const pick = () => {
+      let saved = "";
+      try { saved = localStorage.getItem("auralis.voice") || ""; } catch { /* private mode */ }
+      setVoice(list.find(p => p.id === saved) || list.find(p => p.training_status === "trained")
+        || list.find(p => p.kind === "studio-dataset") || list[0] || null);
+    };
+    apiJson(`${API}/voice/profiles`).then(l => { list = l; pick(); }).catch(() => setVoice(null));
+    window.addEventListener("auralis-voice", pick);
+    return () => window.removeEventListener("auralis-voice", pick);
   }, [API]);
 
   return <nav className="au-nav" aria-label="Main">

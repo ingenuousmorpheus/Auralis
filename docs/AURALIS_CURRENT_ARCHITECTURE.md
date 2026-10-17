@@ -200,6 +200,7 @@ Privacy properties the code enforces:
   - a line repeated within the same section type reuses its melody (the hook)
   - `arrangement["melody_lyrics"]` maps each sung note to `[beat, section, line, syllable]`; `guide.build_score(..., lyric_map)` uses it instead of guessing phrases at rests
   - blueprints without `melody_version` (everything saved before Session 025) take the untouched v1 path: melody, score and every other track byte-identical (fixture fingerprint test)
+- **Melody v3** (Session 030, `MELODY_VERSION = 3`): `guide.spell_numbers` sings digits as words ("24/7" → "twenty four seven", "1999" → "nineteen ninety nine", "2nd" → "second") via `lyric_lines(section, spell=True)` in both the melody writer and the guide score; v1 and v2 blueprints are unchanged (fixture fingerprints).
 - **Guide notes carry their word** (`GuideNote.word`, `word_pos`, `word_len`; `guide.syllabify_words`), so a word-singing guide can speak a word once and spread it over its notes.
 - **Word guide, experimental** (`voice/word_singer.py`; model `word-guide`, `ModelSpec.experimental = True`, opt-in per song; vocalise stays the default):
   - each word is spoken by a Windows SAPI voice (built in; Zira by default) in one PowerShell call; weak forms respelled for speech only ("the" → "thuh" before a consonant, "a" → "uh")
