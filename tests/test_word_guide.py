@@ -188,7 +188,7 @@ def test_pitch_to_score_keeps_the_words(tmp_path):
 
 # ── the pipeline and the notices ─────────────────────────────────────────────
 
-def _sing(tmp_path, singer):
+def _sing(tmp_path, singer, production="lead"):
     import shutil
 
     from auralis.voice import VoiceProfileStore
@@ -200,7 +200,7 @@ def _sing(tmp_path, singer):
     sf.write(ref, (0.2 * np.sin(2 * np.pi * 220 * np.arange(44100 * 8) / 44100)).astype(np.float32), 44100)
     profile = VoiceProfileStore(tmp_path / "v").create("Stand In", str(ref), True)
     return sing_song(bp, None, profile, str(tmp_path / "song"), lambda s, d, q: shutil.copyfile(s, d),
-                     quality="fast", production="lead", master=False, singer=singer)
+                     quality="fast", production=production, master=False, singer=singer)
 
 
 def test_wordless_guide_is_never_presented_as_singing_the_lyrics(tmp_path):
@@ -218,6 +218,22 @@ def test_word_guide_songs_are_tuned_to_the_melody_and_marked_personal_use(tmp_pa
     assert out["guide_sings_words"] is True and out["guide_singer"] == "word-guide"
     assert out["pitch_mode"] == "score" and out["pitch_accuracy"]["within_25_cents_pct"] >= 85
     assert out["personal_use_only"] is True and "Personal, local use only" in out["guide_notice"]
+
+
+def test_word_sung_backing_parts_are_tuned_to_their_own_notes(tmp_path):
+    """Doubles and harmonies sung with words drift like the lead; each is tuned to its
+    own written notes (Session 031). Vocalise backing parts keep their old path."""
+    from auralis.models import MODELS
+
+    out = _sing(tmp_path, _word_guide(), production="full")
+    acc = out["backing_pitch_accuracy"]
+    assert set(acc) == set(out["backing_stems"]) and acc, out["backing_stems"]
+    for part, a in acc.items():
+        # ad-libs are fast wordless runs (~0.15 s notes): pitch tracking on them is noisy
+        # (measured 80-100% across blueprints); word-sung parts measured 100% (Session 031)
+        assert a["within_25_cents_pct"] >= (70 if part == "adlibs" else 85), (part, a)
+    hum = _sing(tmp_path / "v", MODELS.get("vocalise"), production="full")
+    assert "backing_pitch_accuracy" not in hum and hum["backing_stems"]
 
 
 def test_the_guide_notice_travels_into_the_project(tmp_path):

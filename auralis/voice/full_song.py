@@ -178,6 +178,23 @@ def sing_song(blueprint: dict, render: dict, profile, out_dir: str, convert, *, 
         "conversion_calls": calls, "backing_stems": {}, "backing_path": None,
     }
     era = (blueprint.get("era") or {}).get("id") if isinstance(blueprint.get("era"), dict) else blueprint.get("era")
+    if singer.sings_words:
+        # word-sung backing parts drift like the lead: tune each to its own written notes (Session 031)
+        from .pitch import pitch_to_score
+
+        out["backing_pitch_accuracy"] = {}
+        for k, part_audio in list(converted_parts.items()):
+            if k == "lead" or not part_scores.get(k) or not np.any(np.abs(part_audio) > 1e-4):
+                continue
+            src, dst = os.path.join(out_dir, f"_bv_{k}_raw.wav"), os.path.join(out_dir, f"_bv_{k}_tuned.wav")
+            sf.write(src, part_audio, 44100, subtype="PCM_24")
+            report(f"pitch to melody: {k.replace('_', ' ')}", 82)
+            r = pitch_to_score(src, dst, part_scores[k])
+            tuned, _ = sf.read(dst, dtype="float32")
+            converted_parts[k] = tuned[:len(part_audio)] if tuned.ndim == 1 else tuned[:len(part_audio), 0]
+            out["backing_pitch_accuracy"][k] = r.get("after")
+            for path in (src, dst):
+                os.remove(path)
     backing = backing_bus({k: v for k, v in converted_parts.items() if k != "lead"}, out_dir, backing_levels, era=era)
     out["backing_levels"] = dict(backing_levels or {})
     out["backing_era"] = era
