@@ -3348,3 +3348,11 @@ Full entry in `AURALIS_SESSION.md` (Session 030). Summary:
 - Melody v3 sings digits as words ("24/7" → "twenty four seven"); v1 and v2 songs are byte-identical (fixtures).
 - The sidebar voice card follows the shared voice selection; the favicon fixes the app's only console error.
 - The owner gates are unchanged: word-guide default, retraining, plugin trials.
+
+
+## Session 031 — 2026-10-17 — Backing-part tuning, reopen saved songs
+
+Full entry in `AURALIS_SESSION.md`. Summary:
+- Word-sung doubles and harmonies are tuned to their own written notes (measured 100%; ad-libs 80-100%).
+- Projects → Open in Song studio, verified on the owner's song.
+- Owner gates unchanged.
