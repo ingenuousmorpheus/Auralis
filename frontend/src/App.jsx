@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import ReferenceMatch from "./ReferenceMatch.jsx";
+import PluginLibrary from "./PluginLibrary.jsx";
 import CreatePage from "./CreatePage.jsx";
 import DnaPage from "./DnaPage.jsx";
 import MasterMix from "./MasterMix.jsx";
@@ -36,6 +38,8 @@ const optional = import.meta.glob("./HarmonicReference.jsx", { eager: true });
 const HarmonicReference = optional["./HarmonicReference.jsx"]?.default ?? null;
 
 const TOOLS = [
+  { id: "reference-match", label: "Match the demo", icon: "voice" },
+  { id: "plugins", label: "Plugin Library", icon: "studio" },
   { id: "master", label: "Master a mix", icon: "wave" },
   { id: "mix", label: "Mix from stems", icon: "studio" },
   { id: "rack", label: "Vocal chain", icon: "voice" },
@@ -81,6 +85,8 @@ export default function App() {
       <VoiceStudio API={API} card={voiceCard} btn={voiceBtn} colors={VOICE_COLORS} />
     </main>} />
   </div>;
+  else if (page === "reference-match") content = <ReferenceMatch API={API} />;
+  else if (page === "plugins") content = <PluginLibrary API={API} />;
   else if (page === "rack") content = <div className="au-page-scroll"><VocalRack API={API} /></div>;
   else if (page === "harmony" && HarmonicReference) content = <div className="au-page-scroll"><HarmonicReference API={API} /></div>;
 

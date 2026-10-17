@@ -586,3 +586,128 @@ Owner listening approval of the word guide (dry and converted samples ready) bef
 2. Owner listening review.
 3. If approved: make the word guide the default for songs with lyrics, keeping vocalise selectable, and remove the xfail.
 4. Then the licence review, or a licence-clean engine (espeak-ng, or a commercially licensed singing voicebank) for release.
+
+## Session 026 — 2026-10-16 — Plugin Intelligence Phase 1
+
+### Starting state and scope
+- Existing F:/Auralis repository, branch main at `5a93b02`; clean working tree before changes. Read both continuity files before implementation. No user changes overwritten, no destructive Git commands, no push/merge.
+- Graph indexed with the codebase-memory skill (fast, Tier 2), coverage checked, relevant source read directly because freshness metadata reported changed. Existing FastAPI/React architecture; Pedalboard built-in DSP, no third-party discovery/catalog code found in searched application/test source. No new app or host.
+- Existing owner listening gate on the experimental word guide remains unchanged; personal voice training/cloning, song workflows and shell design preserved.
+
+### Exact files changed
+- `auralis/plugins.py`: bounded passive Windows scanner, PE architecture + allowlisted version resources, VST3 moduleinfo class metadata, unknown/candidate states, possible duplicates, classification/search and five inventory-only planning templates.
+- `auralis/api/plugins.py`: session-only catalog, explicit scan, filter and chain endpoints.
+- `auralis/api/main.py`: include the plugin router.
+- `frontend/src/PluginLibrary.jsx`: explicit scan, session-only custom roots, search/category filter, entry details, compatibility and vocal-chain planning.
+- `frontend/src/PluginLibrary.css`: responsive view using existing luxury tokens/surfaces.
+- `frontend/src/App.jsx`: register Plugin Library in existing Tools navigation and render it.
+- `tests/test_plugins.py`: synthetic scanner, privacy, safety, metadata, classification, duplicate, inventory-only recommendation and API coverage.
+- `docs/PLUGIN_INTELLIGENCE.md`: usage, trust boundaries, integration research with official links, limitations, aggregate discovered inventory; detailed product snapshot retained locally, next gate.
+- `AURALIS_SESSION.md`, `auralissession.md`: continuity update.
+
+### Implementation and actual discovery
+- Read-only standard VST folders plus explicit additional dedicated roots; no whole-drive scan, registry reads/writes, arbitrary plugin code loading, activation, installations or DAW automation. Reparse/network/broad/private roots rejected; bounded enumeration/metadata. Only plugin-related metadata is inspected; no license/personal document contents.
+- 49 entries: 32 VST3 and 17 unverified DLL/VST2 candidates; 40 x64, 8 x86, 1 architecture Unknown. Sixteen entries in possible duplicate groups (not byte-identity claims).
+- Examples confirmed as file candidates: Auto-Tune Access 9.0.2, Artist 9.0.2, Pro 10.3.1, EFX 9.0.1, SoundSoap 6.0.0, Vocal Compressor 1.0.1; FabFilter Pro-Q 2 2.0.1.24; Softube Tube-Tech CL 1B 2.5.9. Versions are self-reported Windows resources, not loaded plugin verification.
+- VocALignPro and VocALignProP candidates are x86, version Unknown. No proof of exact edition, licensing, ARA or Mixcraft compatibility. Waves/Soundtoys not verified in scanned standard roots; no claim they are absent from this machine. Detailed candidate snapshot retained locally; aggregates in the phase document.
+- Classification recognizes pitch correction, alignment, EQ, compression, noise reduction, reverb and effects in this snapshot; many entries remain Unknown. Vendor branding alone never implies pitch correction (Auto-Tune-branded EQ/compressor/SoundSoap correctly separated).
+- Planner chooses deterministic classified x64 VST3 candidates, flags missing/unverified steps, and explains purpose. DLLs and x86 candidates are excluded. No audio has been processed by these recommendations.
+
+### Verification
+- `python -m pytest tests/test_plugins.py -q`: **27 passed**.
+- `npm run build`: **passed**, 49 modules.
+- `git diff --check`: passed (line-ending notices only).
+- Wider existing regressions: result appended below when complete. An initial command named nonexistent `tests/test_pipeline.py` and collected no tests; corrected to `tests/test_engine.py`.
+- No real Mixcraft hosting/routing/ARA/activation/listening trial performed. Plugin Library runtime/visual review not performed; build/API checks only. Full expensive speech-recognition suite not rerun for this isolated feature.
+
+### Mixcraft / REA research
+- Acoustica documents VST/VST3 loading, editable folders, rescanning and Plugin Manager. None of those settings changed.
+- Mixcraft 10 has a supported JavaScript MIDI/SysEx controller-script API. A general external RPC or arbitrary chain insertion/preset/audio-host API was not established. Prefer supported controls before investigating internals.
+- Synchro Arts Project 5 docs distinguish ARA from realtime sidechain capture; they cannot establish the locally discovered older x86 Pro edition's support.
+- Antares x64 VST3 files are plausible host candidates only; licensing and installed edition compatibility unverified.
+- Read the reverse-engineer-anything skill and reviewed exposed REA capabilities. No Mixcraft desktop automation adapter or audio engine verified; no targets opened/debugged/instrumented. REA remains a future investigative candidate, not a DAW/audio engine.
+- Primary source links and detailed findings in `docs/PLUGIN_INTELLIGENCE.md`.
+
+### Limitations and next gate
+- Inventory and custom roots are backend-session-only; no persistence. VST2 exports are not checked. Shell subplugins may be unresolved. Strict JSON subset of optional JSON5 moduleinfo only; unsupported/invalid data stays explicit. No compatibility claims from file presence or filenames.
+- Selection is alphabetical among eligible candidates, not an audio-quality ranking. Unknown/unidentified functions remain gaps even if a plugin may actually implement them.
+- Phase 1 stops here. Owner review of inventory/extra dedicated roots and a separately approved manual compatibility/listening test on copied stems is the safest next step. Determine VocAlign edition/architecture and supported routing/bridge first. Plugin execution, configuration or automation is outside this phase.
+- Changes left local and uncommitted for owner review; no push or merge.
+
+### Session 026 final verification result
+- Existing regressions: `python -m pytest tests/test_voice_library.py tests/test_models.py tests/test_harmony.py tests/test_engine.py -q` — **66 passed**, 11 dependency/synthetic-short-audio warnings, 214.82 s.
+- Plugin suite on final code: **27 passed**. Final passive scan still 49 entries, 32 with known resource/declared manufacturers. Frontend final build passed.
+- Phase 1 complete; no real Mixcraft or UI visual check claimed. Local changes remain uncommitted for owner review.
+
+## Session 027 — 2026-10-16 — Match the demo: timing + melody
+
+### Owner request and starting state
+- Owner narrowed new work to one feature: demo/AI vocal + their sung WAV -> their vocal following the demo. Clarified **timing and melody**, preserving their own voice. No broader plugin expansion requested.
+- Main at `5a93b02`; prior Session 026 inventory work remained uncommitted. Preserved it in place. No other features or word-guide/training defaults changed; no push/merge/commit.
+- Used codebase-memory graph/coverage + direct source reads to inspect existing pitch tracking, formant preservation, FastAPI jobs and React tool navigation. Source fallback used for changed freshness metadata. Existing pitch code itself remains unchanged.
+
+### Exact changes for this request
+- NEW `auralis/voice/reference_match.py`: bounded WAV validation/decoding; acoustic-feature DTW; monotonic speed-bounded mapping; existing `_track_pitch`; guide melody targeting; formant-preserving offline rendering via already-installed Pedalboard, new output/report only.
+- NEW `auralis/api/reference_match.py`: staged two-WAV upload, validation before job creation, single active matching job, existing JOBS lifecycle, guide/take/result previews/download and report.
+- NEW `frontend/src/ReferenceMatch.jsx`, `frontend/src/ReferenceMatch.css`: existing luxury design and WavePlayer; two uploads -> one button -> progress -> previews and downloadable WAV; remembered session job when navigating away/back.
+- NEW `tests/test_reference_match.py`: real rendered-audio and API checks, source protection, stereo/rates, invalid input, monotonic limits and worker-failure recovery.
+- NEW `docs/REFERENCE_VOCAL_MATCH.md`: usage, implementation, REA findings, verification/limitations.
+- MODIFIED `auralis/api/main.py`: register new router, preserving Session 026 router changes.
+- MODIFIED `frontend/src/App.jsx`: add Match the demo tool/view, preserving all earlier navigation.
+- MODIFIED both session files: this entry/summary and final results.
+- Synthetic samples/reports in git-excluded `samples/session-027/`; no owner audio, model or lyric files processed/modified.
+
+### REA and actual VocAlign status
+- Used reverse-engineer-anything skill. REA opened installed VocALignPro.vst3 read-only: PE/x86, SHA-256 `4fb638950cda9acd9beb4c9d2518a4b76f147f09d1ddc317fd72042e5097f6be`.
+- Focused REA string analysis returned `provider_unavailable`: Ghidra not configured, Hopper unsupported on Windows, IDA not configured. Read the skill recovery guidance; no installation/configuration performed.
+- No proprietary algorithm was recovered or copied. No plugin instantiated, license/activation inspected, or Mixcraft workflow automated. Public Synchro Arts guide/dub documentation informed the interaction, not an assertion of installed-plugin compatibility.
+- Explained the limitation to the owner while working. Implemented an independent Auralis processor using existing local libraries; the result/report explicitly marks `plugin_used: false`. Actual VocAlign hosting/bridge remains unverified, separate work.
+
+### Behavior and limits
+- Tools -> Match the demo: isolated demo WAV + isolated take WAV, same words/order/section, up to 180 seconds each. 100 MiB upload cap; mono/stereo, 8–96 kHz, bounded decoded sample budget.
+- Takes only timing and melody targets from guide analysis; audio in output comes only from the owner's take. Output matches demo duration/timeline while retaining take rate/channel count. Does not train or clone voices.
+- Speed limited to 0.5–2x, pitch shift to one octave either way, no silent octave folding. Uncertain pitch left unchanged; reduced timing moves/limited pitch and weak acoustic match are surfaced. Acoustic matching cannot verify identical words.
+- An early rendered-audio test detected a phase-cancellation dropout in overlapping stretched regions. Added phase alignment (up to 4 ms) before crossfading; the strict onset-count test now passes.
+- Synthetic three-note take: before onsets `[0.40, 1.45, 2.21]`, demo `[0.21, 0.95, 1.85]`, output `[0.20, 1.01, 1.82]` seconds. Mean onset error **350 -> 33 ms**. Target MIDI `[60,64,62]`, output measured `[60.02,64.01,62.02]`. Distinct source harmonic colour retained, source bytes unchanged. These are synthetic metrics, not a real-singer listening guarantee.
+
+### Verification and handoff
+- Initial reference suite after phase fix: 11 passed. Added a separate passing worker-error/busy-gate regression (12 total tests).
+- Frontend build: passed, 51 modules. Existing/new combined regression outcome appended below when complete.
+- Real Chrome rendering/navigation/initial disabled action checked against isolated local Auralis servers. Browser upload automation blocked by extension file-URL access permission; did not change that setting. Real FastAPI upload -> processing -> result/report/preview download verified by tests. No full browser-upload or owner-vocal listening claim.
+- Existing voice, conversion, training and word-guide code remains intact. No new dependencies, paid calls, original audio writes, DAW automation or plugin changes.
+- Experimental region-based acoustic matcher: consonants, breaths, runs, differing lyrics, large register changes and backing music need owner listening review. No claim of VocAlign-equivalent sound. Next: owner supplies a short isolated demo and matching take for listening/real-vocal validation. Do not expand beyond this requested feature.
+
+### Session 027 final results
+- Combined targeted regressions: **69 passed**, one existing Matchering/SciPy deprecation warning, 161.90 seconds (`test_plugins`, `test_reference_match`, `test_pitch_polish`, `test_voice_library`, `test_models`). The subsequently added worker-error recovery regression also passed separately: **70 passing targeted checks total**.
+- Frontend build passed, 51 modules. `git diff --check` passed. Test Chrome tab and isolated test servers closed/stopped after inspection. No production Auralis server or DAW was restarted.
+- Changes remain local/uncommitted. Feature implementation complete as experimental Auralis reference matching; real-vocal listening and actual VocAlign hosting are unverified.
+
+## Session 028 — 2026-10-16 — Owner vocal pair tested
+
+- Owner supplied `demo vocal.wav` (AI, 248.999955 s) and `my dry vocal1.wav` (live, 499.251859 s), then requested comparison of both apparent portions of the live file. Tested locally, without plugin execution, DAW edits, model downloads or network transcription. Originals remain byte-identical (SHA-256 before/after verified).
+- Initial length/energy inspection suggested two apparent performances. Owner then supplied the open BandLab Studio project. Read-only browser DOM inspection clarified the arrangement: the AI guide region ends at 248.999977 s; Lead Dry has seven regions ending at 239.694657 s and extra regions from 250.344828 to 499.251877 s. All inspected clip playback rates are 1; tempo 58 BPM. Thus the long WAV contains extra timeline clips after the guide ends, not established to be two corresponding takes or a half-speed export. No BandLab selection, mute/solo, effects, clip position, tempo, save or publish state changed.
+- Relevant overlap is 0–249 s. Produced full-length stereo 44.1 kHz/24-bit output, using derived 0–150 and 150–249 s sections split at the shared silent pause to respect the current app's 180 s job limit. Exact guide frame count 10,980,898, finite samples, peak -12.99 dBFS, assembly boundary silent. This batch test does NOT add long-file upload support or automatic take selection to the app.
+- Opening 35 s test: median guide-relative pitch error 40 -> 10 cents; within 50 cents 55.7% -> 92.6%; local ASR guide-word overlap 10/32 -> 24/32; mean word-centre error 186 -> 67 ms across only eight shared recognized words. Those are automated proxies, not manual lyrics or listening. Rechecked the full render's first 35 s: 40 -> 10 cents, 56.3% -> 93.4% within 50 cents on 542 common confident frames.
+- Later passage 248–283 s compared separately: 3/32 guide-recognized-word overlap both before/after, different recognized lyrics, at best 15.4% correspondence against any similarly sized window of the full demo transcript. Diagnostic only; no corresponding guide exists at this part of the project timeline, so not a recommended matched take.
+- Full render adjusted pitch in 338 regions, left 568 uncertain-pitch regions untuned and capped three corrections. No full-song intelligibility or subjective listening validation claimed. Owner should audition consonants, runs, breaths and later sections; processing success is not an assurance of professional quality.
+- Private outputs/reports/transcripts/hashes in git-ignored `jobs/real-vocal-check-gavyzq3v/`; final `your_vocal_matched_to_demo.wav`, test report `REAL_VOCAL_TEST.md`, machine details `manifest.json`, separate short A/B excerpts and diagnostic later-passage render. No owner audio or lyric transcripts added to Git. Both session files updated; feature source unchanged in this testing turn. No commit/push/merge.
+
+## Session 029 — 2026-10-16 — Prinze dataset import and GitHub publication
+
+### Dataset import (local data only)
+- Owner authorized adding the two supplied live-vocal takes to the existing Prinze profile. Verified the shorter recording is an exact PCM prefix of the longer one, so imported one unique raw recording covering both instead of duplicating the opening.
+- Existing profile: Prinze Paired Studio, 137 clips / 965.38 prepared seconds. Used the existing `VoiceProfileStore.add_take -> add_recordings -> refresh_analysis` workflow. Basic capture checks passed; no clipping. Compared candidate clips to existing clips of equal length using waveform correlation; no duplicate matches found within that bounded check.
+- Added 64 mono 44.1 kHz training clips, 427.94 seconds (1.3–20 s each), finite/peak-safe. After: **201 clips / 1393.32 seconds (23:13)**, readiness **84**. Raw unique take archived within the local profile; originals unchanged by SHA-256. Detailed validation/metadata backup/provenance are local, outside the published source.
+- Existing reference, checkpoint and model configuration hashes unchanged; model remains the prior 1,000-step checkpoint. **No retraining was started**, and newly added data is not claimed to have changed the trained voice yet.
+- No feature code changes were needed for importing. No recordings, prepared clips, model weights or transcripts enter Git.
+
+### Publication requested by owner
+- Owner explicitly asked to update GitHub once complete and then to continue. `origin/main` was six commits behind local main; inspected their scope: previously documented Session 025 drum-test fix, versioned lyric mapping, opt-in word guide, guide-choice notices and evaluation notes. These previously verified commits are included in the normal fast-forward publication together with the new work. No force push or merge requested/performed.
+- New publication includes Plugin Library/catalog/classification, experimental Match the demo engine/API/UI, tests, README usage links, research/limits and Sessions 026–029 continuity. Existing personal voice/cloning and word-guide default/listening gate preserved.
+- Detailed installed-plugin inventory moved to an ignored local review snapshot; public docs retain aggregate discovery results and integration research. Audio, datasets, checkpoints, local recognition transcripts, source hashes and detailed private test reports remain local/ignored.
+- Final targeted regression/build results and GitHub outcome appended below.
+
+### Session 029 final verification
+- Final combined targeted run: **107 passed**, 11 existing dependency/short-synthetic-audio warnings, 283.09 s (`test_plugins`, `test_reference_match`, `test_pitch_polish`, `test_voice_library`, `test_models`, `test_harmony`, `test_engine`). Full expensive speech-recognition suite not repeated; earlier Session 025 evidence remains documented for its unchanged commits.
+- Frontend production build passed (51 modules); staged whitespace check passed. Entire publication range against origin/main audited: 38 source/text paths, no personal audio/model/private-job files and no recognizable credential patterns. Current implementation commit contains 17 intended source/test/doc paths.
+- Dataset import verified complete: 201 clips, 1393.32 prepared seconds, readiness 84; protected model/reference/config and supplied-source hashes unchanged. No retraining.

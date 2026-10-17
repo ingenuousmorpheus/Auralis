@@ -43,6 +43,17 @@ plan is documented in
   reference, notes sitting outside the key (with timecodes), and octave
   displacement. It advises only — Pitch Polish is the stage that edits audio.
   See [`docs/HARMONIC_REFERENCE.md`](docs/HARMONIC_REFERENCE.md).
+- **Match the demo (experimental).** Upload an isolated demo vocal and your own
+  sung WAV to follow the demo's timing and melody while retaining your voice.
+  Preview and download a new WAV; originals stay untouched. Use the same lyrics
+  and section, up to three minutes per file. This is local Auralis DSP; actual
+  VocAlign hosting is not implemented. See
+  [`docs/REFERENCE_VOCAL_MATCH.md`](docs/REFERENCE_VOCAL_MATCH.md).
+- **Plugin Library.** Passively inspect standard or explicitly selected Windows
+  VST folders, search and categorize candidates, and plan vocal chains from the
+  discovered inventory. Discovery never loads plugin code, and file presence
+  does not verify host compatibility or licensing. See
+  [`docs/PLUGIN_INTELLIGENCE.md`](docs/PLUGIN_INTELLIGENCE.md).
 - Master to a loudness target with a true-peak ceiling (default −1.0 dBTP).
 - Download a 24-bit WAV.
 - Mix multiple stems with filename-assisted role detection, manual overrides,

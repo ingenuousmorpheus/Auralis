@@ -1,0 +1,12 @@
+.plugin-library { padding: 28px; color: var(--lx-text); }
+.plugin-section { padding: 22px; margin: 18px 0; }
+.plugin-library h1 { font-size: 32px; }
+.plugin-library h2 { font-size: 20px; }
+.plugin-library p, .plugin-library small { color: var(--lx-muted, var(--steel)); line-height: 1.6; }
+.plugin-library label { display: grid; gap: 8px; min-width: 0; }
+.plugin-library input, .plugin-library textarea, .plugin-library select { background: var(--lx-sunken); color: inherit; border: 1px solid var(--lx-border, var(--line)); border-radius: 8px; padding: 12px; font: inherit; min-width: 0; max-width: 100%; }
+.plugin-library button { margin: 12px 0; }
+.plugin-filters, .plugin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.plugin-grid .plugin-section { margin: 0; min-width: 0; }
+.plugin-path { overflow-wrap: anywhere; }
+.plugin-library li { margin: 10px 0; }

@@ -3299,3 +3299,42 @@ Full entry in `AURALIS_SESSION.md` (Session 025). Summary:
 - `181262c`: guide choice and notices in Create and Song Studio.
 - **Seed-VC comparison (2026-10-14, memory freed):** word guide verse + chorus 92.9% → 87.5% after conversion → 92.9% after Vocal Finish; 100% of notes within 25 cents throughout. Phrase 7/7 → 6/7. Vocalise 0-1/56. The first overnight run's pitch numbers were invalid (a different melody per run because the blueprint id was random) and were rerun with the id pinned.
 - Samples in git-excluded `samples/session-025/`. Vocalise stays the default until the owner approves.
+
+## Session 026 — 2026-10-16 — Plugin Intelligence Phase 1
+
+Full entry in `AURALIS_SESSION.md`; implementation/research/inventory in `docs/PLUGIN_INTELLIGENCE.md`.
+- Started clean on main at `5a93b02`; preserved all existing voice/song features and pending word-guide listening approval.
+- Added passive Windows VST catalog/classification/search, five inventory-only vocal-chain templates, FastAPI endpoints and Plugin Library in existing Tools navigation. No third-party hosting or DAW automation.
+- Actual standard-folder scan: 49 entries (32 VST3, 17 DLL candidates), 40 x64 / 8 x86 / 1 Unknown; 16 entries in possible duplicate groups. Auto-Tune, FabFilter and Tube-Tech candidates identified. VocALignPro/ProP are x86 with unknown versions; Waves/Soundtoys unverified. Detailed inventory remains local; aggregates in phase documentation.
+- New files: `auralis/plugins.py`, `auralis/api/plugins.py`, `frontend/src/PluginLibrary.jsx`, `frontend/src/PluginLibrary.css`, `tests/test_plugins.py`, `docs/PLUGIN_INTELLIGENCE.md`. Modified router registration in `auralis/api/main.py`, navigation in `frontend/src/App.jsx`, and both session files.
+- Plugin tests: 27 passed; frontend build passed (49 modules); diff whitespace check passed. Existing regression outcome appended below. No real Mixcraft or UI visual validation claimed; expensive full speech suite not rerun.
+- Research: Mixcraft supports VST/VST3 and a JavaScript MIDI/SysEx controller API; external general RPC/plugin-chain automation not established. Installed VocAlign compatibility unresolved. REA is investigative tooling, with no verified Mixcraft desktop/audio adapter.
+- Session-only inventory; conservative unknowns, unverified DLLs, shell limitations, strict JSON subset of optional JSON5 metadata. No licenses, registry changes, plugin execution, installs, audio edits, paid API calls, push or merge. Work remains local/uncommitted for review.
+- Stop after Phase 1. Next: owner reviews inventory, adds any dedicated roots, then separately approves a manual host/listening trial on copies of stems; resolve VocAlign edition/bridge/sidechain support before automation.
+- Final Session 026 regression result: **66 existing tests passed** (`test_voice_library`, `test_models`, `test_harmony`, `test_engine`), 11 dependency/short-audio warnings, 214.82 s. With 27 plugin tests: **93 passing targeted tests**. Final build passed; scan remains 49 entries. Phase 1 complete, local/uncommitted.
+
+## Session 027 — 2026-10-16 — Match the demo (timing + melody)
+
+Full entry in `AURALIS_SESSION.md`; usage/limits/research in `docs/REFERENCE_VOCAL_MATCH.md`.
+- Owner requested only demo + their sung WAV -> their voice following demo timing **and melody**. Built a single Tools -> Match the demo flow with two uploads, progress, previews and new WAV download. Prior uncommitted Session 026 work preserved.
+- New engine/API: `auralis/voice/reference_match.py`, `auralis/api/reference_match.py`; new UI `frontend/src/ReferenceMatch.jsx`/`.css`; tests `tests/test_reference_match.py`; guide `docs/REFERENCE_VOCAL_MATCH.md`. Router/navigation registration in main.py/App.jsx; both continuity files updated.
+- REA confirmed installed VocALignPro is x86 but deep analysis unavailable (no configured Ghidra/IDA, Hopper unsupported). No plugin execution, licensing changes or proprietary code recovery. Feature is independent Auralis DSP (`plugin_used: false`), using existing librosa pitch tracking and Pedalboard formant-preserving stretching. Actual VocAlign/Mixcraft bridge remains unverified.
+- Synthetic metrics: mean onset error 350 -> 33 ms; target notes 60/64/62 -> output 60.02/64.01/62.02 MIDI; source colour retained, original bytes unchanged. Phase cancellation found by a strict test and fixed.
+- Reference suite 11 passed plus added worker-error test passed (12 total); production frontend build passed (51 modules). Combined regression result appended below.
+- Chrome screen renders; automated file selection blocked by extension permission left unchanged. Real API upload/render/download roundtrip passes. No owner-voice listening validation yet.
+- Same isolated lyrics/order required; WAV 0.5–180 s, max 100 MiB, mono/stereo 8–96 kHz. Speed/pitch bounds and uncertainty surfaced; no original audio overwritten. No dependencies installed, paid calls, DAW automation, push or merge. Synthetic fixtures under git-excluded samples/session-027.
+- Next: owner supplies demo/take pair for a listening trial. Keep work limited to this feature; preserve existing voice training/cloning and pending word-guide listening gate.
+- Session 027 final: **69 combined targeted tests passed**, plus separately passing worker-error regression (**70 total**); build passed (51 modules), diff check passed. Temporary browser/test servers closed/stopped. Local/uncommitted experimental matcher ready for owner vocal listening trial; actual VocAlign hosting remains unverified.
+
+## Session 028 — 2026-10-16 — Real owner vocal test
+
+Full entry in `AURALIS_SESSION.md`. Supplied AI demo (4:09) + live export (8:19), compared both apparent portions. BandLab read-only inspection clarified that Lead Dry has extra clips after the guide ends at 4:09; normal clip speed, 58 BPM, no project edits. Relevant first 0–249 s rendered in two sections at a shared pause, respecting the app's unchanged 180 s limit. Private final output: `jobs/real-vocal-check-gavyzq3v/your_vocal_matched_to_demo.wav` (stereo 44.1 kHz/24-bit, exact demo frame count, finite/no clipping/silent join). Originals unchanged by SHA-256.
+
+Opening-excerpt automated metrics: median pitch error 40 -> 10 cents; within-50-cent rate about 56% -> 93%; eight shared ASR words' timing error 186 -> 67 ms. Full render opening rechecked with similar pitch improvement. Later passage has different recognized lyrics/poor correspondence and no guide at its project position; diagnostic only. Full-song subjective quality unverified, 568 uncertain pitch regions left untuned, three corrections capped. All owner audio/transcripts/reports remain git-ignored in that job folder; `REAL_VOCAL_TEST.md` and `manifest.json` detail scope/limitations. No feature source changes, plugin/DAW execution or model download; no commit/push/merge. Next: owner listens to the matched full take; app still needs explicit future work for direct long-file handling/region selection.
+
+## Session 029 — 2026-10-16 — Training data added; GitHub update authorized
+
+Full entry in `AURALIS_SESSION.md`. Imported one unique live recording covering both supplied WAVs (shorter file is an exact prefix). Existing workflow added **64 clips / 7:08**, taking Prinze Paired Studio to **201 clips / 23:13**, readiness **84%**. Originals, reference, checkpoint and model config hashes unchanged. Existing 1,000-step voice remains; **no retraining run**. Raw take/provenance remain in the local voice store; detailed checks in ignored jobs data, never in GitHub.
+
+Owner authorized GitHub publication and continuation. Reviewed six earlier pending Session 025 commits; normal fast-forward publication will include those plus the Plugin Library and experimental Match the demo work. README documents both tools and current limits. Detailed personal plugin inventory retained locally; published docs use aggregate results. Recordings, model files and recognition transcripts remain excluded. Final verification/push result appended below.
+- Final Session 029 validation: **107 targeted tests passed** (11 dependency/short-audio warnings; 283.09 s), frontend build passed (51 modules), staged diff check and publication privacy scan passed. Import complete: 201 clips / 23:13, readiness 84; originals and checkpoint/reference/config unchanged. No retraining.

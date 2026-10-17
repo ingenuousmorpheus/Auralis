@@ -37,7 +37,12 @@ from .engines import router as engines_router
 from .theory import router as theory_router
 from .projects import router as projects_router
 
+from .reference_match import router as reference_match_router
+from .plugins import router as plugins_router
+
 app = FastAPI(title="Auralis", version="0.8.0")
+app.include_router(reference_match_router)
+app.include_router(plugins_router)
 app.include_router(projects_router)
 app.include_router(artist_router)
 app.include_router(theory_router)

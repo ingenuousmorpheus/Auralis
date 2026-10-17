@@ -1,0 +1,17 @@
+.reference-match { padding: clamp(18px, 3vw, 40px); }
+.reference-match header { margin-bottom: 24px; }
+.reference-match h1 { font-size: clamp(28px, 4vw, 42px); margin: 12px 0; }
+.reference-match h2 { font-size: 21px; }
+.reference-match p { color: var(--lx-muted); line-height: 1.6; }
+.reference-match-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.reference-match section { padding: 24px; min-width: 0; }
+.reference-match-file { display: grid; gap: 12px; font-size: 14px; margin: 22px 0; }
+.reference-match-file input { width: 100%; min-width: 0; color: var(--lx-muted); font: inherit; }
+.reference-match-file input::file-selector-button { background: var(--lx-raised); color: var(--lx-text); border: 1px solid var(--lx-border-strong); border-radius: var(--lx-radius-sm); padding: 12px; margin-right: 12px; cursor: pointer; }
+.reference-match-action, .reference-match-result { margin-top: 22px; }
+.reference-match a.lx-btn { display: inline-flex; align-items: center; text-decoration: none; }
+.reference-match progress { width: min(80%, 400px); accent-color: var(--lx-violet); }
+.reference-match .reference-match-error { color: var(--lx-danger); }
+.reference-match details { margin: 20px 0; color: var(--lx-muted); line-height: 1.6; }
+.reference-match details a { color: var(--lx-violet); }
+@media (max-width: 1000px) { .reference-match-inputs { grid-template-columns: minmax(0, 1fr); } }

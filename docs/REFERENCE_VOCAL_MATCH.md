@@ -1,0 +1,37 @@
+# Match the demo — reference vocal matching
+
+The owner requested one feature: upload a demo/AI singer and their own sung WAV, then match **timing and melody while keeping their voice**. This is independent local Auralis processing; it does not host or call VocAlign, automate Mixcraft, clone the guide's voice, or use a paid API.
+
+## Use
+
+In Auralis, open **Tools → Match the demo** (also available through Studio). Choose **Demo vocal WAV**, choose **Your vocal WAV**, then **Match my vocal**. Listen to the demo, original take and result, and download the matched 24-bit WAV. The demo can be a human or AI singer. Both must contain the same lyrics in the same order, from the same section, as isolated solo vocals without an instrumental backing. Originals are never overwritten. No voice training or plugin configuration is needed.
+
+Current input limits: 0.5–180 seconds each, 100 MiB per upload, mono/stereo WAV at 8–96 kHz, at most 18 million decoded samples per input. Split longer songs into sections. Output keeps the take's sample rate/channel count and the demo's timeline/duration. Melody targets the demo's actual register; it does not silently fold octave errors. Local speed is bounded to 0.5–2x and pitch moves to ±12 semitones. Any limited/unmeasured regions are reported. Bad inputs and gross duration mismatches produce clear errors. Acoustic matching cannot prove that two singers sang the same words.
+
+## Implementation
+
+- `auralis/voice/reference_match.py`: validation, active-region detection, normalized acoustic features, bounded DTW, monotonic slope-limited source/demo map, existing `voice.pitch._track_pitch`, guide-note transition anchors, paired pitch differences and formant-preserving offline rendering through the already-installed Pedalboard time stretcher. Each input is read; only new result/report paths are written. Guide samples are never mixed into the output.
+- The renderer overlaps adjacent regions and aligns their shared waveform phase within 4 ms before crossfading. A meaningful rendered-audio test caught a dropout from phase cancellation in the first implementation; phase alignment fixed it. This is still an experimental region-based matcher, not a claim of VocAlign quality or bit-equivalence. Source vibrato within a region is retained; it does not copy every expressive detail of the guide.
+- `auralis/api/reference_match.py`: explicit two-file upload, bounded temporary staging/validation, the existing job lifecycle, serialized heavy matching, original/result audio and report endpoints. `POST /voice/match` takes `guide`, `take`, optional `melody_strength` (0–1, default 1). Poll existing `GET /jobs/{id}`. Preview/download `GET /voice/match/{id}/audio/{guide|take|result}`; report at `GET /voice/match/{id}/report`.
+- `frontend/src/ReferenceMatch.jsx` / `.css`: two uploads, one action, progress, original/demo/result previews, download, match notes, session job recovery when navigating away and back; existing luxury surfaces and WavePlayer. App adds only a tool/navigation/render entry. Existing personal voice, training, cloning, word-guide and plugin library features are preserved.
+- No new dependency or installation. Existing `pedalboard>=0.9` provides scalar offline stretching; the local installed version is 0.9.23. DTW/pitch use existing librosa 0.11.0. No copied proprietary implementation.
+
+## REA findings and sources
+
+REA `open_binary` inspected the installed `VocALignPro.vst3`: PE, x86, SHA-256 `4fb638950cda9acd9beb4c9d2518a4b76f147f09d1ddc317fd72042e5097f6be`. The target was not executed. A focused REA string search failed with `provider_unavailable`: Ghidra is not configured, Hopper is unavailable on Windows, and IDA is not configured. No algorithms, entry points or host automation were recovered or verified. No licenses/activations were inspected and no provider installation/configuration was performed. A future actual VocAlign adapter remains a separate, unverified integration, and is not necessary to operate this Auralis processor.
+
+Public operational references: [Synchro Arts guide/dub workflow](https://www.synchroarts.com/manuals/VocAlign6Pro/Manual/HTML/what-is-vocalign-6-pro.html) and [timing/pitch controls](https://www.synchroarts.com/manuals/VocAlign6Pro/Manual/HTML/adjusting-the-automatic-time-and-pitch-matching.html). Those describe modern VocAlign, not proof of the installed older binary's capabilities. The implementation uses public DSP facilities: [librosa DTW](https://librosa.org/doc/0.11.0/generated/librosa.sequence.dtw.html), [Pedalboard time stretching](https://spotify.github.io/pedalboard/reference/pedalboard.html). Pedalboard and its stretcher carry existing open-source license obligations; no distribution/license-status change is claimed.
+
+## Acceptance and verification
+
+The quality gates are real rendered timing improvement, per-note melody accuracy, retention of source colour, unchanged originals, finite/peak-safe audio, exact guide duration, stereo/rate handling, bounded transforms, invalid-input handling, upload concurrency, and a real upload → job → downloadable audio/report round trip. Fixtures use invented synthesized notes only; no owner recordings or voice models are processed for evaluation.
+
+`tests/test_reference_match.py` initially had one failure detecting an extra onset/dropout; the final 11 tests pass after overlap phase alignment. The synthetic take deliberately starts late, stretches/compresses different note durations, and sings three notes two semitones below the guide. Acceptance: all three rendered pitches within 35 cents; mean onset error under 90 ms and less than 40% of the original error; source harmonic colour remains distinguishable from the guide. These are synthetic gates, not proof of real-singer word intelligibility or subjective quality.
+
+Browser: the real React screen rendered in Chrome against isolated local test servers; navigation and the initial disabled action were checked visually. Automated file selection was blocked by the Chrome extension's disabled file-URL access permission. That setting was left unchanged. The actual FastAPI upload/download round trip is covered by automated tests; a complete browser upload/listening trial is not claimed. The user's ordinary manual file picker does not require agent-extension file access.
+
+Final targeted tests/build results are recorded in both session files. Next owner check: supply a short isolated demo and a take of the same lyrics, audition the result on consonants/breaths/note changes, then decide whether the matcher meets the desired sound. No Mixcraft or actual VocAlign execution is verified, and no push/merge occurred.
+
+Measured synthetic snapshot: before onsets `[0.40, 1.45, 2.21]`, demo `[0.21, 0.95, 1.85]`, result `[0.20, 1.01, 1.82]` seconds (mean error 350 -> 33 ms). Target MIDI `[60, 64, 62]`; result `[60.02, 64.01, 62.02]`. Git-excluded synthetic fixtures/output/report are in `samples/session-027/`. A worker-failure regression was added after the 11-test run and passes separately, bringing this feature to 12 tests.
+
+Final verification: 69 combined tests passed across plugin inventory, reference matching, Pitch Polish, voice library and model management; one additional worker-failure test passed separately (70 targeted checks total). Frontend production build passed (51 modules), whitespace diff check passed. Temporary test servers/tab were stopped/closed. Local changes remain uncommitted. Restart Auralis normally to load the new backend routes and frontend.
