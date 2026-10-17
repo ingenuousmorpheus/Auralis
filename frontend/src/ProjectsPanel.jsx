@@ -24,7 +24,7 @@ function size(bytes) {
   return bytes > 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 }
 
-export default function ProjectsPanel({ API, onBack }) {
+export default function ProjectsPanel({ API, onBack, onOpenSong }) {
   const [projects, setProjects] = useState([]);
   const [current, setCurrent] = useState(null);
   const [name, setName] = useState("");
@@ -145,6 +145,8 @@ export default function ProjectsPanel({ API, onBack }) {
               </div>
             </div>
             <div className="pj-row">
+              {onOpenSong && current.assets?.some(a => a.metadata?.part === "song_master") &&
+                <button className="pj-button primary" onClick={() => onOpenSong(current.id)}>Open in Song studio</button>}
               {isOpen
                 ? <button className="pj-button" disabled={busy} onClick={closeProject}>Close</button>
                 : <button className="pj-button primary" disabled={busy} onClick={() => openProject(current.id)}>Reopen</button>}

@@ -43,7 +43,7 @@ function MakingSong({ status, sung }) {
   </div>;
 }
 
-export default function CreatePage({ API, go, play, nowPlayingId }) {
+export default function CreatePage({ API, go, play, nowPlayingId, openSong, onSongOpened }) {
   const [mode, setMode] = useState("advanced");
   const [useDna, setUseDna] = useState(true);
   const [useVoice, setUseVoice] = useState(true);
@@ -66,6 +66,12 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
   const [songStatus, setSongStatus] = useState(null);
   const [projectId, setProjectId] = useState(null);
   const [showDemo, setShowDemo] = useState(false);
+  useEffect(() => {                                   // a saved song opened from Projects
+    if (!openSong) return;
+    setProjectId(openSong);
+    setView("studio");
+    onSongOpened?.();
+  }, [openSong]);
 
   useEffect(() => {
     apiJson(`${API}/artist/library`).then(d => setSongs(d.songs)).catch(() => setSongs([]));
@@ -261,9 +267,9 @@ export default function CreatePage({ API, go, play, nowPlayingId }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 28px 12px", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <h1 className="au-title au-shine" style={{ fontSize: 22 }}>{view === "blueprint" && blueprint ? "Song blueprint" : "My workspace"}</h1>
-          {(blueprint || songJob) && <div className="au-segment" role="tablist" aria-label="Workspace view">
+          {(blueprint || songJob || projectId) && <div className="au-segment" role="tablist" aria-label="Workspace view">
             {blueprint && <button role="tab" aria-selected={view === "blueprint"} onClick={() => setView("blueprint")}>Blueprint</button>}
-            {songJob && <button role="tab" aria-selected={view === "making" || view === "studio"} onClick={() => setView(projectId ? "studio" : "making")}>Song</button>}
+            {(songJob || projectId) && <button role="tab" aria-selected={view === "making" || view === "studio"} onClick={() => setView(projectId ? "studio" : "making")}>Song</button>}
             <button role="tab" aria-selected={view === "songs"} onClick={() => setView("songs")}>My songs</button>
           </div>}
         </div>

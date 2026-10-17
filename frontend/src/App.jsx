@@ -70,16 +70,19 @@ function toTrack(song) {
 
 export default function App() {
   const [page, setPage] = useState("create");
+  const [songProject, setSongProject] = useState(null);       // a saved song to reopen in Create's Song studio
   const [track, setTrack] = useState(null);
   const play = song => setTrack(toTrack(song));
 
   let content;
-  if (page === "create") content = <CreatePage API={API} go={setPage} play={play} nowPlayingId={track?.id} />;
+  if (page === "create") content = <CreatePage API={API} go={setPage} play={play} nowPlayingId={track?.id}
+    openSong={songProject} onSongOpened={() => setSongProject(null)} />;
   else if (page === "music") content = <MyMusic API={API} play={play} nowPlayingId={track?.id} />;
   else if (page === "dna") content = <DnaPage API={API} go={setPage} play={play} />;
   else if (page === "studio") content = <StudioPage API={API} go={setPage} tools={TOOLS} />;
   else if (page === "master" || page === "mix") content = <MasterMix API={API} mode={page} />;
-  else if (page === "projects") content = <div className="au-page-scroll"><ProjectsPanel API={API} /></div>;
+  else if (page === "projects") content = <div className="au-page-scroll"><ProjectsPanel API={API}
+    onOpenSong={id => { setSongProject(id); setPage("create"); }} /></div>;
   else if (page === "voice") content = <div className="au-page-scroll" style={{ padding: 0 }}>
     <VoicePage API={API} go={setPage} classic={<main className="voice-stage voice-studio-shell">
       <VoiceStudio API={API} card={voiceCard} btn={voiceBtn} colors={VOICE_COLORS} />
