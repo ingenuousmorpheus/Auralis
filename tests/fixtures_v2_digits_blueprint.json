@@ -1,0 +1,698 @@
+{
+"blueprint_version": 1,
+"melody_version": 2,
+"id": "v2digitsfixture",
+"revision": 1,
+"created_at": "2026-10-17T20:04:42+00:00",
+"updated_at": "2026-10-17T20:04:42+00:00",
+"title": "ballad",
+"brief": {
+"prompt": "ballad",
+"heard": [
+{
+"field": "tempo_feel",
+"value": "slow",
+"words": "ballad"
+}
+],
+"set_by_you": [],
+"harmony": null,
+"vocal": null,
+"groove": null,
+"tempo_feel": "slow",
+"length_seconds": null,
+"chorus_emphasis": false
+},
+"lyrics": "[Verse]\n24/7 I think of you\nI was 19 in 1999\nmy 2nd chance\nback in '99 we sang",
+"inputs": {
+"artist_dna_weight": 0.0,
+"seed": 0,
+"used_dna": false,
+"dna_songs": null
+},
+"era": {
+"id": "modern_alt_rnb",
+"name": "Modern Alternative R&B",
+"status": "hypothesis",
+"harmonic_rhythm": "very slow or static; colour over motion"
+},
+"tempo": 70.0,
+"meter": "4/4",
+"key": "G minor",
+"groove": {
+"id": "hiphop_rnb",
+"name": "Hip-hop R&B",
+"feel": "hiphop",
+"swing_ratio": [
+0.5,
+0.6
+],
+"offsets_ms": {
+"kick": [
+0,
+10
+],
+"snare": [
+0,
+25
+],
+"bass": [
+0,
+15
+],
+"comping": [
+0,
+30
+]
+},
+"quantize_strength": [
+0.7,
+1.0
+],
+"push_pull": "neutral; programmed",
+"pocket_width_ms": 25,
+"status": "hypothesis",
+"sources": [
+{
+"id": "auralis_editorial",
+"title": "Auralis editorial starting hypotheses",
+"url": null
+}
+]
+},
+"sections": [
+{
+"id": "d88f0c7b",
+"type": "intro",
+"label": "Intro",
+"bars": 4,
+"energy": 0.3,
+"chords_per_bar": 0.5,
+"progression": {
+"roman": [
+"i9",
+"IV9"
+],
+"name": "Dorian two-chord vamp",
+"source": "atlas:dorian_vamp",
+"status": "hypothesis",
+"sources": [
+{
+"id": "berklee_harmony",
+"title": "Harmony 2 / HR-216 course outlines",
+"url": "https://online.berklee.edu/courses/harmony-2"
+},
+{
+"id": "auralis_editorial",
+"title": "Auralis editorial starting hypotheses",
+"url": null
+}
+]
+},
+"arrangement": {
+"drums": "off",
+"bass": "off",
+"keys": "medium",
+"pad": "light",
+"lead_vocal": "off",
+"backing_vocals": "off",
+"fx": "light",
+"atmos": "full"
+},
+"lyrics": [],
+"why": [
+"R&B Atlas \u201cDorian two-chord vamp\u201d (hypothesis): The major IV in a minor key is the dorian colour; the funk-derived vamp.",
+"Two chords over two bars each: slow harmonic rhythm keeps the verse spacious."
+],
+"start_bar": 1,
+"start_seconds": 0.0,
+"chords": [
+{
+"bar": 1,
+"beat": 1,
+"beats": 8.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 3,
+"beat": 1,
+"beats": 8.0,
+"roman": "IV9",
+"chord": "C9"
+}
+],
+"vocal": null
+},
+{
+"id": "358da8ec",
+"type": "verse",
+"label": "Verse 1",
+"bars": 16,
+"energy": 0.45,
+"chords_per_bar": 1.0,
+"progression": {
+"roman": [
+"i9",
+"\u266dVImaj7",
+"\u266dVII",
+"i9"
+],
+"name": "Minor loop through \u266dVI",
+"source": "atlas:minor_flat_six_loop",
+"status": "sourced",
+"sources": [
+{
+"id": "richards_axis",
+"title": "Tonal ambiguity and the axis progression (Music Theory Online 17.23.3)",
+"url": "https://mtosmt.org/issues/mto.17.23.3/mto.17.23.3.richards.html"
+}
+]
+},
+"arrangement": {
+"drums": "light",
+"bass": "medium",
+"keys": "medium",
+"pad": "light",
+"lead_vocal": "full",
+"backing_vocals": "off",
+"fx": "off",
+"atmos": "medium"
+},
+"lyrics": [
+"24/7 I think of you",
+"I was 19 in 1999",
+"my 2nd chance",
+"back in '99 we sang"
+],
+"why": [
+"R&B Atlas \u201cMinor loop through \u266dVI\u201d (sourced): Shared with post-1990 pop generally; not uniquely R&B.",
+"One chord a bar."
+],
+"start_bar": 5,
+"start_seconds": 13.71,
+"chords": [
+{
+"bar": 1,
+"beat": 1,
+"beats": 4.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 2,
+"beat": 1,
+"beats": 4.0,
+"roman": "\u266dVImaj7",
+"chord": "E\u266dmaj7"
+},
+{
+"bar": 3,
+"beat": 1,
+"beats": 4.0,
+"roman": "\u266dVII",
+"chord": "F"
+},
+{
+"bar": 4,
+"beat": 1,
+"beats": 4.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 5,
+"beat": 1,
+"beats": 4.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 6,
+"beat": 1,
+"beats": 4.0,
+"roman": "\u266dVImaj7",
+"chord": "E\u266dmaj7"
+},
+{
+"bar": 7,
+"beat": 1,
+"beats": 4.0,
+"roman": "\u266dVII",
+"chord": "F"
+},
+{
+"bar": 8,
+"beat": 1,
+"beats": 4.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 9,
+"beat": 1,
+"beats": 4.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 10,
+"beat": 1,
+"beats": 4.0,
+"roman": "\u266dVImaj7",
+"chord": "E\u266dmaj7"
+},
+{
+"bar": 11,
+"beat": 1,
+"beats": 4.0,
+"roman": "\u266dVII",
+"chord": "F"
+},
+{
+"bar": 12,
+"beat": 1,
+"beats": 4.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 13,
+"beat": 1,
+"beats": 4.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 14,
+"beat": 1,
+"beats": 4.0,
+"roman": "\u266dVImaj7",
+"chord": "E\u266dmaj7"
+},
+{
+"bar": 15,
+"beat": 1,
+"beats": 4.0,
+"roman": "\u266dVII",
+"chord": "F"
+},
+{
+"bar": 16,
+"beat": 1,
+"beats": 4.0,
+"roman": "i9",
+"chord": "Gm9"
+}
+],
+"vocal": {
+"low_midi": 50,
+"high_midi": 62,
+"peak_midi": 60,
+"low": "D3",
+"high": "D4",
+"peak": "C4",
+"pattern": "Phrasing behind the backbeat",
+"lines": 4
+}
+},
+{
+"id": "dc50978a",
+"type": "outro",
+"label": "Outro",
+"bars": 4,
+"energy": 0.3,
+"chords_per_bar": 0.5,
+"progression": {
+"roman": [
+"i9",
+"IV9"
+],
+"name": "Dorian two-chord vamp",
+"source": "atlas:dorian_vamp",
+"status": "hypothesis",
+"sources": [
+{
+"id": "berklee_harmony",
+"title": "Harmony 2 / HR-216 course outlines",
+"url": "https://online.berklee.edu/courses/harmony-2"
+},
+{
+"id": "auralis_editorial",
+"title": "Auralis editorial starting hypotheses",
+"url": null
+}
+]
+},
+"arrangement": {
+"drums": "light",
+"bass": "light",
+"keys": "medium",
+"pad": "medium",
+"lead_vocal": "light",
+"backing_vocals": "light",
+"fx": "light",
+"atmos": "full"
+},
+"lyrics": [],
+"why": [
+"R&B Atlas \u201cDorian two-chord vamp\u201d (hypothesis): The major IV in a minor key is the dorian colour; the funk-derived vamp.",
+"Two chords over two bars each: slow harmonic rhythm keeps the verse spacious."
+],
+"start_bar": 21,
+"start_seconds": 68.57,
+"chords": [
+{
+"bar": 1,
+"beat": 1,
+"beats": 8.0,
+"roman": "i9",
+"chord": "Gm9"
+},
+{
+"bar": 3,
+"beat": 1,
+"beats": 8.0,
+"roman": "IV9",
+"chord": "C9"
+}
+],
+"vocal": {
+"low_midi": 53,
+"high_midi": 67,
+"peak_midi": 64,
+"low": "F3",
+"high": "G4",
+"peak": "E4",
+"pattern": "Falsetto answer line",
+"lines": 0
+}
+}
+],
+"harmony_options": {
+"intro": [
+{
+"roman": [
+"i9",
+"IV9"
+],
+"name": "Dorian two-chord vamp",
+"source": "atlas:dorian_vamp",
+"status": "hypothesis",
+"sources": [
+{
+"id": "berklee_harmony",
+"title": "Harmony 2 / HR-216 course outlines",
+"url": "https://online.berklee.edu/courses/harmony-2"
+},
+{
+"id": "auralis_editorial",
+"title": "Auralis editorial starting hypotheses",
+"url": null
+}
+],
+"loop": true,
+"score": 0.9,
+"why": "R&B Atlas \u201cDorian two-chord vamp\u201d (hypothesis): The major IV in a minor key is the dorian colour; the funk-derived vamp."
+},
+{
+"roman": [
+"i9",
+"\u266dVImaj7",
+"\u266dVII",
+"i9"
+],
+"name": "Minor loop through \u266dVI",
+"source": "atlas:minor_flat_six_loop",
+"status": "sourced",
+"sources": [
+{
+"id": "richards_axis",
+"title": "Tonal ambiguity and the axis progression (Music Theory Online 17.23.3)",
+"url": "https://mtosmt.org/issues/mto.17.23.3/mto.17.23.3.richards.html"
+}
+],
+"loop": true,
+"score": 0.8,
+"why": "R&B Atlas \u201cMinor loop through \u266dVI\u201d (sourced): Shared with post-1990 pop generally; not uniquely R&B."
+}
+],
+"outro": [
+{
+"roman": [
+"i9",
+"IV9"
+],
+"name": "Dorian two-chord vamp",
+"source": "atlas:dorian_vamp",
+"status": "hypothesis",
+"sources": [
+{
+"id": "berklee_harmony",
+"title": "Harmony 2 / HR-216 course outlines",
+"url": "https://online.berklee.edu/courses/harmony-2"
+},
+{
+"id": "auralis_editorial",
+"title": "Auralis editorial starting hypotheses",
+"url": null
+}
+],
+"loop": true,
+"score": 0.9,
+"why": "R&B Atlas \u201cDorian two-chord vamp\u201d (hypothesis): The major IV in a minor key is the dorian colour; the funk-derived vamp."
+},
+{
+"roman": [
+"i9",
+"\u266dVImaj7",
+"\u266dVII",
+"i9"
+],
+"name": "Minor loop through \u266dVI",
+"source": "atlas:minor_flat_six_loop",
+"status": "sourced",
+"sources": [
+{
+"id": "richards_axis",
+"title": "Tonal ambiguity and the axis progression (Music Theory Online 17.23.3)",
+"url": "https://mtosmt.org/issues/mto.17.23.3/mto.17.23.3.richards.html"
+}
+],
+"loop": true,
+"score": 0.8,
+"why": "R&B Atlas \u201cMinor loop through \u266dVI\u201d (sourced): Shared with post-1990 pop generally; not uniquely R&B."
+}
+],
+"verse": [
+{
+"roman": [
+"i9",
+"\u266dVImaj7",
+"\u266dVII",
+"i9"
+],
+"name": "Minor loop through \u266dVI",
+"source": "atlas:minor_flat_six_loop",
+"status": "sourced",
+"sources": [
+{
+"id": "richards_axis",
+"title": "Tonal ambiguity and the axis progression (Music Theory Online 17.23.3)",
+"url": "https://mtosmt.org/issues/mto.17.23.3/mto.17.23.3.richards.html"
+}
+],
+"loop": true,
+"score": 1.1,
+"why": "R&B Atlas \u201cMinor loop through \u266dVI\u201d (sourced): Shared with post-1990 pop generally; not uniquely R&B."
+},
+{
+"roman": [
+"i9",
+"IV9"
+],
+"name": "Dorian two-chord vamp",
+"source": "atlas:dorian_vamp",
+"status": "hypothesis",
+"sources": [
+{
+"id": "berklee_harmony",
+"title": "Harmony 2 / HR-216 course outlines",
+"url": "https://online.berklee.edu/courses/harmony-2"
+},
+{
+"id": "auralis_editorial",
+"title": "Auralis editorial starting hypotheses",
+"url": null
+}
+],
+"loop": true,
+"score": 0.9,
+"why": "R&B Atlas \u201cDorian two-chord vamp\u201d (hypothesis): The major IV in a minor key is the dorian colour; the funk-derived vamp."
+}
+]
+},
+"arrangement": {
+"palette": [
+"sparse drums",
+"808 / sub bass",
+"ambient pads",
+"textures and resampled vocals",
+"filtered keys"
+],
+"palette_status": "editorial default, not Atlas research",
+"mix_profile": "rhythmic-sparse",
+"section_lift": {
+"id": "space_contrast",
+"name": "Contrast by space",
+"changes": [
+"verse strips to vocal + sub",
+"chorus adds pads and textures",
+"timbre change"
+],
+"status": "hypothesis"
+},
+"comments": []
+},
+"atmosphere": {
+"layers": [
+"airy noise bed",
+"tonic drone under verses",
+"dark chorus pad",
+"rising shimmer into choruses",
+"'ah' choir texture in big sections",
+"bell sparkle arpeggios",
+"reverse swells into every lift"
+],
+"status": "editorial default, not Atlas research",
+"why": [
+"Atmosphere palette: in modern alternative R&B texture and atmosphere are structural material."
+]
+},
+"vocal": {
+"range_low_midi": 48.0,
+"range_high_midi": 72.0,
+"range_source": "a default C3\u2013C5; add a voice profile for your real range",
+"patterns": {
+"chorus": {
+"id": "falsetto_answer",
+"name": "Falsetto answer line",
+"contour": "rising then held",
+"start_degree": "5",
+"end_degree": "upper 1",
+"peak_degree": "upper 3",
+"phrase_bars": [
+1,
+2
+],
+"syncopation": "low",
+"melisma": "low-medium",
+"status": "hypothesis"
+},
+"verse": {
+"id": "behind_the_beat_phrase",
+"name": "Phrasing behind the backbeat",
+"contour": "static or wave",
+"start_degree": "1 or 5",
+"end_degree": "5",
+"peak_degree": "6",
+"phrase_bars": [
+1,
+2
+],
+"syncopation": "high",
+"melisma": "low",
+"status": "sourced"
+}
+},
+"tonic_midi": 55,
+"range": "C3\u2013C5",
+"why": [
+"Registers are placed inside C3\u2013C5 (a default C3\u2013C5; add a voice profile for your real range), a semitone below your top note: verses low-middle, pre-choruses climbing, choruses up to about an octave above the tonic."
+]
+},
+"why": {
+"mode": [
+"Minor: no mood words and no Artist DNA, so the most common R&B choice."
+],
+"era": [
+"Modern Alternative R&B fits best: it has minor-key progression families. Pick another era in Era & style to change it."
+],
+"tempo": [
+"\u201cballad\u201d means 60\u201380 BPM; no Artist DNA, so the middle of the band."
+],
+"key": [
+"G minor: verse and chorus peak fit your range with 2 semitone(s) to spare."
+],
+"form": [
+"Section order follows the headers in your lyrics.",
+"The last chorus is doubled to reach the length."
+],
+"energy": [
+"Choruses sit 25 points above the verses; the final chorus peaks."
+],
+"groove": [
+"Hip-hop R&B (hypothesis) from the R&B Atlas: neutral; programmed."
+],
+"atmosphere": [
+"Atmosphere palette: in modern alternative R&B texture and atmosphere are structural material.",
+"Each section's Atmos level (off / light / medium / full) sets how much texture it gets; the layers follow its chords and the energy curve."
+],
+"arrangement": [
+"Modern Alternative R&B palette; roles per section follow energy and the Atlas \u201cContrast by space\u201d lift (verse strips to vocal + sub, chorus adds pads and textures, timbre change). Choruses bring in backing vocals, as your stem sets do."
+]
+},
+"edited": [],
+"key_tonic": 7,
+"mode": "minor",
+"total_bars": 24,
+"duration_seconds": 82.3,
+"energy_curve": [
+0.3,
+0.3,
+0.3,
+0.3,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.45,
+0.3,
+0.24,
+0.18,
+0.12
+],
+"originality": {
+"checks": [
+{
+"id": "no_copied_material",
+"status": "pass",
+"label": "No melody, lyrics or audio from any song",
+"detail": "The blueprint holds Roman numerals, bar counts and vocal ranges only. Melody is written later and must be new."
+},
+{
+"id": "catalog_loops",
+"status": "pass",
+"label": "Your own chord loops are used in at most one section type",
+"detail": "No loop is taken from your catalog."
+}
+],
+"note": "Chords are compared with every song you've switched on. The melody is compared with your lead vocals after rendering (Check originality); audio is not compared."
+},
+"validation": {
+"ok": true,
+"errors": [],
+"warnings": []
+}
+}

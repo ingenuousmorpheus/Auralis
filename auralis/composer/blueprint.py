@@ -42,7 +42,7 @@ from .validation import SECTION_TYPES, validate_blueprint
 BLUEPRINT_VERSION = 1
 # Melody writer version stamped on new blueprints (composer.arrange). Blueprints
 # without it are v1 and re-render exactly as when they were saved.
-MELODY_VERSION = 2
+MELODY_VERSION = 3          # 2: one phrase per line (Session 025); 3: digits sung as words (Session 030)
 DEFAULT_LENGTH = 200                 # seconds, a typical R&B single
 DEFAULT_VOICE = (48.0, 72.0)         # C3–C5 when there is no voice profile or DNA melody
 ROLES = ["drums", "bass", "keys", "pad", "lead_vocal", "backing_vocals", "fx", "atmos"]

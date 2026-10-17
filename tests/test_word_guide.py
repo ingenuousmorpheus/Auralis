@@ -210,7 +210,7 @@ def test_wordless_guide_is_never_presented_as_singing_the_lyrics(tmp_path):
     assert out["guide_sings_words"] is False and out["guide_singer"] == "vocalise"
     assert "does not sing the words" in out["guide_notice"]
     assert out["pitch_mode"] == "key" and out["personal_use_only"] is False
-    assert out["melody_version"] == 2
+    assert out["melody_version"] == 3
 
 
 def test_word_guide_songs_are_tuned_to_the_melody_and_marked_personal_use(tmp_path):

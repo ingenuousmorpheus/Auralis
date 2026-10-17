@@ -232,7 +232,7 @@ def arrange(blueprint: dict, seed: int = 0) -> dict:
     melody_version = int(blueprint.get("melody_version") or 1)
     lyric_map = None
     if melody_version >= 2:
-        tracks["melody"], lyric_map = _melody_v2(blueprint, tonic, mode, rng)
+        tracks["melody"], lyric_map = _melody_v2(blueprint, tonic, mode, rng, spell=melody_version >= 3)
     else:
         tracks["melody"] = _melody(blueprint, tonic, mode, rng)
     demo = blueprint.get("demo")
@@ -377,7 +377,7 @@ def _phrase_line(pool, idx, top, lo, n, step, p_start, start, span, chords, toni
     return phrase, idx
 
 
-def _melody_v2(bp, tonic, mode, rng):
+def _melody_v2(bp, tonic, mode, rng, spell=False):
     """Like ``_melody``, but a section with lyrics gets exactly one phrase per line,
     in order, with exactly one note per syllable (``voice.guide.syllabify``, the
     same count the guide singer uses). The section's bars are shared evenly
@@ -407,7 +407,7 @@ def _melody_v2(bp, tonic, mode, rng):
         is_chorus = s["type"] == "chorus"
         top = peak if is_chorus or s["type"] == "bridge" else min(peak, pool[len(pool) * 2 // 3])
         idx = min(range(len(pool)), key=lambda i: abs(pool[i] - (lo + top) // 2))
-        lines = lyric_lines(s)
+        lines = lyric_lines(s, spell=spell)                       # v3: digits sung as words
         if lines:
             slot = bars * 4.0 / len(lines)
             # rest after each line: 2 beats once a line has 6+ (room for an ad-lib, as v1 left),

@@ -155,7 +155,7 @@ def test_each_lyric_line_is_sung_once_in_order(seed):
     from auralis.voice.guide import lyric_lines, syllabify
 
     bp = build_blueprint("slow 90s R&B ballad", LYRICS, seed=seed)
-    assert bp["melody_version"] == 2
+    assert bp["melody_version"] == 3
     checked = 0
     for s, notes in _sung_by_section(bp, seed):
         lines = lyric_lines(s)
@@ -246,4 +246,59 @@ def test_v2_changes_only_the_melody_and_survives_revision():
     for k in a2["tracks"]:
         if k != "melody":
             assert a2["tracks"][k] == a1["tracks"][k], f"{k} changed with the melody version"
-    assert revise(bp, {"tempo": bp["tempo"] + 4})["melody_version"] == 2
+    assert revise(bp, {"tempo": bp["tempo"] + 4})["melody_version"] == 3
+
+
+# ── melody v3: digits are sung as words (Session 030) ────────────────────────
+
+@pytest.mark.parametrize("text,spoken", [
+    ("24/7 I think of you", "twenty four seven I think of you"),
+    ("I was 19 in 1999", "I was nineteen in nineteen ninety nine"),
+    ("my 2nd chance", "my second chance"),
+    ("back in '99", "back in ninety nine"),
+    ("the 3rd time, 21st night", "the third time, twenty first night"),
+    ("100 percent", "one hundred percent"),
+    ("no numbers here", "no numbers here"),
+])
+def test_numbers_are_spelled_as_sung(text, spoken):
+    from auralis.voice.guide import spell_numbers
+
+    assert spell_numbers(text) == spoken
+
+
+DIGIT_LYRICS = NL.join(["[Verse]", "24/7 I think of you", "I was 19 in 1999", "my 2nd chance",
+                        "back in '99 we sang"])
+
+
+def test_v3_sings_every_number_as_words():
+    from auralis.composer.blueprint import build_blueprint
+    from auralis.voice.guide import lyric_lines, spell_numbers, syllabify
+
+    bp = build_blueprint("ballad", DIGIT_LYRICS, seed=0)
+    assert bp["melody_version"] == 3
+    for s, notes in _sung_by_section(bp):
+        if s.get("lyrics"):
+            wanted = [x for line in s["lyrics"] for x in syllabify(spell_numbers(line))]
+            assert [n.syllable for n in notes] == wanted
+            assert "nineteen" in [n.word for n in notes] and "seven" in [n.word for n in notes]
+            assert len(lyric_lines(s, spell=True)) == 4
+
+
+def test_saved_v2_songs_with_numbers_render_exactly_as_before():
+    """A v2 blueprint (saved Oct 13-17) keeps its tune and words; fingerprints taken
+    with the published v2 code (13f9fed), Session 030. v2 dropped the digits."""
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from auralis.composer.arrange import arrange
+    from auralis.voice.guide import build_score
+
+    bp = json.loads((Path(__file__).parent / "fixtures_v2_digits_blueprint.json").read_text(encoding="utf-8"))
+    assert bp["melody_version"] == 2
+    arr = arrange(bp, seed=0)
+    score = build_score(bp, arr["tracks"]["melody"], arr.get("melody_lyrics"))
+    h = lambda o: hashlib.sha256(json.dumps(o, sort_keys=True).encode()).hexdigest()[:16]
+    fields = ("start", "duration", "midi", "velocity", "syllable", "vowel", "onset", "phrase_end")
+    assert h(arr["tracks"]["melody"]) == "806eb59d6695a488"
+    assert h([{k: n.to_dict()[k] for k in fields} for n in score]) == "d235f3d87f9c3d4b"

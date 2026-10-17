@@ -85,11 +85,52 @@ def onset_of(syllable: str) -> str:
     return "soft"                                   # m n l r w v
 
 
-def lyric_lines(section: dict) -> list[str]:
+_ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+         "fifteen sixteen seventeen eighteen nineteen").split()
+_TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
+_ORDINAL = {"one": "first", "two": "second", "three": "third", "five": "fifth", "eight": "eighth",
+            "nine": "ninth", "twelve": "twelfth"}
+
+
+def _number_words(n: int) -> str:
+    if n < 20:
+        return _ONES[n]
+    if n < 100:
+        return _TENS[n // 10] + ("" if n % 10 == 0 else " " + _ONES[n % 10])
+    if n < 1000:
+        rest = n % 100
+        return _ONES[n // 100] + " hundred" + ("" if rest == 0 else " " + _number_words(rest))
+    if 1100 <= n < 10000 and n % 100 and n // 100 % 10:             # years: 1999 -> nineteen ninety nine
+        return _number_words(n // 100) + " " + (_number_words(n % 100) if n % 100 >= 10 else "oh " + _ONES[n % 100])
+    rest = n % 1000
+    return _number_words(n // 1000) + " thousand" + ("" if rest == 0 else " " + _number_words(rest))
+
+
+def spell_numbers(line: str) -> str:
+    """Digits as the words a singer says: "24/7" -> "twenty four seven", "2nd" -> "second",
+    "'99" -> "ninety nine". Up to 9999; longer digit runs are read digit by digit."""
+    def word(m):
+        digits, suffix = m.group(1), (m.group(2) or "").lower()
+        n = int(digits)
+        text = _number_words(n) if len(digits) <= 4 else " ".join(_ONES[int(d)] for d in digits)
+        if suffix in ("st", "nd", "rd", "th"):
+            last = text.split()[-1]
+            ordinal = _ORDINAL.get(last) or (last[:-1] + "ieth" if last.endswith("y") else last + "th")
+            text = " ".join(text.split()[:-1] + [ordinal])
+        return f" {text} "
+    out = re.sub(r"'?(\d+)(st|nd|rd|th)?\b", word, line)
+    return re.sub(r"\s+", " ", out.replace("/", " ")).strip()
+
+
+def lyric_lines(section: dict, spell: bool = False) -> list[str]:
     """The section's lyric lines that have something to sing (blank or
     punctuation-only lines are not phrases). Shared by the melody writer and the
-    guide score so both count the same lines."""
-    return [line for line in (section.get("lyrics") or []) if syllabify(line)]
+    guide score so both count the same lines. ``spell`` (melody v3) sings digits
+    as words; v1 and v2 songs keep their saved behaviour."""
+    lines = section.get("lyrics") or []
+    if spell:
+        lines = [spell_numbers(line) for line in lines]
+    return [line for line in lines if syllabify(line)]
 
 
 def build_score(blueprint: dict, melody: list[tuple], lyric_map: list | None = None) -> list[GuideNote]:
@@ -110,7 +151,8 @@ def build_score(blueprint: dict, melody: list[tuple], lyric_map: list | None = N
             continue
         mapped = [by_beat.get(round(n[0], 4)) for n in sec]
         if by_beat and all(m and m[0] == section_index for m in mapped):
-            lines = [syllabify_words(line) for line in lyric_lines(s)]
+            spell = int(blueprint.get("melody_version") or 1) >= 3
+            lines = [syllabify_words(line) for line in lyric_lines(s, spell=spell)]
             for (beat, length, pitch, vel), (_, li, k) in zip(sec, mapped):
                 syl, word, pos, n_syl = lines[li][k]
                 out.append(GuideNote(
