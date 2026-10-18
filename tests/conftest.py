@@ -12,3 +12,6 @@ def _no_host_memory_gate(monkeypatch, tmp_path):
     from auralis.models import REGISTRY
 
     monkeypatch.setattr(REGISTRY, "config_path", tmp_path / "models.json")
+    # Pipeline tests sing with the fast, deterministic vocalise guide whatever the user's
+    # settings say; the default itself is tested on a fresh registry (test_word_guide.py).
+    monkeypatch.setattr(REGISTRY, "choices", {**REGISTRY.choices, "guide_singer": "vocalise"})

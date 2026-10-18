@@ -21,7 +21,13 @@ from .builtin import ACEStepSections, DiffSingerGuide, SeedVCConverter, Vocalise
 from .lifecycle import ModelManager
 
 KINDS = ("voice_converter", "guide_singer", "section_generator")
-DEFAULTS = {"voice_converter": "seed-vc", "guide_singer": "vocalise", "section_generator": None}
+# The word guide sings the lyrics' words (owner-approved default, Session 032); vocalise
+# (melody on vowels) is the fallback where no speech voice exists, e.g. outside Windows.
+DEFAULTS = {"voice_converter": "seed-vc", "guide_singer": "word-guide", "section_generator": None}
+FALLBACKS = {"guide_singer": "vocalise"}
+# Settings saved before the word guide existed hold "vocalise" only because it was the sole
+# choice; without this marker that value is not a deliberate choice and the default applies.
+GUIDE_CHOICE_MARK = "guide_choice_since_word_guide"
 
 
 def _config_path() -> Path:
@@ -47,6 +53,9 @@ class Registry:
             return
         for kind in KINDS:
             if kind in data.get("choices", {}):
+                if (kind == "guide_singer" and data["choices"][kind] == "vocalise"
+                        and not data.get(GUIDE_CHOICE_MARK)):
+                    continue                                   # saved before there was a choice
                 self.choices[kind] = data["choices"][kind]
         if data.get("policy"):
             try:
@@ -57,7 +66,8 @@ class Registry:
     def _save(self):
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.config_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"choices": self.choices, "policy": self.manager.policy}, indent=2), "utf-8")
+        tmp.write_text(json.dumps({"choices": self.choices, "policy": self.manager.policy,
+                                   GUIDE_CHOICE_MARK: True}, indent=2), "utf-8")
         os.replace(tmp, self.config_path)
 
     # ── choosing ────────────────────────────────────────────────────────
@@ -91,12 +101,23 @@ class Registry:
             if model and model.is_installed():
                 return model, f"{model.spec.name} (chosen)"
             if default and default != chosen:
-                fallback = self.manager.get(default)
-                return fallback, f"{fallback.spec.name} (your choice, {chosen}, isn't installed)"
+                model, _ = self._default(kind, default)
+                return model, f"{model.spec.name} (your choice, {chosen}, isn't installed)"
         if default:
-            model = self.manager.get(default)
-            return model, f"{model.spec.name} (default)"
+            return self._default(kind, default)
         return None, "none: the built-in synth renders every section"
+
+    def _default(self, kind: str, default: str) -> tuple[object, str]:
+        """The default for ``kind``, or its fallback where the default can't run here."""
+        known = {m.spec.id for m in self.manager.models()}
+        model = self.manager.get(default) if default in known else None
+        fallback = FALLBACKS.get(kind)
+        if (model is None or not model.is_installed()) and fallback in known:
+            spare = self.manager.get(fallback)
+            return spare, f"{spare.spec.name} (default {model.spec.name if model else default} isn't available here)"
+        if model is None:
+            raise KeyError(f"Unknown model: {default}")
+        return model, f"{model.spec.name} (default)"
 
     def guide_singer(self):
         return self.resolve("guide_singer")[0]

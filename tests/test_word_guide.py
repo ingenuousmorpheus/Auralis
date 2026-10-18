@@ -262,7 +262,49 @@ def test_api_refuses_an_unknown_or_wrong_kind_guide_before_starting():
     models = client.get("/models").json()
     word = next(m for m in models["models"] if m["id"] == "word-guide")
     assert word["experimental"] is True and word["kind"] == "guide_singer"
-    assert models["kinds"]["guide_singer"]["active"] == "vocalise"          # not the default until approved
+    assert {"vocalise", "word-guide"} <= set(models["kinds"]["guide_singer"]["options"])
+
+
+# ── the default (owner-approved, Session 032) ─────────────────────────────────
+
+def _registry(tmp_path, config=None, word_installed=True):
+    import json
+
+    from auralis.models.builtin import VocaliseGuide, WordGuide
+    from auralis.models.lifecycle import ModelManager
+    from auralis.models.registry import Registry
+
+    class Word(WordGuide):
+        def is_installed(self):
+            return word_installed
+
+    path = tmp_path / "models.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if config is not None:
+        path.write_text(json.dumps(config), "utf-8")
+    return Registry(ModelManager(), config_path=path, providers=(VocaliseGuide(), Word()))
+
+
+def test_the_word_guide_is_the_default_where_it_can_run(tmp_path):
+    reg = _registry(tmp_path)
+    assert reg.guide_singer().spec.id == "word-guide"
+    spare = _registry(tmp_path / "x", word_installed=False)
+    model, why = spare.resolve("guide_singer")
+    assert model.spec.id == "vocalise" and "isn't available here" in why
+
+
+def test_settings_saved_before_the_word_guide_get_the_new_default_once(tmp_path):
+    """'vocalise' in settings written before Session 025 was the only option, not a choice."""
+    from auralis.models.registry import GUIDE_CHOICE_MARK
+
+    old = _registry(tmp_path / "a", {"choices": {"guide_singer": "vocalise"}, "policy": "balanced"})
+    assert old.guide_singer().spec.id == "word-guide"
+    chose = _registry(tmp_path / "b", {"choices": {"guide_singer": "vocalise"}, GUIDE_CHOICE_MARK: True})
+    assert chose.guide_singer().spec.id == "vocalise"                 # a real choice is respected
+    reg = _registry(tmp_path / "c")
+    reg.select("guide_singer", "vocalise")
+    again = _registry(tmp_path / "c")
+    assert again.guide_singer().spec.id == "vocalise"                  # and stays respected after saving
 
 
 # ── live: consonants through Seed-VC (opt-in, read-only use of a saved voice) ──

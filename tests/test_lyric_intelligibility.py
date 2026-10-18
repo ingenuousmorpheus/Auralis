@@ -62,15 +62,16 @@ def _words_in_order(model, path) -> tuple[int, str]:
 
 # ── the gate ─────────────────────────────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="The default guide is still vocalise (vowels, not words; 0/7 measured, "
-                                       "Session 024). The experimental word guide passes this gate "
-                                       "(tests/test_word_guide.py); it becomes the default only on owner approval.")
 def test_guide_singer_sings_the_words(tmp_path):
-    """The guide singer the pipeline uses must sing a short phrase intelligibly."""
-    from auralis.models import REGISTRY
+    """The default guide singer (a fresh install's) must sing a short phrase intelligibly.
+    Session 024 measured vocalise at 0/7; the word guide became the default in Session 032."""
+    from auralis.models.lifecycle import ModelManager
+    from auralis.models.registry import Registry
 
     model = _recogniser()
-    singer = REGISTRY.guide_singer()
+    singer = Registry(ModelManager(), config_path=tmp_path / "models.json").guide_singer()
+    if singer.spec.id != "word-guide":
+        pytest.skip("no Windows speech voice here: the default falls back to vocalise")
     score = _phrase_score()
     audio = singer.sing(score, score[-1].start + score[-1].duration + 1.0, seed=0)
     path = str(tmp_path / "guide.wav")
