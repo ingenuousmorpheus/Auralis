@@ -777,3 +777,57 @@ Owner listening approval of the word guide (dry and converted samples ready) bef
 - Retraining Prinze Paired Studio with the Session 029 data.
 - Plugin and Match-the-demo listening trials.
 - Pushing the local commits (4 after `13f9fed`).
+
+
+## Session 032 — 2026-10-17 — Word guide default, Prinze retrained, publication
+
+**Owner decisions in this session**, after listening to the Session 025 samples:
+- (1) make the word guide the default for songs with lyrics
+- (2) retrain Prinze Paired Studio with the Session 029 data
+- (3) push the five Session 030-031 commits
+
+### Publication
+`13f9fed..259d940` was fast-forward pushed after checks: GitHub had not moved, the only binary was the 4 KB favicon, and no private paths or credentials were found.
+
+### Word guide is the default (`0d90feb`, local)
+- `DEFAULTS["guide_singer"] = "word-guide"`, with a fallback to vocalise where it can't run. That covers no Windows speech voice, and an unknown or unregistered default; a chosen engine that isn't installed also lands on the safe default.
+- Settings saved before the word guide existed held "vocalise" only because it was the sole option. They now get the new default once; any choice saved from now on is respected (a marker in `models.json`).
+- The owner's live app now resolves to `word-guide`.
+- Vocalise stays selectable. Speech-voice songs stay personal, local use only.
+- **Tests:**
+  - the Session 024 gate passes; its xfail is removed
+  - new tests cover the default, the fallback and the migration
+  - pipeline tests stay pinned to vocalise
+  - full suite: **326 passed**, 1 skipped
+
+### Prinze Paired Studio retrained (local voice data; nothing in Git)
+
+**Backup first.** `voices/1fb8f19a27a9/model_backup_2026-10-17_1000steps/` holds the 1,000-step model, its config and `profile.json`. SHA-256 prefixes were verified identical: model `84b8774a…`.
+
+**Why a fresh run.** The app's own Train button would have resumed from the run folder's kept step-500 checkpoint and overwritten the live model in place. Instead, a fresh 2,500-step run (the app's "deep" length) started from the cached pretrained base, offline, on all **201 clips / 23:13**. It wrote to `voices/1fb8f19a27a9/candidate_2026-10-17/` and took 16.1 min. Loss went from 0.557 at step 250 to 0.544 at step 2,500.
+
+**Memory.** The first attempt failed: Windows ran out of commit memory ("Unable to allocate 1.83 MiB") with 11.6 GB free. LM Studio, in service mode, had reloaded the owner's `lana-gemma4-e4b-v2` model (7.25 GB) within minutes of being unloaded, because the Lana apps request it.
+- With the owner's approval, the Lana watchdog (`C:\LANA\scripts\lana_watchdog.ps1`), its children (LanaOsLink, overlay, ntfy, Playwright helper, Lana TV server) and LM Studio were stopped for the run. So was the Auralis backend.
+- A Claude Code session open on the Lana TV folder and an unidentified 3.15 GB Python process were left alone.
+- Peak use during training: free commit fell to **0.54 GB**; GPU 10.6 of 12 GB.
+- Restart Lana with `Start LANA.bat` on the owner's desktop. LM Studio returns with it.
+
+**Comparison** (the same pinned word-guide verse + chorus converted by both models; speaker similarity is CAM++ cosine to the centroid of 24 of the owner's own clips):
+
+| | Old (1,000 steps, 137 clips) | New (2,500 steps, 201 clips) |
+|---|---|---|
+| Words in order | 51/56 (91.1%) | 51/56 (91.1%) |
+| Notes within 25 c of the written melody | 98.6% | 100% |
+| Speaker similarity | 0.808 | 0.806 |
+
+- For reference, the owner's own clips score 0.794 against their own centroid.
+- The rule agreed with the owner was to switch only if the new model is not worse on all three. It passed, so it was switched in: live model = candidate `ef9e5bdf…`, profile = 2,500 steps.
+- **Honest read:** the metrics are a tie. The new model learned from about 40% more singing, but these measures show no clear gain. The owner's ears decide.
+- Finished A/B samples are in git-excluded `samples/session-032/`.
+
+**Revert:** copy `model_backup_2026-10-17_1000steps/ft_model.pth` and the config back into `voices/1fb8f19a27a9/model/`, and set the profile's `training_steps` back to 1000 (or ask Claude).
+
+### Next
+- Owner listens to A/B (`samples/session-032/`) and keeps or reverts the new model.
+- Owner restarts Lana (`Start LANA.bat`).
+- Push `0d90feb` and these notes when authorised.

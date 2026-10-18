@@ -3356,3 +3356,14 @@ Full entry in `AURALIS_SESSION.md`. Summary:
 - Word-sung doubles and harmonies are tuned to their own written notes (measured 100%; ad-libs 80-100%).
 - Projects → Open in Song studio, verified on the owner's song.
 - Owner gates unchanged.
+
+
+## Session 032 — 2026-10-17 — Word guide default, Prinze retrained
+
+Full entry in `AURALIS_SESSION.md`. Summary:
+- Pushed `259d940`.
+- Word guide is the default (`0d90feb`): fallback to vocalise, one-time migration of pre-word-guide settings; 326 passed.
+- Prinze Paired Studio was retrained fresh, 2,500 steps on 201 clips (16 min), after a backup.
+  - Lana and LM Studio were stopped with owner approval (commit memory).
+  - Old vs new: words 91.1% both; pitch 98.6% → 100%; speaker similarity 0.808 → 0.806.
+  - The new model was switched in per the agreed rule; the backup is kept for revert. A/B samples are in `samples/session-032/`.
