@@ -831,3 +831,54 @@ Owner listening approval of the word guide (dry and converted samples ready) bef
 - Owner listens to A/B (`samples/session-032/`) and keeps or reverts the new model.
 - Owner restarts Lana (`Start LANA.bat`).
 - Push `0d90feb` and these notes when authorised.
+
+
+## Session 033 — 2026-10-18 — The owner's own lyrics through the pipeline
+
+**Owner instruction:** "continue". The `Lyrics/` folder (private, git-excluded) was added in Session 024 "to analyse the songs I've written" and had not been used yet. Only its 117 `.txt` files were read. Nothing from it enters Git; this entry gives aggregates only.
+
+Non-lyric files in the folder were not opened.
+
+### Finding
+
+Real pasted lyrics carry the songwriter's own notes, and the parser sang them:
+- style lines with tempo, key, instruments and references
+- headers with chords on them ("Chorus [F#m7 Em7 Am7]:")
+- chord charts
+- curly apostrophes, which split "don't" into "don" + "t"
+
+### Fix (`ed24ae7`)
+- `parse_lyrics` recognises chord headers: the chords are kept as `written_chords`, or as `header_note` when they aren't chords.
+- Production-note lines are left out of the sung lines: lines with tempo, key or chord markers, or short tag lists with at least two music terms.
+- Curly quotes are straightened.
+- `parse_brief` hears the notes like the prompt, so a noted tempo or key steers the blueprint.
+- Only new blueprints are affected; saved songs keep their parsed lines.
+
+### Measured on the 117 songs
+
+| | Before | After |
+|---|---|---|
+| Note lines sung | 89 | 0 |
+| Chord lines sung | 26 | 0 |
+| Lines with curly apostrophes | 1,536 | 0 |
+| Vowelless syllables | 1,990 | 44 |
+| Untyped blocks | 93 | 35 |
+
+- 125 lines were split off as notes, and all were reviewed: each is a genuine note.
+- **Tests:** the lyric tests now cover pasted notes, chord headers, brief hearing and curly quotes. They also check that lyric lines are never mistaken for notes, including a poetic list of instruments.
+- **Related files** (composer, lyrics, full song, demo, assembly, atlas, similarity): 116 passed.
+
+### Songwriting profile (aggregate; given to the owner in chat)
+- **Tempo:** median 95 BPM, middle half 77-124.
+- **Key:** noted keys are half minor and half major.
+- **Form:** the most common is V-C-V-C-B-C, then the same with pre-choruses and an outro.
+- **Hooks:** in 75 of 104 songs with a chorus, the chorus carries the title words.
+- **Lines:** median 10 syllables per line; the 90th percentile is 17.
+- **Chords:** 31 songs have chords written in.
+- **Oddities:** one file of 1,537 lines is likely a collection rather than one song, and 12 files have no section headers.
+
+### Open
+- The owner can listen to the Session 032 A/B samples and keep or revert the new model.
+- Restart Lana with `Start LANA.bat`.
+- `written_chords` could later seed the blueprint's chords. That is not done yet; it needs an owner decision on whether written chords should override the composer.
+- Unpushed: `0d90feb`, `4e05314`, `ed24ae7` and these notes.

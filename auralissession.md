@@ -3367,3 +3367,12 @@ Full entry in `AURALIS_SESSION.md`. Summary:
   - Lana and LM Studio were stopped with owner approval (commit memory).
   - Old vs new: words 91.1% both; pitch 98.6% → 100%; speaker similarity 0.808 → 0.806.
   - The new model was switched in per the agreed rule; the backup is kept for revert. A/B samples are in `samples/session-032/`.
+
+
+## Session 033 — 2026-10-18 — The owner's own lyrics through the pipeline
+
+Full entry in `AURALIS_SESSION.md`. Summary:
+- On 117 private lyric files, pasted notes, chord headers and curly quotes were being sung.
+- `ed24ae7` reads them as notes instead: 0 note or chord lines sung; vowelless syllables 1,990 → 44; 116 related tests passed.
+- An aggregate songwriting profile was given to the owner.
+- Non-lyric files in the folder were not opened.
