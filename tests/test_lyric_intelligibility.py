@@ -303,3 +303,59 @@ def test_saved_v2_songs_with_numbers_render_exactly_as_before():
     fields = ("start", "duration", "midi", "velocity", "syllable", "vowel", "onset", "phrase_end")
     assert h(arr["tracks"]["melody"]) == "806eb59d6695a488"
     assert h([{k: n.to_dict()[k] for k in fields} for n in score]) == "d235f3d87f9c3d4b"
+
+
+# ── what songwriters actually paste: notes, chord headers, curly quotes (Session 033) ──
+
+PASTED = NL.join([
+    "90s R&B, A minor, 77 bpm, electric piano, bass guitar, sax, drums, dry vocals",
+    "[Verse 1]",
+    "I don’t know where the night will go",
+    "Verse 2 [F#m7 B Em7 Am7]:",
+    "Every light is shining low",
+    "Chorus [soft melody]:",
+    "Hold on, hold on",
+    "chords Dmaj7 Bm7 Em7 A7",
+    "Am C F G",
+])
+
+
+def test_production_notes_and_chord_headers_are_read_not_sung():
+    from auralis.composer.brief import lyric_notes, parse_lyrics
+
+    blocks = parse_lyrics(PASTED)
+    sung = [line for b in blocks for line in b["lines"]]
+    assert sung == ["I don't know where the night will go", "Every light is shining low", "Hold on, hold on"]
+    assert [b["type"] for b in blocks] == ["verse", "verse", "chorus"]
+    assert blocks[1]["written_chords"] == "F#m7 B Em7 Am7" and blocks[2]["header_note"] == "soft melody"
+    notes = lyric_notes(PASTED)
+    assert any("77 bpm" in n for n in notes) and "Verse chords: F#m7 B Em7 Am7" in notes
+    assert "Am C F G" in notes and "chords Dmaj7 Bm7 Em7 A7" in notes
+
+
+def test_notes_steer_the_brief_like_the_prompt():
+    from auralis.composer.brief import parse_brief
+
+    brief = parse_brief("", PASTED)
+    assert brief["tempo"] == 77
+    assert brief["mode"] == "minor"
+
+
+@pytest.mark.parametrize("line", [
+    "I miss you, baby, more and more, every night",
+    "A minor setback in my life",
+    "Me, myself and I, the drums of my heart, the bass of my soul, my guitar",
+    "Take my hand and dance real slow",
+])
+def test_lyric_lines_are_never_mistaken_for_notes(line):
+    from auralis.composer.brief import _is_note
+
+    assert not _is_note(line)
+
+
+def test_curly_apostrophes_do_not_split_words():
+    from auralis.composer.brief import parse_lyrics
+    from auralis.voice.guide import syllabify
+
+    line = parse_lyrics("[Verse]" + NL + "I don’t wanna say it’s over")[0]["lines"][0]
+    assert all(any(v in s for v in "aeiouy") for s in syllabify(line)), syllabify(line)
